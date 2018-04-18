@@ -16,7 +16,7 @@ defineModule(sim, list(
     #defineParameter("paramName", "paramClass", value, min, max, "parameter description")),
     defineParameter("fireTimestep", "numeric", 1, NA, NA, "This describes the simulation time at which the first plot event should occur"),
     defineParameter("burnInitialTime", "numeric", start(sim, "year") + 1, NA, NA, "This describes the simulation time at which the first plot event should occur"),
-    defineParameter("biggestPossibleFireSizeHa", "numeric", 1e5, 1e4, 1e6, "An upper limit, in hectares, of the truncated Pareto distribution of fire sizes"),
+    defineParameter("biggestPossibleFireSizeHa", "numeric", 1e6, 1e4, 2e6, "An upper limit, in hectares, of the truncated Pareto distribution of fire sizes"),
     defineParameter("flushCachedRandomFRI", "logical", FALSE, NA, NA, "If no Fire Return Interval map is supplied, then a random one will be created and cached. Use this to make a new one."),
     defineParameter("randomDefaultData", "logical", FALSE, NA, NA, "Only used for creating a starting dataset. If TRUE, then it will be randomly generated; FALSE, deterministic and identical each time."),
     defineParameter(".plotInitialTime", "numeric", start(sim, "year") + 1, NA, NA, "This describes the simulation time at which the first plot event should occur"),
@@ -185,7 +185,7 @@ Burn <- function(sim) {
   
   numFiresThisPeriod <- rnbinom(length(sim$numFiresPerYear), 
           mu = sim$numFiresPerYear * P(sim)$fireTimestep, 
-          size = 3)
+          size = 1.8765)
   
   thisYrStartCells <- data.table(pixel = 1:ncell(sim$rstStudyRegion),
                                polygonNumeric = sim$rstStudyRegion[] * sim$rstFlammableNum[],
