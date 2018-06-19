@@ -11,7 +11,7 @@ defineModule(sim, list(
   citation = list("citation.bib"),
   documentation = list("README.txt", "LandMine.Rmd"),
   reqdPkgs = list("data.table", "grDevices", "magrittr", "raster", "RColorBrewer", "VGAM",
-                  "PredictiveEcology/SpaDES.tools@prepInputs"),
+                  "PredictiveEcology/SpaDES.tools@development"),
   parameters = rbind(
     #defineParameter("paramName", "paramClass", value, min, max, "parameter description")),
     defineParameter("fireTimestep", "numeric", 1, NA, NA, "This describes the simulation time at which the first plot event should occur"),
@@ -182,11 +182,11 @@ plotFn <- function(sim) {
 
 ### burn events
 Burn <- function(sim) {
-  
-  numFiresThisPeriod <- rnbinom(length(sim$numFiresPerYear), 
-          mu = sim$numFiresPerYear * P(sim)$fireTimestep, 
+
+  numFiresThisPeriod <- rnbinom(length(sim$numFiresPerYear),
+          mu = sim$numFiresPerYear * P(sim)$fireTimestep,
           size = 1.8765)
-  
+
   thisYrStartCells <- data.table(pixel = 1:ncell(sim$rstStudyRegion),
                                polygonNumeric = sim$rstStudyRegion[] * sim$rstFlammableNum[],
                                key = "polygonNumeric")
@@ -258,7 +258,7 @@ Burn <- function(sim) {
 
 
   if (!all(is.na(thisYrStartCells)) & length(thisYrStartCells) > 0) {
-    if (data.table::getDTthreads() < P(sim)$useParallel) 
+    if (data.table::getDTthreads() < P(sim)$useParallel)
       data.table::setDTthreads(P(sim)$useParallel)
     fires <- burn1(sim$fireReturnInterval, startCells = thisYrStartCells,
                    fireSizes = fireSizesInPixels, spreadProbRel = ROSmap,
