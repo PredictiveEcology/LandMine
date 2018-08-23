@@ -135,7 +135,6 @@ fireSize <- 100000
 ```
 
 ```{r functions}
-
 burnFun <- function(ros, centreCell, fireSize, 
                     spawnNewActive, sizeCutoffs, burn1,
                     spreadProb) {
@@ -186,15 +185,15 @@ wrap <- function(cl = NULL, reps, par, burn1, burnFun, objs, libs) {
 }
 
 ####################################################################
-fitSN <- function(sna, ros, centreCell, fireSizes = 10^(2:5), 
-                    desiredPerimeterArea = 0.004, burnFun, burn1) {
+fitSN <- function(sna, ros, centreCell, fireSizes = 10^(2:5),
+                  desiredPerimeterArea = 0.004, burnFun, burn1) {
   
   sizeCutoffs <- 10^sna[5:6]
   spreadProb <- sna[7]
   sna <- c(10^(sna[1]), 10^(sna[2]), 10^(sna[3]), 10^(sna[4]))
   bfs1 <<- lapply(fireSizes, function(fireSize) {
    burnFun(ros, centreCell, fireSize, 
-                    sna, sizeCutoffs, burn1 = burn1, spreadProb = spreadProb)
+           sna, sizeCutoffs, burn1 = burn1, spreadProb = spreadProb)
   })
   res <- lapply(seq(bfs1), function(bfCount) {
     abs(log(bfs1[[bfCount]]$LM[1,"perim.area.ratio"]) -
@@ -203,7 +202,6 @@ fitSN <- function(sna, ros, centreCell, fireSizes = 10^(2:5),
     # it needs to get to above 90,000 HA for it to count
   })
   sum(unlist(res))# * log10(fireSizes)) # weigh larger ones more
-  
 }
 
 ####################################################################
@@ -258,7 +256,7 @@ libs <- c("SpaDES.tools", "data.table", "raster", "SDMTools")
 ```{r make-cluster}
 ########################################
 ### SET UP CLUSTER FOR PARALLEL
-numCores <- detectCores() - 1
+numCores <- detectCores() / 2
 if (Sys.info()["sysname"] == "Windows") {
   cl <- parallel::makeCluster(numCores)
 } else if (grepl("W-VIC-A1053", Sys.info()["nodename"])) {
@@ -271,17 +269,15 @@ if (Sys.info()["sysname"] == "Windows") {
   clNames <- c(rep(machine1, NcoresOnEach),
                rep(machine2, NcoresOnEach),
                rep(machine3, NcoresOnEach))
-  cl <- makeClusterPSOCK(clNames, 
-                       homogeneous = FALSE, verbose = TRUE)
+  cl <- makeClusterPSOCK(clNames, homogeneous = FALSE, verbose = TRUE)
   #cl <- parallel::makeCluster(numCores, type = "FORK")
-  clusterSetRNGStream(cl, sample(1e8,1))
+  clusterSetRNGStream(cl, sample(1e8, 1))
 } else {
   cl <- parallel::makeCluster(numCores, type = "FORK")
-  clusterSetRNGStream(cl, sample(1e8,1))
+  clusterSetRNGStream(cl, sample(1e8, 1))
 }
 
 if (!inherits(cl[[1]], "forknode")) {
-
   #parallel::clusterExport(cl, funs)
   #parallel::clusterExport(cl, objs )
   #env <- environment()
@@ -303,7 +299,6 @@ assign(paste0("outs", sample(1e6,1)), outs)
 ```
 
 ```{r fitSn}
-
 fitSN(sna = c(-1,-1,-1,-2,2,4,0.9),
       ros = ros, centreCell = centreCell, fireSizes = c(10, 100, 1000, 10000, 100000), 
         desiredPerimeterArea = 0.003, burnFun = burnFun, burn1 = burn1)
@@ -353,7 +348,8 @@ sizeCutoffs <- 10^sns[5:6]
 #   .Names = c("par1", 
 sns <- structure(
   c(-1.641197,-1.152821,-0.697335,-1.751917, 3.720378, 4.034059),
-  .Names = c("par1", "par2", "par3", "par4", "par5", "par6"))
+  .Names = c("par1", "par2", "par3", "par4", "par5", "par6")
+)
 spawnNewActive <- 10^sns[1:4]
 sizeCutoffs <- 10^(sns[5:6])
 fireSize <- 30000
@@ -435,11 +431,12 @@ fireSizes <-  10^(4)
 
 for (fs in fireSizes) {
   for (i in 1:1) {
-    ros <- raster(extent(0, 2e5,0,2e5), res = 250, vals = 1)
-    NineCorners <-
-      cellFromRowCol(ros,
+    ros <- raster(extent(0, 2e5, 0, 2e5), res = 250, vals = 1)
+    NineCorners <- cellFromRowCol(
+      ros,
       rownr = nrow(ros) / 4 * rep(1:3, 3),
-      colnr = ncol(ros) / 4 * rep(1:3, each = 3))
+      colnr = ncol(ros) / 4 * rep(1:3, each = 3)
+    )
     centreCell <- NineCorners
     ran <- runif(4, -3, -1)
     spawnNewActive <- 10^ran
