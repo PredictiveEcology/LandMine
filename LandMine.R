@@ -65,7 +65,7 @@ defineModule(sim, list(
   )
 ))
 
-doEvent.LandMine = function(sim, eventTime, eventType, debug = FALSE) {
+doEvent.LandMine <- function(sim, eventTime, eventType, debug = FALSE) {
   if (eventType == "init") {
     ### check for more detailed object dependencies:
     ### (use `checkObject` or similar)
@@ -279,7 +279,7 @@ Burn <- function(sim) {
   return(invisible(sim))
 }
 
-.inputObjects = function(sim) {
+.inputObjects <- function(sim) {
   # Make random forest cover map
   nOT <- if (P(sim)$flushCachedRandomFRI) Sys.time() else NULL
   numDefaultPolygons <- 4L
