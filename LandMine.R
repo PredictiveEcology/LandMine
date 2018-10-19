@@ -247,6 +247,14 @@ Burn <- function(sim) {
   # Other vegetation that can burn -- e.g., grasslands, lichen, shrub
   ROS[sim$rstFlammableNum[] == 1 & is.na(ROS)] <- 30L
 
+
+  ## TODO: test equal rates of spread
+  # ROS[young & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
+  # ROS[immature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
+  # ROS[mature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
+  # ROS[sim$rstFlammableNum[] == 1 & is.na(ROS)] <- 1L
+  ## end TODO
+
   ROSmap <- raster(sim$pixelGroupMap)
   ROSmap[] <- ROS
 
