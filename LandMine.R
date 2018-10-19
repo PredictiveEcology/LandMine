@@ -244,12 +244,6 @@ Burn <- function(sim) {
   ROS[!mature & vegType %in% spruce] <- 20L
   ROS[mature & vegType %in% spruce] <- 30L
 
-  ## TODO: test equal rates of spread
-  # ROS[young & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
-  # ROS[immature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
-  # ROS[mature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
-  ## end TODO
-
   # Other vegetation that can burn -- e.g., grasslands, lichen, shrub
   ROS[sim$rstFlammableNum[] == 1 & is.na(ROS)] <- 30L
 
@@ -264,8 +258,10 @@ Burn <- function(sim) {
   if (!all(is.na(thisYrStartCells)) & length(thisYrStartCells) > 0) {
     if (data.table::getDTthreads() < P(sim)$useParallel)
       data.table::setDTthreads(P(sim)$useParallel)
-    fires <- burn1(sim$fireReturnInterval, startCells = thisYrStartCells,
-                   fireSizes = fireSizesInPixels, spreadProbRel = ROSmap,
+    fires <- burn1(sim$fireReturnInterval,
+                   startCells = thisYrStartCells,
+                   fireSizes = fireSizesInPixels,
+                   spreadProbRel = ROSmap,
                    #spawnNewActive = c(0.65, 0.6, 0.2, 0.2),
                    sizeCutoffs = sizeCutoffs,
                    spawnNewActive = spawnNewActive,
@@ -364,8 +360,9 @@ Burn <- function(sim) {
   # see https://github.com/PredictiveEcology/SpaDES.tools/issues#17 for discussion about this
   meta <- depends(sim)@dependencies
   mods <- unlist(modules(sim))
-  if(all(names(meta) %in% mods)) { # means there is more than just this module in the simList
-    # meta <- depends(sim)
+  if (all(names(meta) %in% mods)) {
+    # means there is more than just this module in the simList
+
     outputs <- lapply(meta, function(x) {x@outputObjects$objectName})
     otherMods <- mods[!(mods %in% currentModule(sim))]
 
@@ -373,14 +370,12 @@ Burn <- function(sim) {
     if (!("rstCurrentBurnCumulative" %in% unlist(outputs[otherMods]))) {
       if (is.null(sim$rstCurrentBurnCumulative)) {
         sim$rstCurrentBurnCumulative <- raster(sim$pixelGroupMap)
-
       }
     }
   }
 
   return(invisible(sim))
 }
-
 
 meanTruncPareto <- function(k, lower, upper, alpha) {
   k * lower^k * (upper^(1 - k) - alpha^(1 - k)) / ((1 - k) * (1 - (alpha/upper)^k))
@@ -393,14 +388,14 @@ vegTypeMapGenerator <- function(species, cohortdata, pixelGroupMap, vegLeadingPe
   species[species == "Pice_mar" , speciesGroup := "PICE_MAR"]
   species[species == "Pice_gla", speciesGroup := "PICE_GLA"]
   species[species == "Abie_sp" , speciesGroup := "ABIE"]
-  #cohortdata <- sim$cohortData
+
   shortcohortdata <- setkey(cohortdata, speciesCode)[setkey(species[, .(speciesCode, speciesGroup)],
                                                             speciesCode), nomatch = 0]
   shortcohortdata[, totalB := sum(B, na.rm = TRUE), by = pixelGroup]
   shortcohortdata <- shortcohortdata[, .(speciesGroupB = sum(B, na.rm = TRUE),
                                          totalB = mean(totalB, na.rm = TRUE)),
                                      by = c("pixelGroup", "speciesGroup")]
-  shortcohortdata[,speciesPercentage := speciesGroupB/totalB]
+  shortcohortdata[, speciesPercentage := speciesGroupB / totalB]
 
   speciesLeading <- NULL
   Factor <- NULL
