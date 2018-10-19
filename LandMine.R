@@ -182,10 +182,9 @@ plotFn <- function(sim) {
 
 ### burn events
 Burn <- function(sim) {
-
   numFiresThisPeriod <- rnbinom(length(sim$numFiresPerYear),
-          mu = sim$numFiresPerYear * P(sim)$fireTimestep,
-          size = 1.8765)
+                                mu = sim$numFiresPerYear * P(sim)$fireTimestep,
+                                size = 1.8765)
 
   thisYrStartCells <- data.table(pixel = 1:ncell(sim$rstStudyRegion),
                                polygonNumeric = sim$rstStudyRegion[] * sim$rstFlammableNum[],
@@ -250,7 +249,7 @@ Burn <- function(sim) {
   # ROS[immature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
   # ROS[mature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
   ## end TODO
-  
+
   # Other vegetation that can burn -- e.g., grasslands, lichen, shrub
   ROS[sim$rstFlammableNum[] == 1 & is.na(ROS)] <- 30L
 
@@ -261,7 +260,6 @@ Burn <- function(sim) {
   spawnNewActive <- sns <- 10^c(-0.731520, -0.501823, -0.605968, -1.809726)
   spreadProb <- 0.9
   sizeCutoffs <- 10^c(2.202732,  4.696060)
-
 
   if (!all(is.na(thisYrStartCells)) & length(thisYrStartCells) > 0) {
     if (data.table::getDTthreads() < P(sim)$useParallel)
@@ -280,7 +278,6 @@ Burn <- function(sim) {
                     proportionBurned = sum(size) / sum(maxSize))])
     sim$rstCurrentBurn[] <- 0L
     sim$rstCurrentBurn[fires$pixels] <- 1L #as.numeric(factor(fires$initialPixels))
-
   }
   return(invisible(sim))
 }
