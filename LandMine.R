@@ -126,9 +126,9 @@ Init <- function(sim) {
   numPixelsPerPolygonNumeric <- Cache(freq, sim$rstStudyRegion, cacheRepo = cachePath(sim)) %>%
     na.omit()
   ordPolygons <- order(numPixelsPerPolygonNumeric[, "value"])
-  numPixelsPerPolygonNumeric <- numPixelsPerPolygonNumeric[ordPolygons,,drop = FALSE]
-  sim$fireReturnIntervalsByPolygonNumeric <- numPixelsPerPolygonNumeric[,"value"]
-  numPixelsPerPolygonNumeric <- numPixelsPerPolygonNumeric[,"count"]
+  numPixelsPerPolygonNumeric <- numPixelsPerPolygonNumeric[ordPolygons, , drop = FALSE]
+  sim$fireReturnIntervalsByPolygonNumeric <- numPixelsPerPolygonNumeric[, "value"]
+  numPixelsPerPolygonNumeric <- numPixelsPerPolygonNumeric[, "count"]
   names(numPixelsPerPolygonNumeric) <- sim$fireReturnIntervalsByPolygonNumeric
 
   numHaPerPolygonNumeric <- numPixelsPerPolygonNumeric * (prod(res(sim$rstStudyRegion)) / 1e4)
@@ -136,7 +136,6 @@ Init <- function(sim) {
 
 
   message("Determine mean fire size")
-
   meanFireSizeHa <- meanTruncPareto(k = sim$kBest, lower = 1,
                                    upper = P(sim)$biggestPossibleFireSizeHa,
                                    alpha = 1)
