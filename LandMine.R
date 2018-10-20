@@ -187,8 +187,8 @@ Burn <- function(sim) {
                                 size = 1.8765)
 
   thisYrStartCells <- data.table(pixel = 1:ncell(sim$rstStudyRegion),
-                               polygonNumeric = sim$rstStudyRegion[] * sim$rstFlammableNum[],
-                               key = "polygonNumeric")
+                                 polygonNumeric = sim$rstStudyRegion[] * sim$rstFlammableNum[],
+                                 key = "polygonNumeric")
   thisYrStartCells <- thisYrStartCells[polygonNumeric == 0, polygonNumeric := NA] %>%
     na.omit() %>%
     .[, SpaDES.tools:::resample(pixel, numFiresThisPeriod[.GRP]), by = polygonNumeric] %>%
