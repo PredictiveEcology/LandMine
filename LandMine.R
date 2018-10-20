@@ -249,7 +249,7 @@ Burn <- function(sim) {
 
 
   ## TODO: test equal rates of spread
-  if (get("runName", .GlobalEnv) == "equalROS") {
+  if (grepl("equalROS", get("runName", .GlobalEnv))) {
     ROS[young & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
     ROS[immature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
     ROS[mature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
