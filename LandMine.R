@@ -34,8 +34,8 @@ defineModule(sim, list(
     expectsInput("cohortData", "data.table", "Columns: B, pixelGroup, speciesCode, Indicating several features about ages and current vegetation of stand"),
     expectsInput("vegLeadingPercent", "numeric", "a proportion, between 0 and 1, that define whether a species is lead for a given pixel", NA),
     expectsInput("rstTimeSinceFire", "Raster", "a time since fire raster layer", NA),
-    expectsInput("pixelGroupMap", "RasterLayer", "Pixels with identical values share identical stand features"),
-    expectsInput("rstCurrentBurnCumulative", "RasterLayer", "Cumulative number of times a pixel has burned")
+    expectsInput("pixelGroupMap", "RasterLayer", "Pixels with identical values share identical stand features")
+    #expectsInput("rstCurrentBurnCumulative", "RasterLayer", "Cumulative number of times a pixel has burned")
   ),
   outputObjects = bind_rows(
     createsOutput("rstCurrentBurn", "RasterLayer", paste(
