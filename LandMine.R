@@ -164,7 +164,7 @@ Init <- function(sim) {
 
 ### plot events
 plotFn <- function(sim) {
-  if (!identical(extent(sim$rstCurrentBurnCumulative), extent(sim$rstCurrentBurn))) {
+  if (is.null(sim$rstCurrentBurnCumulative)) {
     sim$rstCurrentBurnCumulative <- raster(sim$rstCurrentBurn)
   }
   if (time(sim) == P(sim)$.plotInitialTime) {
