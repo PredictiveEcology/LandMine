@@ -134,7 +134,6 @@ Init <- function(sim) {
   numHaPerPolygonNumeric <- numPixelsPerPolygonNumeric * (prod(res(sim$rstStudyRegion)) / 1e4)
   returnInterval <- sim$fireReturnIntervalsByPolygonNumeric
 
-
   message("Determine mean fire size")
   meanFireSizeHa <- meanTruncPareto(k = sim$kBest, lower = 1,
                                    upper = P(sim)$biggestPossibleFireSizeHa,
@@ -294,7 +293,7 @@ Burn <- function(sim) {
   numDefaultPixelGroups <- 20L
   numDefaultSpeciesCodes <- 2L
   emptyRas <- raster(extent(0, 2e4, 0, 2e4), res = 250)
-  
+
   # if(is.null(sim$fireReturnInterval)) {
   #   sim$fireReturnInterval <- Cache(randomPolygons, emptyRas, numTypes = numDefaultPolygons,
   #                                   notOlderThan = nOT, cacheRepo = cachePath(sim))
@@ -304,7 +303,7 @@ Burn <- function(sim) {
   #                  labels = c(60, 100, 120, 250))
   #   sim$fireReturnInterval[] <- as.numeric(as.character(vals))
   # }
-  
+
   if (!suppliedElsewhere("rstFlammable", sim)) {
   #  if (is.null(sim$rstFlammable)) {
     sim$rstFlammable <- raster(emptyRas)
@@ -344,7 +343,7 @@ Burn <- function(sim) {
     }
 
   }
-  
+
   # Upgrades to use suppliedElsewhere -- Eliot Oct 21 2018
   if (!suppliedElsewhere("pixelGroupMap", sim)) {
   #if (is.null(sim$pixelGroupMap)) {
@@ -369,7 +368,7 @@ Burn <- function(sim) {
     sim$vegLeadingPercent <- 0.8
   }
 
-  
+
   # if (!suppliedElsewhere("rstCurrentBurnCumulative))", sim)) {
   #   #if (is.null(sim$rstCurrentBurnCumulative)) {
   #   sim$rstCurrentBurnCumulative <- raster(sim$pixelGroupMap)
@@ -381,10 +380,10 @@ Burn <- function(sim) {
   # mods <- unlist(modules(sim))
   # if (all(names(meta) %in% mods)) {
   #   # means there is more than just this module in the simList
-  # 
+  #
   #   outputs <- lapply(meta, function(x) {x@outputObjects$objectName})
   #   otherMods <- mods[!(mods %in% currentModule(sim))]
-  # 
+  #
   #   # is it or will it be supplied by another module, if yes, don't load a default here
   #   if (!("rstCurrentBurnCumulative" %in% unlist(outputs[otherMods]))) {
   #     if (is.null(sim$rstCurrentBurnCumulative)) {
