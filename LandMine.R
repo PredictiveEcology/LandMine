@@ -293,7 +293,8 @@ Burn <- function(sim) {
   numDefaultPolygons <- 4L
   numDefaultPixelGroups <- 20L
   numDefaultSpeciesCodes <- 2L
-
+  emptyRas <- raster(extent(0, 2e4, 0, 2e4), res = 250)
+  
   # if(is.null(sim$fireReturnInterval)) {
   #   sim$fireReturnInterval <- Cache(randomPolygons, emptyRas, numTypes = numDefaultPolygons,
   #                                   notOlderThan = nOT, cacheRepo = cachePath(sim))
@@ -303,18 +304,19 @@ Burn <- function(sim) {
   #                  labels = c(60, 100, 120, 250))
   #   sim$fireReturnInterval[] <- as.numeric(as.character(vals))
   # }
-
-  if (is.null(sim$rstFlammable)) {
-    emptyRas <- raster(extent(0, 2e4, 0, 2e4), res = 250)
+  
+  if (!suppliedElsewhere("rstFlammable", sim)) {
+  #  if (is.null(sim$rstFlammable)) {
     sim$rstFlammable <- raster(emptyRas)
     sim$rstFlammable[] <- 0  # 0 means flammable
-  } else {
-    emptyRas <- raster(sim$rstFlammable)
-  }
+  } #else {
+    #emptyRas <- raster(sim$rstFlammable)
+  #}
 
   # names(sim$fireReturnInterval) <- "fireReturnInterval"
 
-  if (is.null(sim$rstStudyRegion)) {
+  if (!suppliedElsewhere("rstStudyRegion", sim)) {
+    #if (is.null(sim$rstStudyRegion)) {
     sim$rstStudyRegion <- Cache(randomPolygons, emptyRas,
                                 numTypes = numDefaultPolygons, notOlderThan = nOT,
                                 cacheRepo = cachePath(sim))
@@ -325,7 +327,8 @@ Burn <- function(sim) {
     sim$rstStudyRegion[] <- as.numeric(as.character(vals))
   }
 
-  if (is.null(sim$cohortData)) {
+  if (!suppliedElsewhere("cohortData", sim)) {
+  #  if (is.null(sim$cohortData)) {
     if (!P(sim)$randomDefaultData) {
       ranNum <- runif(1)
       set.seed(123)
@@ -341,47 +344,54 @@ Burn <- function(sim) {
     }
 
   }
-
-  if (is.null(sim$pixelGroupMap)) {
+  
+  # Upgrades to use suppliedElsewhere -- Eliot Oct 21 2018
+  if (!suppliedElsewhere("pixelGroupMap", sim)) {
+  #if (is.null(sim$pixelGroupMap)) {
     sim$pixelGroupMap <- Cache(randomPolygons, emptyRas, numTypes = numDefaultPixelGroups,
                                notOlderThan = nOT, cacheRepo = cachePath(sim))
   }
 
-  if (is.null(sim$rstTimeSinceFire)) {
+  if (!suppliedElsewhere("rstTimeSinceFire", sim)) {
+    #if (is.null(sim$rstTimeSinceFire)) {
     sim$rstTimeSinceFire <- raster(sim$pixelGroupMap)
     sim$rstTimeSinceFire[] <- 200
   }
 
-  if (is.null(sim$species)) {
+  if (!suppliedElsewhere("species", sim)) {
+    #if (is.null(sim$species)) {
     sim$species <- data.table(species = c("Pinu_sp", "Pice_gla"),
                               speciesCode = 1:numDefaultSpeciesCodes)
   }
 
-  if (is.null(sim$vegLeadingPercent)) {
+  if (!suppliedElsewhere("vegLeadingPercent", sim)) {
+  #  if (is.null(sim$vegLeadingPercent)) {
     sim$vegLeadingPercent <- 0.8
   }
 
-  if (is.null(sim$rstCurrentBurnCumulative)) {
-    sim$rstCurrentBurnCumulative <- raster(sim$pixelGroupMap)
-    sim$rstCurrentBurnCumulative[sim$rstTimeSinceFire[] == 0] <- 1
-  }
+  
+  # if (!suppliedElsewhere("rstCurrentBurnCumulative))", sim)) {
+  #   #if (is.null(sim$rstCurrentBurnCumulative)) {
+  #   sim$rstCurrentBurnCumulative <- raster(sim$pixelGroupMap)
+  #   sim$rstCurrentBurnCumulative[sim$rstTimeSinceFire[] == 0] <- 1
+  # }
 
   # see https://github.com/PredictiveEcology/SpaDES.tools/issues#17 for discussion about this
-  meta <- depends(sim)@dependencies
-  mods <- unlist(modules(sim))
-  if (all(names(meta) %in% mods)) {
-    # means there is more than just this module in the simList
-
-    outputs <- lapply(meta, function(x) {x@outputObjects$objectName})
-    otherMods <- mods[!(mods %in% currentModule(sim))]
-
-    # is it or will it be supplied by another module, if yes, don't load a default here
-    if (!("rstCurrentBurnCumulative" %in% unlist(outputs[otherMods]))) {
-      if (is.null(sim$rstCurrentBurnCumulative)) {
-        sim$rstCurrentBurnCumulative <- raster(sim$pixelGroupMap)
-      }
-    }
-  }
+  # meta <- depends(sim)@dependencies
+  # mods <- unlist(modules(sim))
+  # if (all(names(meta) %in% mods)) {
+  #   # means there is more than just this module in the simList
+  # 
+  #   outputs <- lapply(meta, function(x) {x@outputObjects$objectName})
+  #   otherMods <- mods[!(mods %in% currentModule(sim))]
+  # 
+  #   # is it or will it be supplied by another module, if yes, don't load a default here
+  #   if (!("rstCurrentBurnCumulative" %in% unlist(outputs[otherMods]))) {
+  #     if (is.null(sim$rstCurrentBurnCumulative)) {
+  #       sim$rstCurrentBurnCumulative <- raster(sim$pixelGroupMap)
+  #     }
+  #   }
+  # }
 
   return(invisible(sim))
 }
