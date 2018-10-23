@@ -29,7 +29,7 @@ defineModule(sim, list(
   ),
   inputObjects = bind_rows(
     expectsInput("rstFlammable", "Raster", "A raster layer, with 0, 1 and NA, where 1 indicates areas that are flammable, 0 not flammable (e.g., lakes) and NA not applicable (e.g., masked)"),
-    expectsInput("rstStudyRegion","Raster", "A raster layer that is a factor raster, with at least 1 column called LTHRC, representing the fire return interval in years"),
+    expectsInput("rasterToMatch","Raster", "A raster layer that is a factor raster, with at least 1 column called fireReturnInterval, representing the fire return interval in years"),
     expectsInput("species", "data.table", "Columns: species, speciesCode, Indicating several features about species"),
     expectsInput("cohortData", "data.table", "Columns: B, pixelGroup, speciesCode, Indicating several features about ages and current vegetation of stand"),
     expectsInput("vegLeadingPercent", "numeric", "a proportion, between 0 and 1, that define whether a species is lead for a given pixel", NA),
@@ -123,15 +123,22 @@ Init <- function(sim) {
   message("Initializing fire maps")
   sim$fireTimestep <- P(sim)$fireTimestep
   sim$fireInitialTime <- P(sim)$burnInitialTime
-  numPixelsPerPolygonNumeric <- Cache(freq, sim$rstStudyRegion, cacheRepo = cachePath(sim)) %>%
+
+  # check sim$rasterToMatch should have no zeros
+  zeros <- sim$rasterToMatch[]==0
+  if (any(zeros)) sim$rasterToMatch[zeros] <- NA
+  numPixelsPerPolygonNumeric <- Cache(freq, sim$rasterToMatch, useNA = "no", cacheRepo = cachePath(sim)) %>%
     na.omit()
+  numPixelsPerPolygonNumeric[, "value"] <- raster::factorValues(sim$rasterToMatch,
+                                                                numPixelsPerPolygonNumeric[, "value"],
+                                                                att = "fireReturnInterval")[,1]
   ordPolygons <- order(numPixelsPerPolygonNumeric[, "value"])
   numPixelsPerPolygonNumeric <- numPixelsPerPolygonNumeric[ordPolygons, , drop = FALSE]
   sim$fireReturnIntervalsByPolygonNumeric <- numPixelsPerPolygonNumeric[, "value"]
   numPixelsPerPolygonNumeric <- numPixelsPerPolygonNumeric[, "count"]
   names(numPixelsPerPolygonNumeric) <- sim$fireReturnIntervalsByPolygonNumeric
 
-  numHaPerPolygonNumeric <- numPixelsPerPolygonNumeric * (prod(res(sim$rstStudyRegion)) / 1e4)
+  numHaPerPolygonNumeric <- numPixelsPerPolygonNumeric * (prod(res(sim$rasterToMatch)) / 1e4)
   returnInterval <- sim$fireReturnIntervalsByPolygonNumeric
 
   message("Determine mean fire size")
@@ -143,8 +150,8 @@ Init <- function(sim) {
 
   message("Write fire return interval map to disk")
 
-  sim$fireReturnInterval <- raster(sim$rstStudyRegion)
-  sim$fireReturnInterval[] <- sim$rstStudyRegion[]
+  sim$fireReturnInterval <- raster(sim$rasterToMatch)
+  sim$fireReturnInterval[] <- sim$rasterToMatch[]
   fireReturnIntFilename <- file.path(tempdir(), "fireReturnInterval.tif")
   fireReturnIntFilename <- file.path(cachePath(sim), "rasters/fireReturnInterval.tif")
   sim$fireReturnInterval <- writeRaster(sim$fireReturnInterval, filename = fireReturnIntFilename,
@@ -184,8 +191,8 @@ Burn <- function(sim) {
                                 mu = sim$numFiresPerYear * P(sim)$fireTimestep,
                                 size = 1.8765)
 
-  thisYrStartCells <- data.table(pixel = 1:ncell(sim$rstStudyRegion),
-                                 polygonNumeric = sim$rstStudyRegion[] * sim$rstFlammableNum[],
+  thisYrStartCells <- data.table(pixel = 1:ncell(sim$rasterToMatch),
+                                 polygonNumeric = sim$rasterToMatch[] * sim$rstFlammableNum[],
                                  key = "polygonNumeric")
   thisYrStartCells <- thisYrStartCells[polygonNumeric == 0, polygonNumeric := NA] %>%
     na.omit() %>%
@@ -314,16 +321,16 @@ Burn <- function(sim) {
 
   # names(sim$fireReturnInterval) <- "fireReturnInterval"
 
-  if (!suppliedElsewhere("rstStudyRegion", sim)) {
-    #if (is.null(sim$rstStudyRegion)) {
-    sim$rstStudyRegion <- Cache(randomPolygons, emptyRas,
+  if (!suppliedElsewhere("rasterToMatch", sim)) {
+    #if (is.null(sim$rasterToMatch)) {
+    sim$rasterToMatch <- Cache(randomPolygons, emptyRas,
                                 numTypes = numDefaultPolygons, notOlderThan = nOT,
                                 cacheRepo = cachePath(sim))
 
-    vals <- factor(sim$rstStudyRegion[],
+    vals <- factor(sim$rasterToMatch[],
                    levels = 1:numDefaultPolygons,
                    labels = c(60, 100, 120, 250))
-    sim$rstStudyRegion[] <- as.numeric(as.character(vals))
+    sim$rasterToMatch[] <- as.numeric(as.character(vals))
   }
 
   if (!suppliedElsewhere("cohortData", sim)) {
