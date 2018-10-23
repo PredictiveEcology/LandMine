@@ -28,7 +28,7 @@ defineModule(sim, list(
                     desc = "Used in burning. Will be passed to data.table::setDTthreads")
   ),
   inputObjects = bind_rows(
-    expectsInput("rstFlammable", "Raster", "A raster layer, with 0, 1 and NA, where 0 indicates areas that are flammable, 1 not flammable (e.g., lakes) and NA not applicable (e.g., masked)"),
+    expectsInput("rstFlammable", "Raster", "A raster layer, with 0, 1 and NA, where 1 indicates areas that are flammable, 0 not flammable (e.g., lakes) and NA not applicable (e.g., masked)"),
     expectsInput("rstStudyRegion","Raster", "A raster layer that is a factor raster, with at least 1 column called LTHRC, representing the fire return interval in years"),
     expectsInput("species", "data.table", "Columns: species, speciesCode, Indicating several features about species"),
     expectsInput("cohortData", "data.table", "Columns: B, pixelGroup, speciesCode, Indicating several features about ages and current vegetation of stand"),
@@ -154,7 +154,7 @@ Init <- function(sim) {
   sim$rstFlammableNum <- raster(sim$rstFlammable)
   message("6: ", Sys.time())
 
-  sim$rstFlammableNum[] <- 1L - as.integer(sim$rstFlammable[])
+  sim$rstFlammableNum[] <- as.integer(sim$rstFlammable[])
   sim$rstFlammableNum[is.na(sim$rstFlammableNum[])] <- NA
 
   # rm("rstFlammable", envir = envir(sim)) # don't need this in LandMine ... but it is used in timeSinceFire
@@ -307,7 +307,7 @@ Burn <- function(sim) {
   if (!suppliedElsewhere("rstFlammable", sim)) {
   #  if (is.null(sim$rstFlammable)) {
     sim$rstFlammable <- raster(emptyRas)
-    sim$rstFlammable[] <- 0  # 0 means flammable
+    sim$rstFlammable[] <- 1  # 1 means flammable
   } #else {
     #emptyRas <- raster(sim$rstFlammable)
   #}
