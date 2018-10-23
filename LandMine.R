@@ -252,13 +252,19 @@ Burn <- function(sim) {
   # Other vegetation that can burn -- e.g., grasslands, lichen, shrub
   ROS[sim$rstFlammableNum[] == 1 & is.na(ROS)] <- 30L
 
-
   ## TODO: test equal rates of spread
   if (grepl("equalROS", get("runName", .GlobalEnv))) {
     ROS[young & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
     ROS[immature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
     ROS[mature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
     ROS[sim$rstFlammableNum[] == 1 & is.na(ROS)] <- 1L
+  }
+  ## end TODO
+
+
+  ## TODO: test log(rates of spread), which maintains relationships but makes more equal
+  if (grepl("logROS", get("runName", .GlobalEnv))) {
+    ROS[] <- log(ROS[])
   }
   ## end TODO
 
