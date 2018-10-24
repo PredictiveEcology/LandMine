@@ -187,14 +187,16 @@ plotFn <- function(sim) {
 
 ### burn events
 Burn <- function(sim) {
+  sim$numFiresPerYear <- na.omit(sim$numFiresPerYear)
+  NA_ids <- as.integer(attr(sim$numFiresPerYear, "na.action"))
   numFiresThisPeriod <- rnbinom(length(sim$numFiresPerYear),
                                 mu = sim$numFiresPerYear * P(sim)$fireTimestep,
                                 size = 1.8765)
-
+  
   thisYrStartCells <- data.table(pixel = 1:ncell(sim$rasterToMatch),
                                  polygonNumeric = sim$rasterToMatch[] * sim$rstFlammableNum[],
                                  key = "polygonNumeric")
-  thisYrStartCells <- thisYrStartCells[polygonNumeric == 0, polygonNumeric := NA] %>%
+  thisYrStartCells <- thisYrStartCells[polygonNumeric %in% c(0, NA_ids), polygonNumeric := NA] %>%
     na.omit() %>%
     .[, SpaDES.tools:::resample(pixel, numFiresThisPeriod[.GRP]), by = polygonNumeric] %>%
     .$V1
