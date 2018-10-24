@@ -129,12 +129,12 @@ Init <- function(sim) {
   if (any(zeros, na.rm = TRUE)) sim$rasterToMatch[zeros] <- NA
   numPixelsPerPolygonNumeric <- Cache(freq, sim$rasterToMatch, useNA = "no", cacheRepo = cachePath(sim)) %>%
     na.omit()
-  numPixelsPerPolygonNumeric[, "value"] <- raster::factorValues(sim$rasterToMatch,
+  numPixelsPerPolygonNumeric <- cbind(numPixelsPerPolygonNumeric, fri = raster::factorValues(sim$rasterToMatch,
                                                                 numPixelsPerPolygonNumeric[, "value"],
-                                                                att = "fireReturnInterval")[,1]
+                                                                att = "fireReturnInterval")[,1])
   ordPolygons <- order(numPixelsPerPolygonNumeric[, "value"])
   numPixelsPerPolygonNumeric <- numPixelsPerPolygonNumeric[ordPolygons, , drop = FALSE]
-  sim$fireReturnIntervalsByPolygonNumeric <- numPixelsPerPolygonNumeric[, "value"]
+  sim$fireReturnIntervalsByPolygonNumeric <- numPixelsPerPolygonNumeric[, "fri"]
   numPixelsPerPolygonNumeric <- numPixelsPerPolygonNumeric[, "count"]
   names(numPixelsPerPolygonNumeric) <- sim$fireReturnIntervalsByPolygonNumeric
 
@@ -151,7 +151,7 @@ Init <- function(sim) {
   message("Write fire return interval map to disk")
 
   sim$fireReturnInterval <- raster(sim$rasterToMatch)
-  sim$fireReturnInterval[] <- sim$rasterToMatch[]
+  sim$fireReturnInterval[] <- raster::factorValues(sim$rasterToMatch, sim$rasterToMatch[], att = "fireReturnInterval")[,1]
   fireReturnIntFilename <- file.path(tempdir(), "fireReturnInterval.tif")
   fireReturnIntFilename <- file.path(cachePath(sim), "rasters/fireReturnInterval.tif")
   sim$fireReturnInterval <- writeRaster(sim$fireReturnInterval, filename = fireReturnIntFilename,
@@ -205,7 +205,9 @@ Burn <- function(sim) {
   fireSizesThisPeriod <- rtruncpareto(length(thisYrStartCells), lower = 1,
                                       upper = P(sim)$biggestPossibleFireSizeHa,
                                       shape = sim$kBest)
-  # Because annual number of fires is
+  
+  # Because annual number of fires includes fires <6.25 ha, sometimes this will round down to 0 pixels.
+  #   This calculation makes that probabilistic.
   fireSizesInPixels <- fireSizesThisPeriod / (prod(res(sim$rstFlammableNum)) / 1e4)
   ranDraws <- runif(length(fireSizesInPixels))
   truncVals <- trunc(fireSizesInPixels)
