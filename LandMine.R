@@ -126,7 +126,7 @@ Init <- function(sim) {
 
   # check sim$rasterToMatch should have no zeros
   zeros <- sim$rasterToMatch[]==0
-  if (any(zeros)) sim$rasterToMatch[zeros] <- NA
+  if (any(zeros, na.rm = TRUE)) sim$rasterToMatch[zeros] <- NA
   numPixelsPerPolygonNumeric <- Cache(freq, sim$rasterToMatch, useNA = "no", cacheRepo = cachePath(sim)) %>%
     na.omit()
   numPixelsPerPolygonNumeric[, "value"] <- raster::factorValues(sim$rasterToMatch,
