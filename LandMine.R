@@ -125,13 +125,13 @@ Init <- function(sim) {
   sim$fireInitialTime <- P(sim)$burnInitialTime
 
   # check sim$rasterToMatch should have no zeros
-  zeros <- sim$rasterToMatch[]==0
+  zeros <- sim$rasterToMatch[] == 0
   if (any(zeros, na.rm = TRUE)) sim$rasterToMatch[zeros] <- NA
   numPixelsPerPolygonNumeric <- Cache(freq, sim$rasterToMatch, useNA = "no", cacheRepo = cachePath(sim)) %>%
     na.omit()
   numPixelsPerPolygonNumeric <- cbind(numPixelsPerPolygonNumeric, fri = raster::factorValues(sim$rasterToMatch,
                                                                 numPixelsPerPolygonNumeric[, "value"],
-                                                                att = "fireReturnInterval")[,1])
+                                                                att = "fireReturnInterval")[, 1])
   ordPolygons <- order(numPixelsPerPolygonNumeric[, "value"])
   numPixelsPerPolygonNumeric <- numPixelsPerPolygonNumeric[ordPolygons, , drop = FALSE]
   sim$fireReturnIntervalsByPolygonNumeric <- numPixelsPerPolygonNumeric[, "fri"]
@@ -151,7 +151,7 @@ Init <- function(sim) {
   message("Write fire return interval map to disk")
 
   sim$fireReturnInterval <- raster(sim$rasterToMatch)
-  sim$fireReturnInterval[] <- raster::factorValues(sim$rasterToMatch, sim$rasterToMatch[], att = "fireReturnInterval")[,1]
+  sim$fireReturnInterval[] <- raster::factorValues(sim$rasterToMatch, sim$rasterToMatch[], att = "fireReturnInterval")[, 1]
   fireReturnIntFilename <- file.path(tempdir(), "fireReturnInterval.tif")
   fireReturnIntFilename <- file.path(cachePath(sim), "rasters/fireReturnInterval.tif")
   sim$fireReturnInterval <- writeRaster(sim$fireReturnInterval, filename = fireReturnIntFilename,
