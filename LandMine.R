@@ -32,7 +32,7 @@ defineModule(sim, list(
     expectsInput("rasterToMatch","Raster", "A raster layer that is a factor raster, with at least 1 column called fireReturnInterval, representing the fire return interval in years"),
     expectsInput("species", "data.table", "Columns: species, speciesCode, Indicating several features about species"),
     expectsInput("cohortData", "data.table", "Columns: B, pixelGroup, speciesCode, Indicating several features about ages and current vegetation of stand"),
-    expectsInput("vegLeadingPercent", "numeric", "a proportion, between 0 and 1, that define whether a species is lead for a given pixel", NA),
+    expectsInput("vegLeadingProportion", "numeric", "a proportion, between 0 and 1, that define whether a species is lead for a given pixel", NA),
     expectsInput("rstTimeSinceFire", "Raster", "a time since fire raster layer", NA),
     expectsInput("pixelGroupMap", "RasterLayer", "Pixels with identical values share identical stand features")
     #expectsInput("rstCurrentBurnCumulative", "RasterLayer", "Cumulative number of times a pixel has burned")
@@ -110,7 +110,9 @@ EstimateTruncPareto <- function(sim) {
     #abs(sum(fs[fs>quantile(fs, 0.95)])/sum(fs) - 0.9) # "90% of area is in 5% of fires" # from Dave rule of thumb
 
     # Eliot Adjustment because each year was too constant -- should create greater variation
-    abs(sum(fs[fs > quantile(fs, 0.95)]) / sum(fs) - 0.95) # "95% of area is in 5% of fires"
+    abs(sum(fs[fs > quantile(fs, 0.95)]) / sum(fs) - 0.95) # "95% of area (2nd term) is in 5% of fires (first term)"
+    # Eliot Adjustment Oct 23 2018 because each year still too constant -- should create greater variation
+    #abs(sum(fs[fs > quantile(fs, 0.90)]) / sum(fs) - 0.95) # "95% of area (2nd term) is in 5% of fires (first term)"
   }
 
   sim$kBest <- Cache(optimize, interval = c(0.05, 0.99), f = findK_upper,
@@ -191,7 +193,7 @@ Burn <- function(sim) {
   NA_ids <- as.integer(attr(sim$numFiresPerYear, "na.action"))
   numFiresThisPeriod <- rnbinom(length(sim$numFiresPerYear),
                                 mu = sim$numFiresPerYear * P(sim)$fireTimestep,
-                                size = 1.8765)
+                                size = 1.3765) # Eliot lowered this from 1.8765 on Oct 23, 2018 because too constant
   
   thisYrStartCells <- data.table(pixel = 1:ncell(sim$rasterToMatch),
                                  polygonNumeric = sim$rasterToMatch[] * sim$rstFlammableNum[],
@@ -226,7 +228,7 @@ Burn <- function(sim) {
   immature <- (sim$rstTimeSinceFire[] > 40) & !mature
   young <- !immature & !mature
 
-  vegTypeMap <- vegTypeMapGenerator(sim$species, sim$cohortData, sim$pixelGroupMap, sim$vegLeadingPercent)
+  vegTypeMap <- vegTypeMapGenerator(sim$species, sim$cohortData, sim$pixelGroupMap, sim$vegLeadingProportion)
   vegType <- getValues(vegTypeMap)
   vegTypes <- data.frame(raster::levels(vegTypeMap)[[1]][, "Factor", drop = FALSE])
   #vegTypes <- factorValues(vegTypeMap, seq_len(NROW(levels(vegTypeMap)[[1]]))) # [vegType, "Factor"]
@@ -380,9 +382,9 @@ Burn <- function(sim) {
                               speciesCode = 1:numDefaultSpeciesCodes)
   }
 
-  if (!suppliedElsewhere("vegLeadingPercent", sim)) {
-  #  if (is.null(sim$vegLeadingPercent)) {
-    sim$vegLeadingPercent <- 0.8
+  if (!suppliedElsewhere("vegLeadingProportion", sim)) {
+  #  if (is.null(sim$vegLeadingProportion)) {
+    sim$vegLeadingProportion <- 0.8
   }
 
 
@@ -416,7 +418,7 @@ meanTruncPareto <- function(k, lower, upper, alpha) {
   k * lower^k * (upper^(1 - k) - alpha^(1 - k)) / ((1 - k) * (1 - (alpha/upper)^k))
 }
 
-vegTypeMapGenerator <- function(species, cohortdata, pixelGroupMap, vegLeadingPercent) {
+vegTypeMapGenerator <- function(species, cohortdata, pixelGroupMap, vegLeadingProportion) {
   species[species == "Pinu_ban" | species == "Pinu_con" | species == "Pinu_sp", speciesGroup := "PINU"]
   species[species == "Betu_pap" | species == "Popu_bal" | species == "Popu_tre" |
             species == "Lari_lar", speciesGroup := "DECI"]
@@ -430,26 +432,26 @@ vegTypeMapGenerator <- function(species, cohortdata, pixelGroupMap, vegLeadingPe
   shortcohortdata <- shortcohortdata[, .(speciesGroupB = sum(B, na.rm = TRUE),
                                          totalB = mean(totalB, na.rm = TRUE)),
                                      by = c("pixelGroup", "speciesGroup")]
-  shortcohortdata[, speciesPercentage := speciesGroupB / totalB]
+  shortcohortdata[, speciesProportion := speciesGroupB / totalB]
 
   speciesLeading <- NULL
   Factor <- NULL
   ID <- NULL
   pixelGroup <- NULL
-  speciesPercentage <- NULL
+  speciesProportion <- NULL
   speciesGroup <- NULL
   speciesCode <- NULL
   totalB <- NULL
   B <- NULL
   speciesGroupB <- NULL
 
-  shortcohortdata[speciesGroup == "PINU" & speciesPercentage > vegLeadingPercent,
+  shortcohortdata[speciesGroup == "PINU" & speciesProportion > vegLeadingProportion,
                   speciesLeading := 1]# pine leading
-  shortcohortdata[speciesGroup == "DECI" & speciesPercentage > vegLeadingPercent,
+  shortcohortdata[speciesGroup == "DECI" & speciesProportion > vegLeadingProportion,
                   speciesLeading := 2]# deciduous leading
-  shortcohortdata[speciesGroup == "PICE_MAR" & speciesPercentage > vegLeadingPercent,
+  shortcohortdata[speciesGroup == "PICE_MAR" & speciesProportion > vegLeadingProportion,
                   speciesLeading := 3]# spruce leading
-  shortcohortdata[speciesGroup == "PICE_GLA" & speciesPercentage > vegLeadingPercent,
+  shortcohortdata[speciesGroup == "PICE_GLA" & speciesProportion > vegLeadingProportion,
                   speciesLeading := 4]# spruce leading
   shortcohortdata[is.na(speciesLeading), speciesLeading := 0]
   shortcohortdata[,speciesLeading := max(speciesLeading, na.rm = TRUE), by = pixelGroup]
