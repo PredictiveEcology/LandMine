@@ -11,7 +11,8 @@ defineModule(sim, list(
   citation = list("citation.bib"),
   documentation = list("README.txt", "LandMine.Rmd"),
   reqdPkgs = list("data.table", "grDevices", "magrittr", "raster", "RColorBrewer", "VGAM",
-                  "PredictiveEcology/SpaDES.tools@development"),
+                  "PredictiveEcology/SpaDES.tools@development",
+                  "PredictiveEcology/pemisc"),
   parameters = rbind(
     #defineParameter("paramName", "paramClass", value, min, max, "parameter description")),
     defineParameter("fireTimestep", "numeric", 1, NA, NA, "This describes the simulation time at which the first plot event should occur"),
@@ -29,7 +30,7 @@ defineModule(sim, list(
   ),
   inputObjects = bind_rows(
     expectsInput("rstFlammable", "Raster", "A raster layer, with 0, 1 and NA, where 1 indicates areas that are flammable, 0 not flammable (e.g., lakes) and NA not applicable (e.g., masked)"),
-    expectsInput("rasterToMatch","Raster", "A raster layer that is a factor raster, with at least 1 column called fireReturnInterval, representing the fire return interval in years"),
+    expectsInput("fireReturnInterval","Raster", "A raster layer that is a factor raster, with at least 1 column called fireReturnInterval, representing the fire return interval in years"),
     expectsInput("species", "data.table", "Columns: species, speciesCode, Indicating several features about species"),
     expectsInput("cohortData", "data.table", "Columns: B, pixelGroup, speciesCode, Indicating several features about ages and current vegetation of stand"),
     expectsInput("vegLeadingProportion", "numeric", "a proportion, between 0 and 1, that define whether a species is lead for a given pixel", NA),
@@ -126,21 +127,23 @@ Init <- function(sim) {
   sim$fireTimestep <- P(sim)$fireTimestep
   sim$fireInitialTime <- P(sim)$burnInitialTime
 
-  # check sim$rasterToMatch should have no zeros
-  zeros <- sim$rasterToMatch[] == 0
-  if (any(zeros, na.rm = TRUE)) sim$rasterToMatch[zeros] <- NA
-  numPixelsPerPolygonNumeric <- Cache(freq, sim$rasterToMatch, useNA = "no", cacheRepo = cachePath(sim)) %>%
+  # check sim$fireReturnInterval should have no zeros
+  zeros <- sim$fireReturnInterval[] == 0
+  if (any(zeros, na.rm = TRUE)) sim$fireReturnInterval[zeros] <- NA
+  numPixelsPerPolygonNumeric <- Cache(freq, sim$fireReturnInterval, useNA = "no", cacheRepo = cachePath(sim)) %>%
     na.omit()
-  numPixelsPerPolygonNumeric <- cbind(numPixelsPerPolygonNumeric, fri = raster::factorValues(sim$rasterToMatch,
-                                                                numPixelsPerPolygonNumeric[, "value"],
-                                                                att = "fireReturnInterval")[, 1])
+  colnames(numPixelsPerPolygonNumeric) <- c("fri", "count")
+  numPixelsPerPolygonNumeric <- cbind(value = seq_len(NROW(numPixelsPerPolygonNumeric)), numPixelsPerPolygonNumeric)
+  #numPixelsPerPolygonNumeric <- cbind(numPixelsPerPolygonNumeric, fri = raster::factorValues(sim$rasterToMatch,
+  #                                                              numPixelsPerPolygonNumeric[, "value"],
+  #                                                              att = "fireReturnInterval")[, 1])
   ordPolygons <- order(numPixelsPerPolygonNumeric[, "value"])
   numPixelsPerPolygonNumeric <- numPixelsPerPolygonNumeric[ordPolygons, , drop = FALSE]
   sim$fireReturnIntervalsByPolygonNumeric <- numPixelsPerPolygonNumeric[, "fri"]
   numPixelsPerPolygonNumeric <- numPixelsPerPolygonNumeric[, "count"]
   names(numPixelsPerPolygonNumeric) <- sim$fireReturnIntervalsByPolygonNumeric
 
-  numHaPerPolygonNumeric <- numPixelsPerPolygonNumeric * (prod(res(sim$rasterToMatch)) / 1e4)
+  numHaPerPolygonNumeric <- numPixelsPerPolygonNumeric * (prod(res(sim$fireReturnInterval)) / 1e4)
   returnInterval <- sim$fireReturnIntervalsByPolygonNumeric
 
   message("Determine mean fire size")
@@ -152,12 +155,11 @@ Init <- function(sim) {
 
   message("Write fire return interval map to disk")
 
-  sim$fireReturnInterval <- raster(sim$rasterToMatch)
-  sim$fireReturnInterval[] <- raster::factorValues(sim$rasterToMatch, sim$rasterToMatch[], att = "fireReturnInterval")[, 1]
-  fireReturnIntFilename <- file.path(tempdir(), "fireReturnInterval.tif")
-  fireReturnIntFilename <- file.path(cachePath(sim), "rasters/fireReturnInterval.tif")
-  sim$fireReturnInterval <- writeRaster(sim$fireReturnInterval, filename = fireReturnIntFilename,
-                                        datatype = "INT2U", overwrite = TRUE)
+  #sim$fireReturnInterval <- raster(sim$rasterToMatch)
+  #sim$fireReturnInterval[] <- raster::factorValues(sim$rasterToMatch, sim$rasterToMatch[], att = "fireReturnInterval")[, 1]
+  #fireReturnIntFilename <- file.path(cachePath(sim), "rasters/fireReturnInterval.tif")
+  #sim$fireReturnInterval <- writeRaster(sim$fireReturnInterval, filename = fireReturnIntFilename,
+  #                                      datatype = "INT2U", overwrite = TRUE)
   sim$rstCurrentBurn <- raster(sim$fireReturnInterval)
   sim$rstCurrentBurn[] <- 0L
   sim$rstFlammableNum <- raster(sim$rstFlammable)
@@ -176,7 +178,7 @@ plotFn <- function(sim) {
     sim$rstCurrentBurnCumulative <- raster(sim$rstCurrentBurn)
   }
   if (time(sim) == P(sim)$.plotInitialTime) {
-    Plot(sim$fireReturnInterval, title = "Fire Return Interval", speedup = 3, new = TRUE)
+    Plot(sim$fireReturnInterval, title = "Fire Return Interval", new = TRUE)
     sim$rstCurrentBurnCumulative[!is.na(sim$rstCurrentBurn)] <- 0
   }
   sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn +   sim$rstCurrentBurnCumulative
@@ -194,9 +196,9 @@ Burn <- function(sim) {
   numFiresThisPeriod <- rnbinom(length(sim$numFiresPerYear),
                                 mu = sim$numFiresPerYear * P(sim)$fireTimestep,
                                 size = 1.3765) # Eliot lowered this from 1.8765 on Oct 23, 2018 because too constant
-  
-  thisYrStartCells <- data.table(pixel = 1:ncell(sim$rasterToMatch),
-                                 polygonNumeric = sim$rasterToMatch[] * sim$rstFlammableNum[],
+
+  thisYrStartCells <- data.table(pixel = 1:ncell(sim$fireReturnInterval),
+                                 polygonNumeric = sim$fireReturnInterval[] * sim$rstFlammableNum[],
                                  key = "polygonNumeric")
   thisYrStartCells <- thisYrStartCells[polygonNumeric %in% c(0, NA_ids), polygonNumeric := NA] %>%
     na.omit() %>%
@@ -209,7 +211,7 @@ Burn <- function(sim) {
   fireSizesThisPeriod <- rtruncpareto(length(thisYrStartCells), lower = 1,
                                       upper = P(sim)$biggestPossibleFireSizeHa,
                                       shape = sim$kBest)
-  
+
   # Because annual number of fires includes fires <6.25 ha, sometimes this will round down to 0 pixels.
   #   This calculation makes that probabilistic.
   fireSizesInPixels <- fireSizesThisPeriod / (prod(res(sim$rstFlammableNum)) / 1e4)
@@ -333,16 +335,16 @@ Burn <- function(sim) {
 
   # names(sim$fireReturnInterval) <- "fireReturnInterval"
 
-  if (!suppliedElsewhere("rasterToMatch", sim)) {
-    #if (is.null(sim$rasterToMatch)) {
-    sim$rasterToMatch <- Cache(randomPolygons, emptyRas,
+  if (!suppliedElsewhere("fireReturnInterval", sim)) {
+    #if (is.null(sim$fireReturnInterval)) {
+    sim$fireReturnInterval <- Cache(randomPolygons, emptyRas,
                                 numTypes = numDefaultPolygons, notOlderThan = nOT,
                                 cacheRepo = cachePath(sim))
 
-    vals <- factor(sim$rasterToMatch[],
-                   levels = 1:numDefaultPolygons,
-                   labels = c(60, 100, 120, 250))
-    sim$rasterToMatch[] <- as.numeric(as.character(vals))
+    #vals <- factor(sim$fireReturnInterval[],
+    #               levels = 1:numDefaultPolygons,
+    #               labels = c(60, 100, 120, 250))
+    sim$fireReturnInterval[] <- as.numeric(as.character(vals))
   }
 
   if (!suppliedElsewhere("cohortData", sim)) {
@@ -383,7 +385,6 @@ Burn <- function(sim) {
   }
 
   if (!suppliedElsewhere("vegLeadingProportion", sim)) {
-  #  if (is.null(sim$vegLeadingProportion)) {
     sim$vegLeadingProportion <- 0.8
   }
 
