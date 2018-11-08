@@ -49,9 +49,6 @@ defineModule(sim, list(
     createsOutput("fireInitialTime", "numeric",
                   "The initial event time of the burn event. This is simply a reassignment from P(sim)$burnInitialTime."
     ),
-    createsOutput("rstFlammableNum", "RasterLayer", paste(
-      "A binary, numeric raster indicating NA or 0 for not burnable.")
-    ),
     createsOutput("numFiresPerYear", "numeric", paste(
       "The average number of fires per year, by fire return interval level on rstCurrentBurn.")
     ),
@@ -104,16 +101,16 @@ doEvent.LandMine <- function(sim, eventTime, eventType, debug = FALSE) {
 EstimateTruncPareto <- function(sim) {
   message("Estimate Truncated Pareto parameters")
 
-  findK_upper <- function(params=c(0.4), upper1 ) {
+  findK_upper <- function(params = c(0.4), upper1) {
     fs <- round(rtruncpareto(1e6, 1, upper = upper1, shape = params[1]))
     #meanFS <- meanTruncPareto(k = params[1], lower = 1, upper = upper1, alpha = 1)
     #diff1 <- abs(quantile(fs, 0.95) - meanFS)
     #abs(sum(fs[fs>quantile(fs, 0.95)])/sum(fs) - 0.9) # "90% of area is in 5% of fires" # from Dave rule of thumb
 
     # Eliot Adjustment because each year was too constant -- should create greater variation
-    abs(sum(fs[fs > quantile(fs, 0.95)]) / sum(fs) - 0.95) # "95% of area (2nd term) is in 5% of fires (first term)"
-    # Eliot Adjustment Oct 23 2018 because each year still too constant -- should create greater variation
-    #abs(sum(fs[fs > quantile(fs, 0.90)]) / sum(fs) - 0.95) # "95% of area (2nd term) is in 5% of fires (first term)"
+    abs(sum(fs[fs > quantile(fs, 0.95)]) / sum(fs) - 0.95) # "95% of area (2nd term) is in 5% of fires (1st term)"
+    # Eliot Adjustment Oct 23, 2018 because each year still too constant -- should create greater variation
+    #abs(sum(fs[fs > quantile(fs, 0.90)]) / sum(fs) - 0.95) # "95% of area (2nd term) is in 10% of fires (1st term)"
   }
 
   sim$kBest <- Cache(optimize, interval = c(0.05, 0.99), f = findK_upper,
@@ -162,11 +159,7 @@ Init <- function(sim) {
   #                                      datatype = "INT2U", overwrite = TRUE)
   sim$rstCurrentBurn <- raster(sim$fireReturnInterval)
   sim$rstCurrentBurn[] <- 0L
-  sim$rstFlammableNum <- raster(sim$rstFlammable)
   message("6: ", Sys.time())
-
-  sim$rstFlammableNum[] <- as.integer(sim$rstFlammable[])
-  sim$rstFlammableNum[is.na(sim$rstFlammableNum[])] <- NA
 
   # rm("rstFlammable", envir = envir(sim)) # don't need this in LandMine ... but it is used in timeSinceFire
   return(invisible(sim))
@@ -198,8 +191,9 @@ Burn <- function(sim) {
                                 size = 1.3765) # Eliot lowered this from 1.8765 on Oct 23, 2018 because too constant
 
   thisYrStartCells <- data.table(pixel = 1:ncell(sim$fireReturnInterval),
-                                 polygonNumeric = sim$fireReturnInterval[] * sim$rstFlammableNum[],
+                                 polygonNumeric = sim$fireReturnInterval[],
                                  key = "polygonNumeric")
+
   thisYrStartCells <- thisYrStartCells[polygonNumeric %in% c(0, NA_ids), polygonNumeric := NA] %>%
     na.omit() %>%
     .[, SpaDES.tools:::resample(pixel, numFiresThisPeriod[.GRP]), by = polygonNumeric] %>%
@@ -214,7 +208,7 @@ Burn <- function(sim) {
 
   # Because annual number of fires includes fires <6.25 ha, sometimes this will round down to 0 pixels.
   #   This calculation makes that probabilistic.
-  fireSizesInPixels <- fireSizesThisPeriod / (prod(res(sim$rstFlammableNum)) / 1e4)
+  fireSizesInPixels <- fireSizesThisPeriod / (prod(res(sim$rstFlammable)) / 1e4)
   ranDraws <- runif(length(fireSizesInPixels))
   truncVals <- trunc(fireSizesInPixels)
   decimalVals <- (unname(fireSizesInPixels - (truncVals))) > ranDraws
@@ -258,14 +252,14 @@ Burn <- function(sim) {
   ROS[mature & vegType %in% spruce] <- 30L
 
   # Other vegetation that can burn -- e.g., grasslands, lichen, shrub
-  ROS[sim$rstFlammableNum[] == 1 & is.na(ROS)] <- 30L
+  ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 30L
 
   ## TODO: test equal rates of spread
   if (grepl("equalROS", get("runName", .GlobalEnv))) {
     ROS[young & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
     ROS[immature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
     ROS[mature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
-    ROS[sim$rstFlammableNum[] == 1 & is.na(ROS)] <- 1L
+    ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 1L
   }
   ## end TODO
 
@@ -328,7 +322,7 @@ Burn <- function(sim) {
   if (!suppliedElsewhere("rstFlammable", sim)) {
   #  if (is.null(sim$rstFlammable)) {
     sim$rstFlammable <- raster(emptyRas)
-    sim$rstFlammable[] <- 1  # 1 means flammable
+    sim$rstFlammable[] <- 1L  # 1 means flammable
   } #else {
     #emptyRas <- raster(sim$rstFlammable)
   #}
