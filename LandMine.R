@@ -29,28 +29,18 @@ defineModule(sim, list(
                     desc = "Used in burning. Will be passed to data.table::setDTthreads")
   ),
   inputObjects = bind_rows(
-    expectsInput("rstFlammable", "Raster", "A raster layer, with 0, 1 and NA, where 1 indicates areas that are flammable, 0 not flammable (e.g., lakes) and NA not applicable (e.g., masked)"),
-    expectsInput("fireReturnInterval","Raster", "A raster layer that is a factor raster, with at least 1 column called fireReturnInterval, representing the fire return interval in years"),
-    expectsInput("species", "data.table", "Columns: species, speciesCode, Indicating several features about species"),
     expectsInput("cohortData", "data.table", "Columns: B, pixelGroup, speciesCode, Indicating several features about ages and current vegetation of stand"),
-    expectsInput("vegLeadingProportion", "numeric", "a proportion, between 0 and 1, that define whether a species is lead for a given pixel", NA),
+    expectsInput("fireReturnInterval","Raster", "A raster layer that is a factor raster, with at least 1 column called fireReturnInterval, representing the fire return interval in years"),
+    expectsInput("pixelGroupMap", "RasterLayer", "Pixels with identical values share identical stand features"),
+    #expectsInput("rstCurrentBurnCumulative", "RasterLayer", "Cumulative number of times a pixel has burned"),
+    expectsInput("rstFlammable", "Raster", "A raster layer, with 0, 1 and NA, where 1 indicates areas that are flammable, 0 not flammable (e.g., lakes) and NA not applicable (e.g., masked)"),
     expectsInput("rstTimeSinceFire", "Raster", "a time since fire raster layer", NA),
-    expectsInput("pixelGroupMap", "RasterLayer", "Pixels with identical values share identical stand features")
-    #expectsInput("rstCurrentBurnCumulative", "RasterLayer", "Cumulative number of times a pixel has burned")
+    expectsInput("species", "data.table", "Columns: species, speciesCode, Indicating several features about species"),
+    expectsInput("vegLeadingProportion", "numeric", "a proportion, between 0 and 1, that define whether a species is lead for a given pixel", NA)
   ),
   outputObjects = bind_rows(
-    createsOutput("rstCurrentBurn", "RasterLayer", paste(
-      "A raster layer, produced at each timestep, where each",
-      "pixel is either 1 or 0 indicating burned or not burned.")
-    ),
-    createsOutput("fireTimestep", "numeric",
-                  "The number of time units between successive fire events in a fire module."
-    ),
     createsOutput("fireInitialTime", "numeric",
                   "The initial event time of the burn event. This is simply a reassignment from P(sim)$burnInitialTime."
-    ),
-    createsOutput("numFiresPerYear", "numeric", paste(
-      "The average number of fires per year, by fire return interval level on rstCurrentBurn.")
     ),
     createsOutput("fireReturnInterval", "RasterLayer", paste(
       "A Raster map showing the fire return interval. THis is created from the rstCurrentBurn.")
@@ -58,7 +48,17 @@ defineModule(sim, list(
     createsOutput("fireReturnIntervalsByPolygonNumeric", "numeric", paste(
       "A vector of the fire return intervals, ordered by the numeric representation of polygon ID")
     ),
+    createsOutput("fireTimestep", "numeric",
+                  "The number of time units between successive fire events in a fire module."
+    ),
     createsOutput("kBest", "numeric", "A numeric scalar that is the optimal value of K in the Truncated Pareto distribution (rtruncpareto)"),
+    createsOutput("numFiresPerYear", "numeric", paste(
+      "The average number of fires per year, by fire return interval level on rstCurrentBurn.")
+    ),
+    createsOutput("rstCurrentBurn", "RasterLayer", paste(
+      "A raster layer, produced at each timestep, where each",
+      "pixel is either 1 or 0 indicating burned or not burned.")
+    ),
     createsOutput("rstCurrentBurnCumulative", "RasterLayer", "Cumulative number of times a pixel has burned")
   )
 ))
