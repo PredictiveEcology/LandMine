@@ -264,7 +264,7 @@ Burn <- function(sim) {
   ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 30L
 
   if (!is.null(override.LandMine.Burn))
-    ROS <- override.LandMine.Burn(ROS)
+    ROS <- override.LandMine.Burn(sim, ROS)
   
   ROSmap <- raster(sim$pixelGroupMap)
   ROSmap[] <- ROS
@@ -456,7 +456,7 @@ override.LandMine.inputObjects <- function(sim) {
   sim
 }
 
-override.LandMine.Burn <- function(ROS) {
+override.LandMine.Burn <- function(sim, ROS) {
   ## test equal rates of spread
   if (grepl("equalROS", P(sim)$runName)) {
     ROS[young & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
