@@ -154,8 +154,8 @@ Init <- function(sim) {
 
   message("Determine mean fire size")
   meanFireSizeHa <- meanTruncPareto(k = sim$kBest, lower = 1,
-                                   upper = P(sim)$biggestPossibleFireSizeHa,
-                                   alpha = 1)
+                                    upper = P(sim)$biggestPossibleFireSizeHa,
+                                    alpha = 1)
   numFiresByPolygonNumeric <- numHaPerPolygonNumeric / meanFireSizeHa
   sim$numFiresPerYear <- numFiresByPolygonNumeric / returnInterval
 
@@ -183,7 +183,7 @@ plotFn <- function(sim) {
     Plot(sim$fireReturnInterval, title = "Fire Return Interval", new = TRUE)
     sim$rstCurrentBurnCumulative[!is.na(sim$rstCurrentBurn)] <- 0
   }
-  sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn +   sim$rstCurrentBurnCumulative
+  sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn + sim$rstCurrentBurnCumulative
   Plot(sim$rstCurrentBurnCumulative, new = TRUE,
        title = "Cumulative Fire Map",
        cols = c("pink", "red"), zero.color = "transparent")
@@ -265,7 +265,7 @@ Burn <- function(sim) {
 
   if (!is.null(override.LandMine.Burn))
     ROS <- override.LandMine.Burn(sim, ROS)
-  
+
   ROSmap <- raster(sim$pixelGroupMap)
   ROSmap[] <- ROS
 
@@ -309,7 +309,7 @@ Burn <- function(sim) {
     sim$rstFlammable <- raster(emptyRas)
     sim$rstFlammable[] <- 1L  # 1 means flammable
   }
-  
+
   if (!suppliedElsewhere("fireReturnInterval", sim)) {
     sim$fireReturnInterval <- Cache(randomPolygons, emptyRas,
                                     numTypes = numDefaultPolygons, notOlderThan = nOT,
@@ -322,7 +322,6 @@ Burn <- function(sim) {
   }
 
   if (!suppliedElsewhere("cohortData", sim)) {
-  #  if (is.null(sim$cohortData)) {
     if (!P(sim)$randomDefaultData) {
       ranNum <- runif(1)
       set.seed(123)
@@ -336,12 +335,10 @@ Burn <- function(sim) {
     if (!P(sim)$randomDefaultData) {
       set.seed(ranNum)
     }
-
   }
 
   # Upgrades to use suppliedElsewhere -- Eliot Oct 21 2018
   if (!suppliedElsewhere("pixelGroupMap", sim)) {
-  #if (is.null(sim$pixelGroupMap)) {
     sim$pixelGroupMap <- Cache(randomPolygons, emptyRas, numTypes = numDefaultPixelGroups,
                                notOlderThan = nOT, cacheRepo = cachePath(sim))
   }
@@ -385,7 +382,7 @@ Burn <- function(sim) {
   #     }
   #   }
   # }
-  
+
   if (!is.null(override.LandMine.inputObjects))
     sim <- override.LandMine.inputObjects(sim)
 
@@ -428,11 +425,11 @@ vegTypeMapGenerator <- function(species, cohortdata, pixelGroupMap, vegLeadingPr
   shortcohortdata[speciesGroup == "DECI" & speciesProportion > vegLeadingProportion,
                   speciesLeading := 2]# deciduous leading
   shortcohortdata[speciesGroup == "PICE_MAR" & speciesProportion > vegLeadingProportion,
-                  speciesLeading := 3]# spruce leading
+                  speciesLeading := 3]# black spruce leading
   shortcohortdata[speciesGroup == "PICE_GLA" & speciesProportion > vegLeadingProportion,
-                  speciesLeading := 4]# spruce leading
+                  speciesLeading := 4]# white spruce leading
   shortcohortdata[is.na(speciesLeading), speciesLeading := 0]
-  shortcohortdata[,speciesLeading := max(speciesLeading, na.rm = TRUE), by = pixelGroup]
+  shortcohortdata[, speciesLeading := max(speciesLeading, na.rm = TRUE), by = pixelGroup]
   shortcohortdata <- unique(shortcohortdata[, .(pixelGroup, speciesLeading)], by = "pixelGroup")
   shortcohortdata[speciesLeading == 0, speciesLeading := 5] # 5 is mixed forests
   attritable <- data.table(ID = sort(unique(shortcohortdata$speciesLeading)))
@@ -450,10 +447,10 @@ vegTypeMapGenerator <- function(species, cohortdata, pixelGroupMap, vegLeadingPr
 
 override.LandMine.inputObjects <- function(sim) {
   if (grepl("doubleFRI", P(sim)$runName)) {
-    sim$fireReturnInterval[] <- sim$fireReturnInterval[] * 2
+    sim$fireReturnInterval[] <- fireReturnInterval[] * 2
   }
-  
-  sim
+
+  return(invisible(sim))
 }
 
 override.LandMine.Burn <- function(sim, ROS) {
@@ -464,11 +461,11 @@ override.LandMine.Burn <- function(sim, ROS) {
     ROS[mature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
     ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 1L
   }
-  
+
   ## test log(rates of spread), which maintains relationships but makes more equal
   if (grepl("logROS", P(sim)$runName)) {
     ROS[] <- log(ROS[])
   }
-  
+
   ROS
 }
