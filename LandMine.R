@@ -254,29 +254,16 @@ Burn <- function(sim) {
   # Other vegetation that can burn -- e.g., grasslands, lichen, shrub
   ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 30L
 
-  ## TODO: test equal rates of spread
-  if (grepl("equalROS", get("runName", .GlobalEnv))) {
-    ROS[young & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
-    ROS[immature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
-    ROS[mature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
-    ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 1L
-  }
-  ## end TODO
-
-
-  ## TODO: test log(rates of spread), which maintains relationships but makes more equal
-  if (grepl("logROS", get("runName", .GlobalEnv))) {
-    ROS[] <- log(ROS[])
-  }
-  ## end TODO
-
+  if (!is.null(sim$override.LandMine.Burn))
+    ROS <- sim$override.LandMine.Burn(ROS)
+  
   ROSmap <- raster(sim$pixelGroupMap)
   ROSmap[] <- ROS
 
   # From DEoptim fitting - run in the LandMine.Rmd file
   spawnNewActive <- sns <- 10^c(-0.731520, -0.501823, -0.605968, -1.809726)
   spreadProb <- 0.9
-  sizeCutoffs <- 10^c(2.202732,  4.696060)
+  sizeCutoffs <- 10^c(2.202732, 4.696060)
 
   if (!all(is.na(thisYrStartCells)) & length(thisYrStartCells) > 0) {
     if (data.table::getDTthreads() < P(sim)$useParallel)
@@ -309,36 +296,20 @@ Burn <- function(sim) {
   numDefaultSpeciesCodes <- 2L
   emptyRas <- raster(extent(0, 2e4, 0, 2e4), res = 250)
 
-  # if(is.null(sim$fireReturnInterval)) {
-  #   sim$fireReturnInterval <- Cache(randomPolygons, emptyRas, numTypes = numDefaultPolygons,
-  #                                   notOlderThan = nOT, cacheRepo = cachePath(sim))
-  #
-  #   vals <- factor(sim$fireReturnInterval[],
-  #                  levels = 1:numDefaultPolygons,
-  #                  labels = c(60, 100, 120, 250))
-  #   sim$fireReturnInterval[] <- as.numeric(as.character(vals))
-  # }
-
   if (!suppliedElsewhere("rstFlammable", sim)) {
-  #  if (is.null(sim$rstFlammable)) {
     sim$rstFlammable <- raster(emptyRas)
     sim$rstFlammable[] <- 1L  # 1 means flammable
-  } #else {
-    #emptyRas <- raster(sim$rstFlammable)
-  #}
-
-  # names(sim$fireReturnInterval) <- "fireReturnInterval"
-
+  }
+  
   if (!suppliedElsewhere("fireReturnInterval", sim)) {
-    #if (is.null(sim$fireReturnInterval)) {
     sim$fireReturnInterval <- Cache(randomPolygons, emptyRas,
-                                numTypes = numDefaultPolygons, notOlderThan = nOT,
-                                cacheRepo = cachePath(sim))
+                                    numTypes = numDefaultPolygons, notOlderThan = nOT,
+                                    cacheRepo = cachePath(sim))
 
     #vals <- factor(sim$fireReturnInterval[],
     #               levels = 1:numDefaultPolygons,
     #               labels = c(60, 100, 120, 250))
-    sim$fireReturnInterval[] <- as.numeric(as.character(vals))
+    sim$fireReturnInterval[] <- as.numeric(as.character(vals)) ## TODO: need vals
   }
 
   if (!suppliedElsewhere("cohortData", sim)) {
@@ -405,6 +376,9 @@ Burn <- function(sim) {
   #     }
   #   }
   # }
+  
+  if (!is.null(sim$override.LandMine.inputObjects))
+    sim <- sim$override.LandMine.inputObjects(sim)
 
   return(invisible(sim))
 }
@@ -463,4 +437,31 @@ vegTypeMapGenerator <- function(species, cohortdata, pixelGroupMap, vegLeadingPr
   levels(vegTypeMap) <- as.data.frame(attritable)
   projection(vegTypeMap) <- projection(pixelGroupMap)
   vegTypeMap
+}
+
+override.LandMine.inputObjects <- function(sim) {
+  switch(sim$runName,
+         "doubleFRI" = {
+           sim$fireReturnInterval[] <- sim$fireReturnInterval[] * 2
+         }
+  )
+  
+  sim
+}
+
+override.LandMine.Burn <- function(ROS) {
+  ## test equal rates of spread
+  if (grepl("equalROS", sim$runName)) {
+    ROS[young & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
+    ROS[immature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
+    ROS[mature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
+    ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 1L
+  }
+  
+  ## test log(rates of spread), which maintains relationships but makes more equal
+  if (grepl("logROS", sim$runName)) {
+    ROS[] <- log(ROS[])
+  }
+  
+  ROS
 }
