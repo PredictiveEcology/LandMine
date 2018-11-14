@@ -16,15 +16,24 @@ defineModule(sim, list(
   parameters = rbind(
     #defineParameter("paramName", "paramClass", value, min, max, "parameter description")),
     defineParameter("fireTimestep", "numeric", 1, NA, NA, "This describes the simulation time at which the first plot event should occur"),
-    defineParameter("burnInitialTime", "numeric", start(sim, "year") + 1, NA, NA, "This describes the simulation time at which the first plot event should occur"),
-    defineParameter("biggestPossibleFireSizeHa", "numeric", 1e6, 1e4, 2e6, "An upper limit, in hectares, of the truncated Pareto distribution of fire sizes"),
-    defineParameter("flushCachedRandomFRI", "logical", FALSE, NA, NA, "If no Fire Return Interval map is supplied, then a random one will be created and cached. Use this to make a new one."),
-    defineParameter("randomDefaultData", "logical", FALSE, NA, NA, "Only used for creating a starting dataset. If TRUE, then it will be randomly generated; FALSE, deterministic and identical each time."),
-    defineParameter(".plotInitialTime", "numeric", start(sim, "year") + 1, NA, NA, "This describes the simulation time at which the first plot event should occur"),
+    defineParameter("burnInitialTime", "numeric", start(sim, "year") + 1, NA, NA,
+                    "This describes the simulation time at which the first plot event should occur"),
+    defineParameter("biggestPossibleFireSizeHa", "numeric", 1e6, 1e4, 2e6,
+                    "An upper limit, in hectares, of the truncated Pareto distribution of fire sizes"),
+    defineParameter("flushCachedRandomFRI", "logical", FALSE, NA, NA,
+                    "If no Fire Return Interval map is supplied, then a random one will be created and cached. Use this to make a new one."),
+    defineParameter("randomDefaultData", "logical", FALSE, NA, NA,
+                    "Only used for creating a starting dataset. If TRUE, then it will be randomly generated; FALSE, deterministic and identical each time."),
+    defineParameter("runName", "character", NA_character_, NA, NA,
+                    paste("The name of the current simulation run, used to override",
+                          "certain default input values (see override functions below).")),
+    defineParameter(".plotInitialTime", "numeric", start(sim, "year") + 1, NA, NA,
+                    "This describes the simulation time at which the first plot event should occur"),
     defineParameter(".plotInterval", "numeric", 1, NA, NA, "This describes the simulation time interval between plot events"),
     defineParameter(".saveInitialTime", "numeric", NA, NA, NA, "This describes the simulation time at which the first save event should occur"),
     defineParameter(".saveInterval", "numeric", NA, NA, NA, "This describes the simulation time interval between save events"),
-    defineParameter(".useCache", "logical", FALSE, NA, NA, "Should this entire module be run with caching activated? This is generally intended for data-type modules, where stochasticity and time are not relevant"),
+    defineParameter(".useCache", "logical", FALSE, NA, NA,
+                    "Should this entire module be run with caching activated? This is generally intended for data-type modules, where stochasticity and time are not relevant"),
     defineParameter(name = "useParallel", class = "numeric", default = parallel::detectCores(),
                     desc = "Used in burning. Will be passed to data.table::setDTthreads")
   ),
@@ -254,8 +263,8 @@ Burn <- function(sim) {
   # Other vegetation that can burn -- e.g., grasslands, lichen, shrub
   ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 30L
 
-  if (!is.null(sim$override.LandMine.Burn))
-    ROS <- sim$override.LandMine.Burn(ROS)
+  if (!is.null(override.LandMine.Burn))
+    ROS <- override.LandMine.Burn(ROS)
   
   ROSmap <- raster(sim$pixelGroupMap)
   ROSmap[] <- ROS
@@ -377,8 +386,8 @@ Burn <- function(sim) {
   #   }
   # }
   
-  if (!is.null(sim$override.LandMine.inputObjects))
-    sim <- sim$override.LandMine.inputObjects(sim)
+  if (!is.null(override.LandMine.inputObjects))
+    sim <- override.LandMine.inputObjects(sim)
 
   return(invisible(sim))
 }
@@ -440,18 +449,16 @@ vegTypeMapGenerator <- function(species, cohortdata, pixelGroupMap, vegLeadingPr
 }
 
 override.LandMine.inputObjects <- function(sim) {
-  switch(sim$runName,
-         "doubleFRI" = {
-           sim$fireReturnInterval[] <- sim$fireReturnInterval[] * 2
-         }
-  )
+  if (grepl("doubleFRI", P(sim)$runName)) {
+    sim$fireReturnInterval[] <- sim$fireReturnInterval[] * 2
+  }
   
   sim
 }
 
 override.LandMine.Burn <- function(ROS) {
   ## test equal rates of spread
-  if (grepl("equalROS", sim$runName)) {
+  if (grepl("equalROS", P(sim)$runName)) {
     ROS[young & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
     ROS[immature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
     ROS[mature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
@@ -459,7 +466,7 @@ override.LandMine.Burn <- function(ROS) {
   }
   
   ## test log(rates of spread), which maintains relationships but makes more equal
-  if (grepl("logROS", sim$runName)) {
+  if (grepl("logROS", P(sim)$runName)) {
     ROS[] <- log(ROS[])
   }
   
