@@ -166,7 +166,7 @@ Init <- function(sim) {
   #fireReturnIntFilename <- file.path(cachePath(sim), "rasters/fireReturnInterval.tif")
   #sim$fireReturnInterval <- writeRaster(sim$fireReturnInterval, filename = fireReturnIntFilename,
   #                                      datatype = "INT2U", overwrite = TRUE)
-  sim$rstCurrentBurn <- raster(sim$fireReturnInterval)
+  sim$rstCurrentBurn <- raster(sim$fireReturnInterval) ## creates no-value raster
   sim$rstCurrentBurn[] <- 0L
   message("6: ", Sys.time())
 
