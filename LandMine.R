@@ -24,9 +24,6 @@ defineModule(sim, list(
                     "If no Fire Return Interval map is supplied, then a random one will be created and cached. Use this to make a new one."),
     defineParameter("randomDefaultData", "logical", FALSE, NA, NA,
                     "Only used for creating a starting dataset. If TRUE, then it will be randomly generated; FALSE, deterministic and identical each time."),
-    defineParameter("runName", "character", NA_character_, NA, NA,
-                    paste("The name of the current simulation run, used to override",
-                          "certain default input values (see override functions below).")),
     defineParameter(".plotInitialTime", "numeric", start(sim, "year") + 1, NA, NA,
                     "This describes the simulation time at which the first plot event should occur"),
     defineParameter(".plotInterval", "numeric", 1, NA, NA, "This describes the simulation time interval between plot events"),
@@ -228,7 +225,7 @@ Burn <- function(sim) {
   thisYrStartCells <- thisYrStartCells[firesGT0]
   fireSizesInPixels <- fireSizesInPixels[firesGT0]
 
-  #Rate of Spread
+  ## Rate of Spread
   mature <- sim$rstTimeSinceFire[] > 120
   immature <- (sim$rstTimeSinceFire[] > 40) & !mature
   young <- !immature & !mature
@@ -237,37 +234,9 @@ Burn <- function(sim) {
   vegType <- getValues(vegTypeMap)
   vegTypes <- data.frame(raster::levels(vegTypeMap)[[1]][, "Factor", drop = FALSE])
   #vegTypes <- factorValues(vegTypeMap, seq_len(NROW(levels(vegTypeMap)[[1]]))) # [vegType, "Factor"]
-  ROS <- rep(NA_integer_, NROW(vegType))
-  mixed <- grep(tolower(vegTypes$Factor), pattern = "mix")
-  spruce <- grep(tolower(vegTypes$Factor), pattern = "spruce")
-  pine <- grep(tolower(vegTypes$Factor), pattern = "pine")
-  decid <- grep(tolower(vegTypes$Factor), pattern = "deci")
-  softwood <- grep(tolower(vegTypes$Factor), pattern = "soft")
-
-  ROS[!mature & vegType %in% decid] <- 6L
-  ROS[mature & vegType %in% decid] <- 9L
-
-  ROS[!mature & vegType %in% mixed] <- 12L
-  ROS[mature & vegType %in% mixed] <- 17L
-
-  ROS[immature & vegType %in% pine] <- 14L
-  ROS[mature & vegType %in% pine] <- 21L
-  ROS[young & vegType %in% pine] <- 22L
-
-  ROS[!mature & vegType %in% softwood] <- 18L
-  ROS[mature & vegType %in% softwood] <- 27L
-
-  ROS[!mature & vegType %in% spruce] <- 20L
-  ROS[mature & vegType %in% spruce] <- 30L
-
-  # Other vegetation that can burn -- e.g., grasslands, lichen, shrub
-  ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 30L
-
-  if (!is.null(override.LandMine.Burn))
-    ROS <- override.LandMine.Burn(sim, ROS)
 
   ROSmap <- raster(sim$pixelGroupMap)
-  ROSmap[] <- ROS
+  ROSmap[] <- fireROS(sim, type = P(sim)$ROStype)
 
   # From DEoptim fitting - run in the LandMine.Rmd file
   spawnNewActive <- sns <- 10^c(-0.731520, -0.501823, -0.605968, -1.809726)
@@ -294,6 +263,7 @@ Burn <- function(sim) {
     sim$rstCurrentBurn[] <- 0L
     sim$rstCurrentBurn[fires$pixels] <- 1L #as.numeric(factor(fires$initialPixels))
   }
+
   return(invisible(sim))
 }
 
@@ -383,9 +353,6 @@ Burn <- function(sim) {
   #   }
   # }
 
-  if (!is.null(override.LandMine.inputObjects))
-    sim <- override.LandMine.inputObjects(sim)
-
   return(invisible(sim))
 }
 
@@ -453,17 +420,43 @@ override.LandMine.inputObjects <- function(sim) {
   return(invisible(sim))
 }
 
-override.LandMine.Burn <- function(sim, ROS) {
-  ## test equal rates of spread
-  if (grepl("equalROS", P(sim)$runName)) {
+fireROS <- function(sim, type = "original") {
+  ROS <- rep(NA_integer_, NROW(vegType))
+  mixed <- grep(tolower(vegTypes$Factor), pattern = "mix")
+  spruce <- grep(tolower(vegTypes$Factor), pattern = "spruce")
+  pine <- grep(tolower(vegTypes$Factor), pattern = "pine")
+  decid <- grep(tolower(vegTypes$Factor), pattern = "deci")
+  softwood <- grep(tolower(vegTypes$Factor), pattern = "soft")
+
+  if (type == "original") {
+    ROS[!mature & vegType %in% decid] <- 6L
+    ROS[mature & vegType %in% decid] <- 9L
+
+    ROS[!mature & vegType %in% mixed] <- 12L
+    ROS[mature & vegType %in% mixed] <- 17L
+
+    ROS[immature & vegType %in% pine] <- 14L
+    ROS[mature & vegType %in% pine] <- 21L
+    ROS[young & vegType %in% pine] <- 22L
+
+    ROS[!mature & vegType %in% softwood] <- 18L
+    ROS[mature & vegType %in% softwood] <- 27L
+
+    ROS[!mature & vegType %in% spruce] <- 20L
+    ROS[mature & vegType %in% spruce] <- 30L
+
+    # Other vegetation that can burn -- e.g., grasslands, lichen, shrub
+    ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 30L
+  } else if (type == "equal") {
+    ## equal rates of spread
     ROS[young & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
     ROS[immature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
     ROS[mature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
     ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 1L
   }
 
-  ## test log(rates of spread), which maintains relationships but makes more equal
-  if (grepl("logROS", P(sim)$runName)) {
+  ## log(rates of spread), which maintains relationships but makes more equal
+  if (type == "log") {
     ROS[] <- log(ROS[])
   }
 
