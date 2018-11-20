@@ -226,17 +226,11 @@ Burn <- function(sim) {
   fireSizesInPixels <- fireSizesInPixels[firesGT0]
 
   ## Rate of Spread
-  mature <- sim$rstTimeSinceFire[] > 120
-  immature <- (sim$rstTimeSinceFire[] > 40) & !mature
-  young <- !immature & !mature
-
-  vegTypeMap <- vegTypeMapGenerator(sim$species, sim$cohortData, sim$pixelGroupMap, sim$vegLeadingProportion)
-  vegType <- getValues(vegTypeMap)
-  vegTypes <- data.frame(raster::levels(vegTypeMap)[[1]][, "Factor", drop = FALSE])
-  #vegTypes <- factorValues(vegTypeMap, seq_len(NROW(levels(vegTypeMap)[[1]]))) # [vegType, "Factor"]
+  vegTypeMap <- vegTypeMapGenerator(sim$species, sim$cohortData, sim$pixelGroupMap,
+                                    sim$vegLeadingProportion)
 
   ROSmap <- raster(sim$pixelGroupMap)
-  ROSmap[] <- fireROS(sim, type = P(sim)$ROStype)
+  ROSmap[] <- fireROS(sim, type = P(sim)$ROStype, vegTypeMap = vegTypeMap)
 
   # From DEoptim fitting - run in the LandMine.Rmd file
   spawnNewActive <- sns <- 10^c(-0.731520, -0.501823, -0.605968, -1.809726)
@@ -368,7 +362,16 @@ override.LandMine.inputObjects <- function(sim) {
   return(invisible(sim))
 }
 
-fireROS <- function(sim, type = "original") {
+fireROS <- function(sim, type = "original", vegTypeMap) {
+  vegType <- getValues(vegTypeMap)
+  vegTypes <- data.frame(raster::levels(vegTypeMap)[[1]][, "Factor", drop = FALSE])
+  #vegTypes <- factorValues(vegTypeMap, seq_len(NROW(levels(vegTypeMap)[[1]]))) # [vegType, "Factor"]
+  
+  ## note: these are defined differently than in LandWeb, and that's ok?
+  mature <- sim$rstTimeSinceFire[] > 120
+  immature <- (sim$rstTimeSinceFire[] > 40) & !mature
+  young <- !immature & !mature
+  
   ROS <- rep(NA_integer_, NROW(vegType))
   mixed <- grep(tolower(vegTypes$Factor), pattern = "mix")
   spruce <- grep(tolower(vegTypes$Factor), pattern = "spruce")
