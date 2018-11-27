@@ -178,6 +178,7 @@ plotFn <- function(sim) {
   }
   if (time(sim) == P(sim)$.plotInitialTime) {
     Plot(sim$fireReturnInterval, title = "Fire Return Interval", new = TRUE)
+
     sim$rstCurrentBurnCumulative[!is.na(sim$rstCurrentBurn)] <- 0
   }
   sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn + sim$rstCurrentBurnCumulative
@@ -366,12 +367,12 @@ fireROS <- function(sim, type = "original", vegTypeMap) {
   vegType <- getValues(vegTypeMap)
   vegTypes <- data.frame(raster::levels(vegTypeMap)[[1]][, "Factor", drop = FALSE])
   #vegTypes <- factorValues(vegTypeMap, seq_len(NROW(levels(vegTypeMap)[[1]]))) # [vegType, "Factor"]
-  
+
   ## note: these are defined differently than in LandWeb, and that's ok?
   mature <- sim$rstTimeSinceFire[] > 120
   immature <- (sim$rstTimeSinceFire[] > 40) & !mature
   young <- !immature & !mature
-  
+
   ROS <- rep(NA_integer_, NROW(vegType))
   mixed <- grep(tolower(vegTypes$Factor), pattern = "mix")
   spruce <- grep(tolower(vegTypes$Factor), pattern = "spruce")
