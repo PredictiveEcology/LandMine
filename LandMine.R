@@ -38,6 +38,10 @@ defineModule(sim, list(
     expectsInput("cohortData", "data.table", "Columns: B, pixelGroup, speciesCode, Indicating several features about ages and current vegetation of stand"),
     expectsInput("fireReturnInterval","Raster", "A raster layer that is a factor raster, with at least 1 column called fireReturnInterval, representing the fire return interval in years"),
     expectsInput("pixelGroupMap", "RasterLayer", "Pixels with identical values share identical stand features"),
+    expectsInput("rasterToMatch", "RasterLayer",
+                 #desc = "this raster contains two pieces of information: Full study area with fire return interval attribute",
+                 desc = "DESCRIPTION NEEDED", # TODO: is this correct?
+                 sourceURL = NA), # i guess this is study area and fire return interval
     #expectsInput("rstCurrentBurnCumulative", "RasterLayer", "Cumulative number of times a pixel has burned"),
     expectsInput("rstFlammable", "Raster", "A raster layer, with 0, 1 and NA, where 1 indicates areas that are flammable, 0 not flammable (e.g., lakes) and NA not applicable (e.g., masked)"),
     expectsInput("rstTimeSinceFire", "Raster", "a time since fire raster layer", NA),
@@ -167,6 +171,7 @@ Init <- function(sim) {
   sim$rstCurrentBurn[] <- 0L
   message("6: ", Sys.time())
 
+  sim$areaBurnedOverTime <- data.frame(time = numeric(0), nPixelsBurned = numeric(0))
   # rm("rstFlammable", envir = envir(sim)) # don't need this in LandMine ... but it is used in timeSinceFire
   return(invisible(sim))
 }
@@ -185,10 +190,25 @@ plotFn <- function(sim) {
     rstFlammable[] <- getValues(sim$rstFlammable)
     Plot(rstFlammable, title = "Land Type (rstFlammable)", cols = c("blue", "red"), new = TRUE)
   }
+browser()
+  currBurn <- raster::mask(sim$rstCurrentBurn, sim$rasterToMatch) ## TODO: should be basked by rasterToMatch
+  burnedDF <- data.frame(time = as.numeric(times(sim)$current),
+                         nPixelsBurned = unname(table(currBurn[])[2]))
+  sim$areaBurnedOverTime <- rbind(sim$areaBurnedOverTime, burnedDF)
+  gg_areaBurnedOverTime <- ggplot(sim$areaBurnedOverTime, aes(x = time, y = nPixelsBurned)) +
+    geom_point() +
+    xlim(start(sim), end(sim)) +
+    ylim(0, length(na.omit(currBurn[])))
+
+  Plot(gg_areaBurnedOverTime, addTo = "areaBurnedOverTime",
+       title = "Current area burned (pixels)",
+       cols = c("darkred"), zero.color = "transparent")
+
   sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn + sim$rstCurrentBurnCumulative
   Plot(sim$rstCurrentBurnCumulative, new = TRUE,
        title = "Cumulative Fire Map",
        cols = c("pink", "red"), zero.color = "transparent")
+
   # ! ----- STOP EDITING ----- ! #
   return(invisible(sim))
 }
