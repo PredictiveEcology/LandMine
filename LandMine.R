@@ -180,6 +180,10 @@ plotFn <- function(sim) {
     Plot(sim$fireReturnInterval, title = "Fire Return Interval", new = TRUE)
 
     sim$rstCurrentBurnCumulative[!is.na(sim$rstCurrentBurn)] <- 0
+
+    rstFlammable <- raster(sim$rstFlammable)
+    rstFlammable[] <- getValues(sim$rstFlammable)
+    Plot(rstFlammable, title = "Land Type (rstFlammable)", cols = c("blue", "red"), new = TRUE)
   }
   sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn + sim$rstCurrentBurnCumulative
   Plot(sim$rstCurrentBurnCumulative, new = TRUE,
