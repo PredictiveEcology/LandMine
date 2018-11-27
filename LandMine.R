@@ -190,19 +190,25 @@ plotFn <- function(sim) {
     rstFlammable[] <- getValues(sim$rstFlammable)
     Plot(rstFlammable, title = "Land Type (rstFlammable)", cols = c("blue", "red"), new = TRUE)
   }
-browser()
-  currBurn <- raster::mask(sim$rstCurrentBurn, sim$rasterToMatch) ## TODO: should be basked by rasterToMatch
-  burnedDF <- data.frame(time = as.numeric(times(sim)$current),
-                         nPixelsBurned = unname(table(currBurn[])[2]))
-  sim$areaBurnedOverTime <- rbind(sim$areaBurnedOverTime, burnedDF)
-  gg_areaBurnedOverTime <- ggplot(sim$areaBurnedOverTime, aes(x = time, y = nPixelsBurned)) +
-    geom_point() +
-    xlim(start(sim), end(sim)) +
-    ylim(0, length(na.omit(currBurn[])))
 
-  Plot(gg_areaBurnedOverTime, addTo = "areaBurnedOverTime",
-       title = "Current area burned (pixels)",
-       cols = c("darkred"), zero.color = "transparent")
+  currBurn <- raster::mask(sim$rstCurrentBurn, sim$rasterToMatch)
+  fris <- unique(na.omit(sim$fireReturnInterval[]))
+  names(fris) <- fris
+  npix <- vapply(fris, function(x) {
+    ids <- which(sim$fireReturnInterval[] == x)
+    unname(table(currBurn[ids])[2])
+  }, numeric(1))
+  polys <- sim$fireReturnInterval
+  burnedDF <- data.frame(time = as.numeric(times(sim)$current),
+                         nPixelsBurned = npix,
+                         FRI = as.factor(fris))
+  sim$areaBurnedOverTime <- rbind(sim$areaBurnedOverTime, burnedDF)
+  gg_areaBurnedOverTime <- ggplot(sim$areaBurnedOverTime,
+                                  aes(x = time, y = nPixelsBurned, fill = FRI, ymin = 0)) +
+    geom_area() +
+    theme(legend.text = element_text(size = 6))
+
+  Plot(gg_areaBurnedOverTime, title = "Current area burned (pixels)", addTo = "areaBurnedOverTime")
 
   sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn + sim$rstCurrentBurnCumulative
   Plot(sim$rstCurrentBurnCumulative, new = TRUE,
