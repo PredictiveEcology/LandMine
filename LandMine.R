@@ -182,7 +182,10 @@ plotFn <- function(sim) {
     sim$rstCurrentBurnCumulative <- raster(sim$rstCurrentBurn)
   }
   if (time(sim) == P(sim)$.plotInitialTime) {
-    Plot(sim$fireReturnInterval, title = "Fire Return Interval", new = TRUE)
+    friRast <- sim$fireReturnInterval
+    friRast[] <- as.factor(sim$fireReturnInterval[])
+    Plot(friRast, title = "Fire Return Interval",
+         cols = c("pink", "darkred"), new = TRUE)
 
     sim$rstCurrentBurnCumulative[!is.na(sim$rstCurrentBurn)] <- 0
 
