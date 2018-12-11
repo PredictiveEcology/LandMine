@@ -24,6 +24,8 @@ defineModule(sim, list(
                     "If no Fire Return Interval map is supplied, then a random one will be created and cached. Use this to make a new one."),
     defineParameter("randomDefaultData", "logical", FALSE, NA, NA,
                     "Only used for creating a starting dataset. If TRUE, then it will be randomly generated; FALSE, deterministic and identical each time."),
+    defineParameter("vegLeadingProportion", "numeric", 0.8, 0, 1,
+                    "a number that define whether a species is leading for a given pixel"),
     defineParameter(".plotInitialTime", "numeric", start(sim, "year") + 1, NA, NA,
                     "This describes the simulation time at which the first plot event should occur"),
     defineParameter(".plotInterval", "numeric", 1, NA, NA, "This describes the simulation time interval between plot events"),
@@ -31,8 +33,8 @@ defineModule(sim, list(
     defineParameter(".saveInterval", "numeric", NA, NA, NA, "This describes the simulation time interval between save events"),
     defineParameter(".useCache", "logical", FALSE, NA, NA,
                     "Should this entire module be run with caching activated? This is generally intended for data-type modules, where stochasticity and time are not relevant"),
-    defineParameter(name = "useParallel", class = "numeric", default = parallel::detectCores(),
-                    desc = "Used in burning. Will be passed to data.table::setDTthreads")
+    defineParameter(".useParallel", "numeric", parallel::detectCores(), NA, NA,
+                    "Used in burning. Will be passed to data.table::setDTthreads")
   ),
   inputObjects = bind_rows(
     expectsInput("cohortData", "data.table", "Columns: B, pixelGroup, speciesCode, Indicating several features about ages and current vegetation of stand"),
@@ -45,8 +47,7 @@ defineModule(sim, list(
     #expectsInput("rstCurrentBurnCumulative", "RasterLayer", "Cumulative number of times a pixel has burned"),
     expectsInput("rstFlammable", "Raster", "A raster layer, with 0, 1 and NA, where 1 indicates areas that are flammable, 0 not flammable (e.g., lakes) and NA not applicable (e.g., masked)"),
     expectsInput("rstTimeSinceFire", "Raster", "a time since fire raster layer", NA),
-    expectsInput("species", "data.table", "Columns: species, speciesCode, Indicating several features about species"),
-    expectsInput("vegLeadingProportion", "numeric", "a proportion, between 0 and 1, that define whether a species is lead for a given pixel", NA)
+    expectsInput("species", "data.table", "Columns: species, speciesCode, Indicating several features about species")
   ),
   outputObjects = bind_rows(
     createsOutput("fireInitialTime", "numeric",
@@ -261,7 +262,7 @@ Burn <- function(sim) {
 
   ## Rate of Spread
   vegTypeMap <- vegTypeMapGenerator(sim$species, sim$cohortData, sim$pixelGroupMap,
-                                    sim$vegLeadingProportion)
+                                    P(sim)$vegLeadingProportion)
 
   ROSmap <- raster(sim$pixelGroupMap)
   ROSmap[] <- fireROS(sim, type = P(sim)$ROStype, vegTypeMap = vegTypeMap)
@@ -272,8 +273,8 @@ Burn <- function(sim) {
   sizeCutoffs <- 10^c(2.202732, 4.696060)
 
   if (!all(is.na(thisYrStartCells)) & length(thisYrStartCells) > 0) {
-    if (data.table::getDTthreads() < P(sim)$useParallel)
-      data.table::setDTthreads(P(sim)$useParallel)
+    if (data.table::getDTthreads() < P(sim)$.useParallel)
+      data.table::setDTthreads(P(sim)$.useParallel)
     fires <- burn1(sim$fireReturnInterval,
                    startCells = thisYrStartCells,
                    fireSizes = fireSizesInPixels,
@@ -352,11 +353,6 @@ Burn <- function(sim) {
     sim$species <- data.table(species = c("Pinu_sp", "Pice_gla"),
                               speciesCode = 1:numDefaultSpeciesCodes)
   }
-
-  if (!suppliedElsewhere("vegLeadingProportion", sim)) {
-    sim$vegLeadingProportion <- 0.8
-  }
-
 
   # if (!suppliedElsewhere("rstCurrentBurnCumulative))", sim)) {
   #   #if (is.null(sim$rstCurrentBurnCumulative)) {
