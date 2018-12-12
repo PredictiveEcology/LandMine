@@ -15,11 +15,11 @@ defineModule(sim, list(
                   "PredictiveEcology/SpaDES.tools@development"),
   parameters = rbind(
     #defineParameter("paramName", "paramClass", value, min, max, "parameter description")),
-    defineParameter("fireTimestep", "numeric", 1, NA, NA, "This describes the simulation time at which the first plot event should occur"),
-    defineParameter("burnInitialTime", "numeric", start(sim, "year") + 1, NA, NA,
-                    "This describes the simulation time at which the first plot event should occur"),
     defineParameter("biggestPossibleFireSizeHa", "numeric", 1e6, 1e4, 2e6,
                     "An upper limit, in hectares, of the truncated Pareto distribution of fire sizes"),
+    defineParameter("burnInitialTime", "numeric", start(sim, "year") + 1, NA, NA,
+                    "This describes the simulation time at which the first plot event should occur"),
+    defineParameter("fireTimestep", "numeric", 1, NA, NA, "This describes the simulation time at which the first plot event should occur"),
     defineParameter("flushCachedRandomFRI", "logical", FALSE, NA, NA,
                     "If no Fire Return Interval map is supplied, then a random one will be created and cached. Use this to make a new one."),
     defineParameter("randomDefaultData", "logical", FALSE, NA, NA,
@@ -43,7 +43,7 @@ defineModule(sim, list(
     expectsInput("rasterToMatch", "RasterLayer",
                  #desc = "this raster contains two pieces of information: Full study area with fire return interval attribute",
                  desc = "DESCRIPTION NEEDED", # TODO: is this correct?
-                 sourceURL = NA), # i guess this is study area and fire return interval
+                 sourceURL = NA),
     #expectsInput("rstCurrentBurnCumulative", "RasterLayer", "Cumulative number of times a pixel has burned"),
     expectsInput("rstFlammable", "Raster", "A raster layer, with 0, 1 and NA, where 1 indicates areas that are flammable, 0 not flammable (e.g., lakes) and NA not applicable (e.g., masked)"),
     expectsInput("rstTimeSinceFire", "Raster", "a time since fire raster layer", NA),
