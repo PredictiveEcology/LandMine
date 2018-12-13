@@ -445,26 +445,26 @@ fireROS <- function(sim, type = "original", vegTypeMap) {
   decid <- grep(tolower(vegTypes$Factor), pattern = "deci")
   softwood <- grep(tolower(vegTypes$Factor), pattern = "soft")
 
-  if (type == "original") {
-    ROS[!mature & vegType %in% decid] <- 6L
-    ROS[mature & vegType %in% decid] <- 9L
+  ROS[!mature & vegType %in% decid] <- 6L
+  ROS[mature & vegType %in% decid] <- 9L
 
-    ROS[!mature & vegType %in% mixed] <- 12L
-    ROS[mature & vegType %in% mixed] <- 17L
+  ROS[!mature & vegType %in% mixed] <- 12L
+  ROS[mature & vegType %in% mixed] <- 17L
 
-    ROS[immature & vegType %in% pine] <- 14L
-    ROS[mature & vegType %in% pine] <- 21L
-    ROS[young & vegType %in% pine] <- 22L
+  ROS[immature & vegType %in% pine] <- 14L
+  ROS[mature & vegType %in% pine] <- 21L
+  ROS[young & vegType %in% pine] <- 22L
 
-    ROS[!mature & vegType %in% softwood] <- 18L
-    ROS[mature & vegType %in% softwood] <- 27L
+  ROS[!mature & vegType %in% softwood] <- 18L
+  ROS[mature & vegType %in% softwood] <- 27L
 
-    ROS[!mature & vegType %in% spruce] <- 20L
-    ROS[mature & vegType %in% spruce] <- 30L
+  ROS[!mature & vegType %in% spruce] <- 20L
+  ROS[mature & vegType %in% spruce] <- 30L
 
-    # Other vegetation that can burn -- e.g., grasslands, lichen, shrub
-    ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 30L
-  } else if (type == "equal") {
+  # Other vegetation that can burn -- e.g., grasslands, lichen, shrub
+  ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 30L
+
+  if (type == "equal") {
     ## equal rates of spread
     ROS[young & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
     ROS[immature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
