@@ -341,7 +341,7 @@ Burn <- function(sim) {
   }
 
   if (!suppliedElsewhere("rstFlammable", sim)) {
-    sim$rstFlammable <- raster(emptyRas)
+    sim$rstFlammable <- sim$rasterToMatch
     sim$rstFlammable[] <- 1L  # 1 means flammable
   }
 
