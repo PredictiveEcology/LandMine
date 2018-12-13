@@ -193,17 +193,19 @@ plotFn <- function(sim) {
     friRast <- sim$fireReturnInterval
     friRast[] <- as.factor(sim$fireReturnInterval[])
     Plot(friRast, title = "Fire Return Interval", cols = c("pink", "darkred"), new = TRUE)
-    Plot(sim$studyAreaReporting, addTo = "friRast")
+    Plot(sim$studyAreaReporting, addTo = "friRast", title = "",
+         gp = gpar(col = "black", fill = 0))
 
     sim$rstCurrentBurnCumulative[!is.na(sim$rstCurrentBurn)] <- 0
 
     rstFlammable <- raster(sim$rstFlammable)
     rstFlammable[] <- getValues(sim$rstFlammable)
-    Plot(rstFlammable, title = "Land Type (rstFlammable)", cols = c("blue", "red"), new = TRUE)
-    Plot(sim$studyAreaReporting, addTo = "rstFlammable")
+    Plot(rstFlammable, title = "Land Type (rstFlammable)", cols = c("mediumblue", "firebrick"), new = TRUE)
+    Plot(sim$studyAreaReporting, addTo = "rstFlammable", title = "",
+         gp = gpar(col = "black", fill = 0))
   }
 
-  currBurn <- raster::mask(sim$rstCurrentBurn, sim$rasterToMatch)
+  currBurn <- raster::mask(sim$rstCurrentBurn, sim$studyAreaReporting) %>% stack()
   fris <- unique(na.omit(sim$fireReturnInterval[]))
   names(fris) <- fris
   npix <- vapply(fris, function(x) {
