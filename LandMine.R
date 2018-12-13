@@ -44,10 +44,17 @@ defineModule(sim, list(
                  #desc = "this raster contains two pieces of information: Full study area with fire return interval attribute",
                  desc = "DESCRIPTION NEEDED", # TODO: is this correct?
                  sourceURL = NA),
-    #expectsInput("rstCurrentBurnCumulative", "RasterLayer", "Cumulative number of times a pixel has burned"),
+    expectsInput("rasterToMatchReporting", "RasterLayer",
+                 desc = "Raster layer of study area used for plotting and reporting only.
+                 Defaults to the kNN biomass map masked with `studyArea`",
+                 sourceURL = "http://tree.pfc.forestry.ca/kNN-StructureBiomass.tar"),
     expectsInput("rstFlammable", "Raster", "A raster layer, with 0, 1 and NA, where 1 indicates areas that are flammable, 0 not flammable (e.g., lakes) and NA not applicable (e.g., masked)"),
     expectsInput("rstTimeSinceFire", "Raster", "a time since fire raster layer", NA),
-    expectsInput("species", "data.table", "Columns: species, speciesCode, Indicating several features about species")
+    expectsInput("species", "data.table", "Columns: species, speciesCode, Indicating several features about species"),
+    expectsInput("studyAreaReporting", "SpatialPolygonsDataFrame",
+                 desc = paste("multipolygon (typically smaller/unbuffered than studyArea) to use for plotting/reporting.",
+                              "Defaults to an area in Southwestern Alberta, Canada."),
+                 sourceURL = NA)
   ),
   outputObjects = bind_rows(
     createsOutput("fireInitialTime", "numeric",
@@ -185,14 +192,15 @@ plotFn <- function(sim) {
   if (time(sim) == P(sim)$.plotInitialTime) {
     friRast <- sim$fireReturnInterval
     friRast[] <- as.factor(sim$fireReturnInterval[])
-    Plot(friRast, title = "Fire Return Interval",
-         cols = c("pink", "darkred"), new = TRUE)
+    Plot(friRast, title = "Fire Return Interval", cols = c("pink", "darkred"), new = TRUE)
+    Plot(sim$studyAreaReporting, addTo = "friRast")
 
     sim$rstCurrentBurnCumulative[!is.na(sim$rstCurrentBurn)] <- 0
 
     rstFlammable <- raster(sim$rstFlammable)
     rstFlammable[] <- getValues(sim$rstFlammable)
     Plot(rstFlammable, title = "Land Type (rstFlammable)", cols = c("blue", "red"), new = TRUE)
+    Plot(sim$studyAreaReporting, addTo = "rstFlammable")
   }
 
   currBurn <- raster::mask(sim$rstCurrentBurn, sim$rasterToMatch)
@@ -303,6 +311,32 @@ Burn <- function(sim) {
   numDefaultPixelGroups <- 20L
   numDefaultSpeciesCodes <- 2L
   emptyRas <- raster(extent(0, 2e4, 0, 2e4), res = 250)
+
+  if (is.null(sim$rasterToMatch)) {
+    if (!suppliedElsewhere("rasterToMatch", sim)) {
+      stop("There is no 'rasterToMatch' supplied")
+    }
+  }
+
+  if (!suppliedElsewhere("rasterToMatchReporting")) {
+    sim$rasterToMatchReporting <- sim$rasterToMatch
+  }
+
+  if (!suppliedElsewhere("studyArea", sim)) {
+    message("'studyArea' was not provided by user. Using a polygon in southwestern Alberta, Canada,")
+
+    sim$studyArea <- randomStudyArea(seed = 1234)
+  }
+
+  if (!suppliedElsewhere("studyAreaLarge", sim)) {
+    message("'studyAreaLarge' was not provided by user. Using the same as 'studyArea'.")
+    sim$studyAreaLarge <- sim$studyArea
+  }
+
+  if (!suppliedElsewhere("studyAreaReporting", sim)) {
+    message("'studyAreaReporting' was not provided by user. Using the same as 'studyArea'.")
+    sim$studyAreaLarge <- sim$studyArea
+  }
 
   if (!suppliedElsewhere("rstFlammable", sim)) {
     sim$rstFlammable <- raster(emptyRas)
