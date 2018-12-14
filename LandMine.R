@@ -47,10 +47,13 @@ defineModule(sim, list(
                  desc = "DESCRIPTION NEEDED", # TODO: is this correct?
                  sourceURL = NA),
     expectsInput("rasterToMatchReporting", "RasterLayer",
-                 desc = "Raster layer of study area used for plotting and reporting only.
-                 Defaults to the kNN biomass map masked with `studyArea`",
+                 desc = paste("Raster layer of study area used for plotting and reporting only.",
+                              "Defaults to the kNN biomass map masked with `studyArea`"),
                  sourceURL = "http://tree.pfc.forestry.ca/kNN-StructureBiomass.tar"),
-    expectsInput("rstFlammable", "Raster", "A raster layer, with 0, 1 and NA, where 1 indicates areas that are flammable, 0 not flammable (e.g., lakes) and NA not applicable (e.g., masked)"),
+    expectsInput("rstFlammable", "Raster",
+                 desc = paste("A raster layer, with 0, 1 and NA, where 1 indicates areas",
+                              "that are flammable, 0 not flammable (e.g., lakes)",
+                              "and NA not applicable (e.g., masked)")),
     expectsInput("rstTimeSinceFire", "Raster", "a time since fire raster layer", NA),
     expectsInput("species", "data.table", "Columns: species, speciesCode, Indicating several features about species"),
     expectsInput("studyAreaReporting", "SpatialPolygonsDataFrame",
@@ -348,7 +351,7 @@ Burn <- function(sim) {
 
   if (!suppliedElsewhere("studyAreaReporting", sim)) {
     message("'studyAreaReporting' was not provided by user. Using the same as 'studyArea'.")
-    sim$studyAreaLarge <- sim$studyArea
+    sim$studyAreaReporting <- sim$studyArea
   }
 
   if (!suppliedElsewhere("rstFlammable", sim)) {
