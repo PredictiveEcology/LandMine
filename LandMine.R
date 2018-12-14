@@ -184,7 +184,10 @@ Init <- function(sim) {
   sim$rstCurrentBurn[] <- 0L
   message("6: ", Sys.time())
 
-  sim$areaBurnedOverTime <- data.frame(time = numeric(0), nPixelsBurned = numeric(0))
+  mod$areaBurnedOverTime <- data.frame(time = numeric(0),
+                                       nPixelsBurned = numeric(0),
+                                       haBurned = numeric(0),
+                                       FRI = numeric(0))
   # rm("rstFlammable", envir = envir(sim)) # don't need this in LandMine ... but it is used in timeSinceFire
   return(invisible(sim))
 }
@@ -212,22 +215,22 @@ plotFn <- function(sim) {
 
   currBurn <- raster::mask(sim$rstCurrentBurn, sim$studyAreaReporting) %>% stack()
   fris <- unique(na.omit(sim$fireReturnInterval[]))
-  names(fris) <- fris
   npix <- vapply(fris, function(x) {
     ids <- which(sim$fireReturnInterval[] == x)
     unname(table(currBurn[ids])[2])
-  }, numeric(1))
+  }, numeric(1)) %>% unname()
   polys <- sim$fireReturnInterval
   burnedDF <- data.frame(time = as.numeric(times(sim)$current),
                          nPixelsBurned = npix,
+                         haBurned = npix * prod(res(sim$rstCurrentBurn)) / 100^2, ## area in ha
                          FRI = as.factor(fris))
-  sim$areaBurnedOverTime <- rbind(sim$areaBurnedOverTime, burnedDF)
-  gg_areaBurnedOverTime <- ggplot(sim$areaBurnedOverTime,
-                                  aes(x = time, y = nPixelsBurned, fill = FRI, ymin = 0)) +
+  mod$areaBurnedOverTime <- rbind(mod$areaBurnedOverTime, burnedDF)
+  gg_areaBurnedOverTime <- ggplot(mod$areaBurnedOverTime,
+                                  aes(x = time, y = haBurned, fill = FRI, ymin = 0)) +
     geom_area() +
     theme(legend.text = element_text(size = 6))
 
-  Plot(gg_areaBurnedOverTime, title = "Current area burned (pixels)", addTo = "areaBurnedOverTime")
+  Plot(gg_areaBurnedOverTime, title = "Current area burned (ha)", addTo = "areaBurnedOverTime")
 
   sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn + sim$rstCurrentBurnCumulative
   Plot(sim$rstCurrentBurnCumulative, new = TRUE,
