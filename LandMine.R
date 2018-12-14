@@ -22,6 +22,8 @@ defineModule(sim, list(
     defineParameter("fireTimestep", "numeric", 1, NA, NA, "This describes the simulation time at which the first plot event should occur"),
     defineParameter("flushCachedRandomFRI", "logical", FALSE, NA, NA,
                     "If no Fire Return Interval map is supplied, then a random one will be created and cached. Use this to make a new one."),
+    defineParameter("minPropBurn", "numeric", 0.90, 0.00, 1.00,
+                    "Minimum proportion burned pixels to use when triggering warnings about simulatied fires."),
     defineParameter("randomDefaultData", "logical", FALSE, NA, NA,
                     "Only used for creating a starting dataset. If TRUE, then it will be randomly generated; FALSE, deterministic and identical each time."),
     defineParameter("vegLeadingProportion", "numeric", 0.8, 0, 1,
@@ -296,9 +298,18 @@ Burn <- function(sim) {
                    spreadProb = spreadProb)
     fa <- attr(fires, "spreadState")$clusterDT
     print(fa[order(maxSize)][(.N - pmin(7, NROW(fa))):.N])
-    print(fa[, list(numPixelsBurned = sum(size),
-                    expectedNumBurned = sum(maxSize),
-                    proportionBurned = sum(size) / sum(maxSize))])
+
+    fa1 <- fa[, list(numPixelsBurned = sum(size),
+                     expectedNumBurned = sum(maxSize),
+                     proportionBurned = sum(size) / sum(maxSize))]
+    print(fa1)
+
+    if (any(tail(fa1$proportionBurned, 10)  < P(sim)$minPropBurn)) {
+      mess <- "In 'LandMine' module 'Burn()': proportion area burned is less than 'minPropBurn'!"
+      message(crayon::red(mess))
+      warning(mess, call. = FALSE)
+    }
+
     sim$rstCurrentBurn[] <- 0L
     sim$rstCurrentBurn[fires$pixels] <- 1L #as.numeric(factor(fires$initialPixels))
   }
