@@ -99,6 +99,8 @@ doEvent.LandMine <- function(sim, eventTime, eventType, debug = FALSE) {
     sim <- EstimateTruncPareto(sim)
     sim <- Init(sim)
 
+    mod$LandMineDevice <- max(dev.list()) + 1
+
     # schedule future event(s)
     sim <- scheduleEvent(sim, P(sim)$burnInitialTime, "LandMine", "Burn", 2.5)
     sim <- scheduleEvent(sim, P(sim)$.plotInitialTime, "LandMine", "plot")
@@ -106,11 +108,13 @@ doEvent.LandMine <- function(sim, eventTime, eventType, debug = FALSE) {
   } else if (eventType == "plot") {
     # ! ----- EDIT BELOW ----- ! #
     # do stuff for this event
+
+    devCur <- dev.cur()
+    dev(mod$LandMineDevic)
     sim <- plotFn(sim)
+    dev(devCur)
     sim <- scheduleEvent(sim, P(sim)$.plotInterval, "LandMine", "plot")
 
-    #Plot(objectFromModule) # uncomment this, replace with object to plot
-    # schedule future event(s)
   } else if (eventType == "save") {
   } else if (eventType == "Burn") {
     sim <- Burn(sim)
