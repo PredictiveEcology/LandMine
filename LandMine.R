@@ -219,23 +219,33 @@ plotFn <- function(sim) {
     ids <- which(sim$fireReturnInterval[] == x)
     unname(table(currBurn[ids])[2])
   }, numeric(1)) %>% unname()
+  npix[is.na(npix)] <- 0 # Show that zero pixels burned in a year with no pixels burned, rather than NA
   polys <- sim$fireReturnInterval
   burnedDF <- data.frame(time = as.numeric(times(sim)$current),
                          nPixelsBurned = npix,
                          haBurned = npix * prod(res(sim$rstCurrentBurn)) / 100^2, ## area in ha
                          FRI = as.factor(fris))
   mod$areaBurnedOverTime <- rbind(mod$areaBurnedOverTime, burnedDF)
-  gg_areaBurnedOverTime <- ggplot(mod$areaBurnedOverTime,
-                                  aes(x = time, y = haBurned, fill = FRI, ymin = 0)) +
-    geom_area() +
-    theme(legend.text = element_text(size = 6))
 
-  Plot(gg_areaBurnedOverTime, title = "Current area burned (ha)", addTo = "areaBurnedOverTime")
+  if (length(unique(mod$areaBurnedOverTime$time)) > 1) {
 
-  sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn + sim$rstCurrentBurnCumulative
-  Plot(sim$rstCurrentBurnCumulative, new = TRUE,
-       title = "Cumulative Fire Map",
-       cols = c("pink", "red"), zero.color = "transparent")
+    gg_areaBurnedOverTime <- ggplot(mod$areaBurnedOverTime,
+                                    aes(x = time, y = haBurned, col = FRI, ymin = 0)) +
+      geom_line(size = 1.5) +
+      #geom_area() +
+      theme(legend.text = element_text(size = 6))
+
+    title1 <- if (identical(time(sim), P(sim)$.plotInitialTime))
+      "Current area burned (ha)" else ""
+    Plot(gg_areaBurnedOverTime, title = title1, addTo = "areaBurnedOverTime")
+
+    sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn + sim$rstCurrentBurnCumulative
+    title2 <- if (identical(time(sim), P(sim)$.plotInitialTime))
+      "Cumulative Fire Map" else ""
+    Plot(sim$rstCurrentBurnCumulative, new = TRUE,
+         title = title2,
+         cols = c("pink", "red"), zero.color = "transparent")
+  }
 
   # ! ----- STOP EDITING ----- ! #
   return(invisible(sim))
