@@ -241,12 +241,13 @@ plotFn <- function(sim) {
       geom_area() +
       theme(legend.text = element_text(size = 6))
 
-    title1 <- if (identical(time(sim), P(sim)$.plotInitialTime))
+    firstPlot <- identical(time(sim), P(sim)$.plotInitialTime + P(sim)$.plotInterval)
+    title1 <- if (firstPlot)
       "Current area burned (ha)" else ""
     Plot(gg_areaBurnedOverTime, title = title1, addTo = "areaBurnedOverTime")
 
     sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn + sim$rstCurrentBurnCumulative
-    title2 <- if (identical(time(sim), P(sim)$.plotInitialTime))
+    title2 <- if (firstPlot)
       "Cumulative Fire Map" else ""
     Plot(sim$rstCurrentBurnCumulative, new = TRUE,
          title = title2,
