@@ -35,6 +35,8 @@ defineModule(sim, list(
     defineParameter(".saveInterval", "numeric", NA, NA, NA, "This describes the simulation time interval between save events"),
     defineParameter(".useCache", "logical", FALSE, NA, NA,
                     "Should this entire module be run with caching activated? This is generally intended for data-type modules, where stochasticity and time are not relevant"),
+    defineParameter(".unitTest", "logical", TRUE, NA, NA,
+                    "Some functions can have internal testing. This will turn those on or off, if any exist"),
     defineParameter(".useParallel", "numeric", parallel::detectCores(), NA, NA,
                     "Used in burning. Will be passed to data.table::setDTthreads")
   ),
@@ -289,8 +291,10 @@ Burn <- function(sim) {
   fireSizesInPixels <- fireSizesInPixels[firesGT0]
 
   ## Rate of Spread
-  vegTypeMap <- vegTypeMapGenerator(sim$species, sim$cohortData, sim$pixelGroupMap,
-                                    P(sim)$vegLeadingProportion)
+  vegTypeMap <- vegTypeMapGenerator(sim$cohortData, sim$pixelGroupMap,
+                                    P(sim)$vegLeadingProportion,
+                                    colors = sim$sppColors,
+                                    unitTest = P(sim)$.unitTest)
 
   ROSmap <- raster(sim$pixelGroupMap)
   ROSmap[] <- fireROS(sim, type = P(sim)$ROStype, vegTypeMap = vegTypeMap)
@@ -457,7 +461,7 @@ override.LandMine.inputObjects <- function(sim) {
 
 fireROS <- function(sim, type = "original", vegTypeMap) {
   vegType <- getValues(vegTypeMap)
-  vegTypes <- data.frame(raster::levels(vegTypeMap)[[1]][, "Factor", drop = FALSE])
+  vegTypes <- data.frame(raster::levels(vegTypeMap)[[1]][, 2, drop = FALSE]) # 2nd column in levels
   #vegTypes <- factorValues(vegTypeMap, seq_len(NROW(levels(vegTypeMap)[[1]]))) # [vegType, "Factor"]
 
   ## note: these are defined differently than in LandWeb, and that's ok?
