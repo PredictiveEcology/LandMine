@@ -232,9 +232,9 @@ plotFn <- function(sim) {
   if (length(unique(mod$areaBurnedOverTime$time)) > 1) {
 
     gg_areaBurnedOverTime <- ggplot(mod$areaBurnedOverTime,
-                                    aes(x = time, y = haBurned, col = FRI, ymin = 0)) +
-      geom_line(size = 1.5) +
-      #geom_area() +
+                                    aes(x = time, y = haBurned, fill = FRI, ymin = 0)) +
+      #geom_line(size = 1.5) +
+      geom_area() +
       theme(legend.text = element_text(size = 6))
 
     title1 <- if (identical(time(sim), P(sim)$.plotInitialTime))
