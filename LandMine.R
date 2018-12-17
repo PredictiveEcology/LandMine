@@ -110,7 +110,7 @@ doEvent.LandMine <- function(sim, eventTime, eventType, debug = FALSE) {
     # do stuff for this event
 
     devCur <- dev.cur()
-    dev(mod$LandMineDevic)
+    dev(mod$LandMineDevice)
     sim <- plotFn(sim)
     dev(devCur)
     sim <- scheduleEvent(sim, P(sim)$.plotInterval, "LandMine", "plot")
