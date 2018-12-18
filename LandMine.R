@@ -241,7 +241,7 @@ plotFn <- function(sim) {
       geom_area() +
       theme(legend.text = element_text(size = 6))
 
-    firstPlot <- identical(time(sim), P(sim)$.plotInitialTime + P(sim)$.plotInterval)
+    firstPlot <- isTRUE(time(sim) == P(sim)$.plotInitialTime + P(sim)$.plotInterval)
     title1 <- if (firstPlot) "Current area burned (ha)" else ""
     Plot(gg_areaBurnedOverTime, title = title1, addTo = "areaBurnedOverTime")
 
