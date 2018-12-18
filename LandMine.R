@@ -186,6 +186,7 @@ Init <- function(sim) {
   #fireReturnIntFilename <- file.path(cachePath(sim), "rasters/fireReturnInterval.tif")
   #sim$fireReturnInterval <- writeRaster(sim$fireReturnInterval, filename = fireReturnIntFilename,
   #                                      datatype = "INT2U", overwrite = TRUE)
+
   sim$rstCurrentBurn <- raster(sim$fireReturnInterval) ## creates no-value raster
   sim$rstCurrentBurn[] <- 0L
   message("6: ", Sys.time())
@@ -194,7 +195,6 @@ Init <- function(sim) {
                                        nPixelsBurned = numeric(0),
                                        haBurned = numeric(0),
                                        FRI = numeric(0))
-  # rm("rstFlammable", envir = envir(sim)) # don't need this in LandMine ... but it is used in timeSinceFire
   return(invisible(sim))
 }
 
@@ -242,16 +242,16 @@ plotFn <- function(sim) {
       theme(legend.text = element_text(size = 6))
 
     firstPlot <- identical(time(sim), P(sim)$.plotInitialTime + P(sim)$.plotInterval)
-    title1 <- if (firstPlot)
-      "Current area burned (ha)" else ""
+    title1 <- if (firstPlot) "Current area burned (ha)" else ""
     Plot(gg_areaBurnedOverTime, title = title1, addTo = "areaBurnedOverTime")
 
     sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn + sim$rstCurrentBurnCumulative
-    title2 <- if (firstPlot)
-      "Cumulative Fire Map" else ""
+    title2 <- if (firstPlot) "Cumulative Fire Map" else ""
     Plot(sim$rstCurrentBurnCumulative, new = TRUE,
          title = title2,
          cols = c("pink", "red"), zero.color = "transparent")
+    Plot(sim$studyAreaReporting, addTo = "sim$rstCurrentBurnCumulative", title = "",
+         gp = gpar(col = "black", fill = 0))
   }
 
   # ! ----- STOP EDITING ----- ! #
