@@ -343,6 +343,10 @@ Burn <- function(sim) {
 }
 
 .inputObjects <- function(sim) {
+  cacheTags <- c(currentModule(sim), "function:.inputObjects")
+  dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
+  message(currentModule(sim), ": using dataPath '", dPath, "'.")
+
   # Make random forest cover map
   nOT <- if (P(sim)$flushCachedRandomFRI) Sys.time() else NULL
   numDefaultPolygons <- 4L
