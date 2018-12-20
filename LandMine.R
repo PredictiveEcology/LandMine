@@ -459,18 +459,6 @@ Burn <- function(sim) {
   return(invisible(sim))
 }
 
-meanTruncPareto <- function(k, lower, upper, alpha) {
-  k * lower^k * (upper^(1 - k) - alpha^(1 - k)) / ((1 - k) * (1 - (alpha/upper)^k))
-}
-
-override.LandMine.inputObjects <- function(sim) {
-  if (grepl("doubleFRI", P(sim)$runName)) {
-    sim$fireReturnInterval[] <- fireReturnInterval[] * 2
-  }
-
-  return(invisible(sim))
-}
-
 fireROS <- function(sim, type = "original", vegTypeMap) {
   vegType <- getValues(vegTypeMap)
   vegTypes <- data.frame(raster::levels(vegTypeMap)[[1]][, 2, drop = FALSE]) # 2nd column in levels

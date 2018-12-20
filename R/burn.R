@@ -20,7 +20,7 @@
 #'                       probabilities are used. See details.
 #'
 #' @details
-#' This algorithm is a modified contagious cellular automaton. The algorithm is as follows:
+#' This algorithm is a modified contagious cellular automaton.
 #'
 #' @section Algorithm:
 #'
@@ -49,8 +49,9 @@
 #' once (i.e., 4 neighbours, 1 jump, 4 neighbours, 1 jump), then it will stop, unable to achieve
 #' the desired fireSize.
 #'
-#' @return
-#' A \code{data.table} with 4 columns
+#' @return A \code{data.table} with 4 columns
+#'
+#' @export
 # burn <- function(landscape, startCells, fireSizes = 5, nActiveCells1 = c(10, 36),
 #                  spawnNewActive = c(0.46, 0.2, 0.26, 0.11),
 #                  sizeCutoffs = c(8e3, 2e4), spreadProbRel = 0.23) {
@@ -83,6 +84,12 @@
 
 #' @param sizeCutoffs Numeric vector, length 2, indicating in the units of the map (e.g., m), not
 #'                    pixels, the cutoff between the different \code{spawnNewActive} levels.
+#'
+#' @export
+#' @importFrom data.table set
+#' @importFrom purrr transpose
+#' @importFrom raster res
+#' @importFrom SpaDES.tools spread2
 burn1 <- function(landscape, startCells, fireSizes = 5, nActiveCells1 = c(10, 36),
                   spawnNewActive = c(0.46, 0.2, 0.26, 0.11),
                   sizeCutoffs = c(8e3, 2e4), spreadProbRel = spreadProbRel, spreadProb = 0.77) {
