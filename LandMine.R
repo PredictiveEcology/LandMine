@@ -7,7 +7,7 @@ defineModule(sim, list(
     person(c("Alex", "M."), "Chubaty", email = "achubaty@friresearch.ca", role = c("ctb"))
   ),
   childModules = character(0),
-  version = numeric_version("0.0.1"),
+  version = list(SpaDES.core = "0.2.3.9009", LandMine = numeric_version("0.0.1")),
   spatialExtent = raster::extent(rep(NA_real_, 4)),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
