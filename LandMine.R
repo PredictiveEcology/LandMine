@@ -425,7 +425,7 @@ Burn <- function(sim) {
   if (!suppliedElsewhere("rstTimeSinceFire", sim)) {
     #if (is.null(sim$rstTimeSinceFire)) {
     sim$rstTimeSinceFire <- raster(sim$pixelGroupMap)
-    sim$rstTimeSinceFire[] <- 200
+    sim$rstTimeSinceFire[] <- 200L
   }
 
   if (!suppliedElsewhere("species", sim)) {
