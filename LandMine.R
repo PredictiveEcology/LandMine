@@ -211,7 +211,8 @@ plotFn <- function(sim) {
     friRast <- sim$fireReturnInterval
     friRast[] <- as.factor(sim$fireReturnInterval[])
     Plot(friRast, title = "Fire Return Interval", cols = c("pink", "darkred"), new = TRUE)
-    Plot(sim$studyAreaReporting, addTo = "friRast", title = "",
+    sar <- sim$studyAreaReporting
+    Plot(sar, addTo = "friRast", title = "",
          gp = gpar(col = "black", fill = 0))
 
     sim$rstCurrentBurnCumulative[!is.na(sim$rstCurrentBurn)] <- 0
@@ -219,7 +220,7 @@ plotFn <- function(sim) {
     rstFlammable <- raster(sim$rstFlammable)
     rstFlammable[] <- getValues(sim$rstFlammable)
     Plot(rstFlammable, title = "Land Type (rstFlammable)", cols = c("mediumblue", "firebrick"), new = TRUE)
-    Plot(sim$studyAreaReporting, addTo = "rstFlammable", title = "",
+    Plot(sar, addTo = "rstFlammable", title = "",
          gp = gpar(col = "black", fill = 0))
   }
 
@@ -251,10 +252,12 @@ plotFn <- function(sim) {
 
     sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn + sim$rstCurrentBurnCumulative
     title2 <- if (firstPlot) "Cumulative Fire Map" else ""
-    Plot(sim$rstCurrentBurnCumulative, new = TRUE,
+    rcbc <- sim$rstCurrentBurnCumulative
+    Plot(rcbc, new = TRUE,
          title = title2,
          cols = c("pink", "red"), zero.color = "transparent")
-    Plot(sim$studyAreaReporting, addTo = "sim$rstCurrentBurnCumulative", title = "",
+    sar <- sim$studyAreaReporting
+    Plot(sar, addTo = "rcbc", title = "",
          gp = gpar(col = "black", fill = 0))
   }
 
