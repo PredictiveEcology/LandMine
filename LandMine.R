@@ -248,7 +248,7 @@ plotFn <- function(sim) {
 
     firstPlot <- isTRUE(time(sim) == P(sim)$.plotInitialTime + P(sim)$.plotInterval)
     title1 <- if (firstPlot) "Current area burned (ha)" else ""
-    Plot(gg_areaBurnedOverTime, title = title1, addTo = "areaBurnedOverTime")
+    Plot(gg_areaBurnedOverTime, title = title1, new = TRUE, addTo = "areaBurnedOverTime")
 
     sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn + sim$rstCurrentBurnCumulative
     title2 <- if (firstPlot) "Cumulative Fire Map" else ""
