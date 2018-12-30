@@ -215,7 +215,7 @@ plotFn <- function(sim) {
     Plot(sar, addTo = "friRast", title = "",
          gp = gpar(col = "black", fill = 0))
 
-    sim$rstCurrentBurnCumulative[!is.na(sim$rstCurrentBurn)] <- 0
+    sim$rstCurrentBurnCumulative[!is.na(sim$rstCurrentBurn)] <- 0L
 
     rstFlammable <- raster(sim$rstFlammable)
     rstFlammable[] <- getValues(sim$rstFlammable)
@@ -400,7 +400,7 @@ Burn <- function(sim) {
     #vals <- factor(sim$fireReturnInterval[],
     #               levels = 1:numDefaultPolygons,
     #               labels = c(60, 100, 120, 250))
-    sim$fireReturnInterval[] <- as.numeric(as.character(vals)) ## TODO: need vals
+    sim$fireReturnInterval[] <- as.integer(as.character(vals)) ## TODO: need vals
   }
 
   if (!suppliedElsewhere("cohortData", sim)) {
