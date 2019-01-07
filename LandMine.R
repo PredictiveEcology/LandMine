@@ -377,11 +377,6 @@ Burn <- function(sim) {
     sim$studyArea <- randomStudyArea(seed = 1234)
   }
 
-  if (!suppliedElsewhere("studyAreaLarge", sim)) {
-    message("'studyAreaLarge' was not provided by user. Using the same as 'studyArea'.")
-    sim$studyAreaLarge <- sim$studyArea
-  }
-
   if (!suppliedElsewhere("studyAreaReporting", sim)) {
     message("'studyAreaReporting' was not provided by user. Using the same as 'studyArea'.")
     sim$studyAreaReporting <- sim$studyArea
