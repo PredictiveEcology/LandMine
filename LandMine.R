@@ -131,8 +131,9 @@ doEvent.LandMine <- function(sim, eventTime, eventType, debug = FALSE) {
 }
 
 ### initialization
-EstimateTruncPareto <- function(sim) {
-  message("Estimate Truncated Pareto parameters")
+EstimateTruncPareto <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
+  if (verbose > 0)
+    message("Estimate Truncated Pareto parameters")
 
   findK_upper <- function(params = c(0.4), upper1) {
     fs <- round(rtruncpareto(1e6, 1, upper = upper1, shape = params[1]))
@@ -152,8 +153,9 @@ EstimateTruncPareto <- function(sim) {
   return(invisible(sim))
 }
 
-Init <- function(sim) {
-  message("Initializing fire maps")
+Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
+  if (verbose > 0)
+    message("Initializing fire maps")
   sim$fireTimestep <- P(sim)$fireTimestep
   sim$fireInitialTime <- P(sim)$burnInitialTime
 
@@ -176,14 +178,16 @@ Init <- function(sim) {
   numHaPerPolygonNumeric <- numPixelsPerPolygonNumeric * (prod(res(sim$fireReturnInterval)) / 1e4)
   returnInterval <- sim$fireReturnIntervalsByPolygonNumeric
 
-  message("Determine mean fire size")
+  if (verbose > 0)
+    message("Determine mean fire size")
   meanFireSizeHa <- meanTruncPareto(k = sim$kBest, lower = 1,
                                     upper = P(sim)$biggestPossibleFireSizeHa,
                                     alpha = 1)
   numFiresByPolygonNumeric <- numHaPerPolygonNumeric / meanFireSizeHa
   sim$numFiresPerYear <- numFiresByPolygonNumeric / returnInterval
 
-  message("Write fire return interval map to disk")
+  if (verbose > 0)
+    message("Write fire return interval map to disk")
 
   #sim$fireReturnInterval <- raster(sim$rasterToMatch)
   #sim$fireReturnInterval[] <- raster::factorValues(sim$rasterToMatch, sim$rasterToMatch[], att = "fireReturnInterval")[, 1]
@@ -193,7 +197,8 @@ Init <- function(sim) {
 
   sim$rstCurrentBurn <- raster(sim$fireReturnInterval) ## creates no-value raster
   sim$rstCurrentBurn[] <- 0L
-  message("6: ", Sys.time())
+  if (verbose > 0)
+    message("6: ", Sys.time())
 
   mod$areaBurnedOverTime <- data.frame(time = numeric(0),
                                        nPixelsBurned = numeric(0),
@@ -266,7 +271,7 @@ plotFn <- function(sim) {
 }
 
 ### burn events
-Burn <- function(sim) {
+Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   sim$numFiresPerYear <- na.omit(sim$numFiresPerYear)
   NA_ids <- as.integer(attr(sim$numFiresPerYear, "na.action"))
   numFiresThisPeriod <- rnbinom(length(sim$numFiresPerYear),
@@ -329,18 +334,22 @@ Burn <- function(sim) {
                    #spawnNewActive = c(0.76, 0.45, 1.0, 0.00),
                    spreadProb = spreadProb)
     fa <- attr(fires, "spreadState")$clusterDT
-    print(fa[order(maxSize)][(.N - pmin(7, NROW(fa))):.N])
+    if (verbose > 0)
+      print(fa[order(maxSize)][(.N - pmin(7, NROW(fa))):.N])
 
     fa1 <- fa[, list(numPixelsBurned = sum(size),
                      expectedNumBurned = sum(maxSize),
                      proportionBurned = sum(size) / sum(maxSize))]
-    print(fa1)
+    if (verbose > 0)
+      print(fa1)
 
-    if (any(tail(fa1$proportionBurned, 10)  < P(sim)$minPropBurn)) {
-      mess <- "In 'LandMine' module 'Burn()': proportion area burned is less than 'minPropBurn'!"
-      message(crayon::red(mess))
-      warning(mess, call. = FALSE)
-    }
+    if (getOption("LandR.assertions", TRUE))
+      if (any(tail(fa1$proportionBurned, 10)  < P(sim)$minPropBurn)) {
+        mess <- "In 'LandMine' module 'Burn()': proportion area burned is less than 'minPropBurn'!"
+        if (verbose > 0)
+          message(crayon::red(mess))
+        warning(mess, call. = FALSE)
+      }
 
     sim$rstCurrentBurn[] <- 0L
     sim$rstCurrentBurn[fires$pixels] <- 1L #as.numeric(factor(fires$initialPixels))
@@ -352,7 +361,8 @@ Burn <- function(sim) {
 .inputObjects <- function(sim) {
   cacheTags <- c(currentModule(sim), "function:.inputObjects")
   dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
-  message(currentModule(sim), ": using dataPath '", dPath, "'.")
+  if (getOption("LandR.verbose", TRUE) > 0)
+    message(currentModule(sim), ": using dataPath '", dPath, "'.")
 
   # Make random forest cover map
   nOT <- if (P(sim)$flushCachedRandomFRI) Sys.time() else NULL
@@ -372,13 +382,15 @@ Burn <- function(sim) {
   }
 
   if (!suppliedElsewhere("studyArea", sim)) {
-    message("'studyArea' was not provided by user. Using a polygon in southwestern Alberta, Canada,")
+    if (getOption("LandR.verbose", TRUE) > 0)
+      message("'studyArea' was not provided by user. Using a polygon in southwestern Alberta, Canada,")
 
     sim$studyArea <- randomStudyArea(seed = 1234)
   }
 
   if (!suppliedElsewhere("studyAreaReporting", sim)) {
-    message("'studyAreaReporting' was not provided by user. Using the same as 'studyArea'.")
+    if (getOption("LandR.verbose", TRUE) > 0)
+      message("'studyAreaReporting' was not provided by user. Using the same as 'studyArea'.")
     sim$studyAreaReporting <- sim$studyArea
   }
 
