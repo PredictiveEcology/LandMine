@@ -2,16 +2,20 @@ defineModule(sim, list(
   name = "LandMine",
   description = "Rewrite of Andison (1999) LandMine fire model",
   keywords = c("Fire", "Landscape", "Percolation", "Pixel-based"),
-  authors = person(c("Eliot", "J", "B"), "McIntire", email = "eliot.mcintire@canada.ca", role = c("aut", "cre")),
+  authors = c(
+    person(c("Eliot", "J", "B"), "McIntire", email = "eliot.mcintire@canada.ca", role = c("aut", "cre")),
+    person(c("Alex", "M."), "Chubaty", email = "achubaty@friresearch.ca", role = c("ctb"))
+  ),
   childModules = character(0),
-  version = numeric_version("0.0.1"),
+  version = list(SpaDES.core = "0.2.3.9009", LandMine = numeric_version("0.0.1")),
   spatialExtent = raster::extent(rep(NA_real_, 4)),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = list("README.txt", "LandMine.Rmd"),
   reqdPkgs = list("data.table", "grDevices", "magrittr", "raster", "RColorBrewer", "VGAM",
-                  "PredictiveEcology/pemisc",
+                  "PredictiveEcology/LandR@development",
+                  "PredictiveEcology/pemisc@development",
                   "PredictiveEcology/SpaDES.tools@development"),
   parameters = rbind(
     #defineParameter("paramName", "paramClass", value, min, max, "parameter description")),
@@ -110,7 +114,7 @@ doEvent.LandMine <- function(sim, eventTime, eventType, debug = FALSE) {
     # do stuff for this event
 
     devCur <- dev.cur()
-    dev(mod$LandMineDevice)
+    quickPlot::dev(mod$LandMineDevice, width= 18, height = 12)
     sim <- plotFn(sim)
     dev(devCur)
     sim <- scheduleEvent(sim, P(sim)$.plotInterval, "LandMine", "plot")
@@ -127,8 +131,9 @@ doEvent.LandMine <- function(sim, eventTime, eventType, debug = FALSE) {
 }
 
 ### initialization
-EstimateTruncPareto <- function(sim) {
-  message("Estimate Truncated Pareto parameters")
+EstimateTruncPareto <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
+  if (verbose > 0)
+    message("Estimate Truncated Pareto parameters")
 
   findK_upper <- function(params = c(0.4), upper1) {
     fs <- round(rtruncpareto(1e6, 1, upper = upper1, shape = params[1]))
@@ -148,8 +153,9 @@ EstimateTruncPareto <- function(sim) {
   return(invisible(sim))
 }
 
-Init <- function(sim) {
-  message("Initializing fire maps")
+Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
+  if (verbose > 0)
+    message("Initializing fire maps")
   sim$fireTimestep <- P(sim)$fireTimestep
   sim$fireInitialTime <- P(sim)$burnInitialTime
 
@@ -172,29 +178,32 @@ Init <- function(sim) {
   numHaPerPolygonNumeric <- numPixelsPerPolygonNumeric * (prod(res(sim$fireReturnInterval)) / 1e4)
   returnInterval <- sim$fireReturnIntervalsByPolygonNumeric
 
-  message("Determine mean fire size")
+  if (verbose > 0)
+    message("Determine mean fire size")
   meanFireSizeHa <- meanTruncPareto(k = sim$kBest, lower = 1,
                                     upper = P(sim)$biggestPossibleFireSizeHa,
                                     alpha = 1)
   numFiresByPolygonNumeric <- numHaPerPolygonNumeric / meanFireSizeHa
   sim$numFiresPerYear <- numFiresByPolygonNumeric / returnInterval
 
-  message("Write fire return interval map to disk")
+  if (verbose > 0)
+    message("Write fire return interval map to disk")
 
   #sim$fireReturnInterval <- raster(sim$rasterToMatch)
   #sim$fireReturnInterval[] <- raster::factorValues(sim$rasterToMatch, sim$rasterToMatch[], att = "fireReturnInterval")[, 1]
   #fireReturnIntFilename <- file.path(cachePath(sim), "rasters/fireReturnInterval.tif")
   #sim$fireReturnInterval <- writeRaster(sim$fireReturnInterval, filename = fireReturnIntFilename,
   #                                      datatype = "INT2U", overwrite = TRUE)
+
   sim$rstCurrentBurn <- raster(sim$fireReturnInterval) ## creates no-value raster
   sim$rstCurrentBurn[] <- 0L
-  message("6: ", Sys.time())
+  if (verbose > 0)
+    message("6: ", Sys.time())
 
   mod$areaBurnedOverTime <- data.frame(time = numeric(0),
                                        nPixelsBurned = numeric(0),
                                        haBurned = numeric(0),
                                        FRI = numeric(0))
-  # rm("rstFlammable", envir = envir(sim)) # don't need this in LandMine ... but it is used in timeSinceFire
   return(invisible(sim))
 }
 
@@ -207,15 +216,16 @@ plotFn <- function(sim) {
     friRast <- sim$fireReturnInterval
     friRast[] <- as.factor(sim$fireReturnInterval[])
     Plot(friRast, title = "Fire Return Interval", cols = c("pink", "darkred"), new = TRUE)
-    Plot(sim$studyAreaReporting, addTo = "friRast", title = "",
+    sar <- sim$studyAreaReporting
+    Plot(sar, addTo = "friRast", title = "",
          gp = gpar(col = "black", fill = 0))
 
-    sim$rstCurrentBurnCumulative[!is.na(sim$rstCurrentBurn)] <- 0
+    sim$rstCurrentBurnCumulative[!is.na(sim$rstCurrentBurn)] <- 0L
 
     rstFlammable <- raster(sim$rstFlammable)
     rstFlammable[] <- getValues(sim$rstFlammable)
     Plot(rstFlammable, title = "Land Type (rstFlammable)", cols = c("mediumblue", "firebrick"), new = TRUE)
-    Plot(sim$studyAreaReporting, addTo = "rstFlammable", title = "",
+    Plot(sar, addTo = "rstFlammable", title = "",
          gp = gpar(col = "black", fill = 0))
   }
 
@@ -241,17 +251,19 @@ plotFn <- function(sim) {
       geom_area() +
       theme(legend.text = element_text(size = 6))
 
-    firstPlot <- identical(time(sim), P(sim)$.plotInitialTime + P(sim)$.plotInterval)
-    title1 <- if (firstPlot)
-      "Current area burned (ha)" else ""
-    Plot(gg_areaBurnedOverTime, title = title1, addTo = "areaBurnedOverTime")
+    firstPlot <- isTRUE(time(sim) == P(sim)$.plotInitialTime + P(sim)$.plotInterval)
+    title1 <- if (firstPlot) "Current area burned (ha)" else ""
+    Plot(gg_areaBurnedOverTime, title = title1, new = TRUE, addTo = "areaBurnedOverTime")
 
     sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn + sim$rstCurrentBurnCumulative
-    title2 <- if (firstPlot)
-      "Cumulative Fire Map" else ""
-    Plot(sim$rstCurrentBurnCumulative, new = TRUE,
+    title2 <- if (firstPlot) "Cumulative Fire Map" else ""
+    rcbc <- sim$rstCurrentBurnCumulative
+    Plot(rcbc, new = TRUE,
          title = title2,
          cols = c("pink", "red"), zero.color = "transparent")
+    sar <- sim$studyAreaReporting
+    Plot(sar, addTo = "rcbc", title = "",
+         gp = gpar(col = "black", fill = 0))
   }
 
   # ! ----- STOP EDITING ----- ! #
@@ -259,7 +271,7 @@ plotFn <- function(sim) {
 }
 
 ### burn events
-Burn <- function(sim) {
+Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   sim$numFiresPerYear <- na.omit(sim$numFiresPerYear)
   NA_ids <- as.integer(attr(sim$numFiresPerYear, "na.action"))
   numFiresThisPeriod <- rnbinom(length(sim$numFiresPerYear),
@@ -310,8 +322,11 @@ Burn <- function(sim) {
   sizeCutoffs <- 10^c(2.202732, 4.696060)
 
   if (!all(is.na(thisYrStartCells)) & length(thisYrStartCells) > 0) {
-    if (data.table::getDTthreads() < P(sim)$.useParallel)
-      data.table::setDTthreads(P(sim)$.useParallel)
+    if (is.numeric(P(sim)$.useParallel)) {
+      a <- data.table::setDTthreads(P(sim)$.useParallel)
+      message("Burn should be using >100% CPU")
+      on.exit(setDTthreads(a))
+    }
     fires <- burn1(sim$fireReturnInterval,
                    startCells = thisYrStartCells,
                    fireSizes = fireSizesInPixels,
@@ -322,18 +337,22 @@ Burn <- function(sim) {
                    #spawnNewActive = c(0.76, 0.45, 1.0, 0.00),
                    spreadProb = spreadProb)
     fa <- attr(fires, "spreadState")$clusterDT
-    print(fa[order(maxSize)][(.N - pmin(7, NROW(fa))):.N])
+    if (verbose > 0)
+      print(fa[order(maxSize)][(.N - pmin(7, NROW(fa))):.N])
 
     fa1 <- fa[, list(numPixelsBurned = sum(size),
                      expectedNumBurned = sum(maxSize),
                      proportionBurned = sum(size) / sum(maxSize))]
-    print(fa1)
+    if (verbose > 0)
+      print(fa1)
 
-    if (any(tail(fa1$proportionBurned, 10)  < P(sim)$minPropBurn)) {
-      mess <- "In 'LandMine' module 'Burn()': proportion area burned is less than 'minPropBurn'!"
-      message(crayon::red(mess))
-      warning(mess, call. = FALSE)
-    }
+    if (getOption("LandR.assertions", TRUE))
+      if (any(tail(fa1$proportionBurned, 10)  < P(sim)$minPropBurn)) {
+        mess <- "In 'LandMine' module 'Burn()': proportion area burned is less than 'minPropBurn'!"
+        if (verbose > 0)
+          message(crayon::red(mess))
+        warning(mess, call. = FALSE)
+      }
 
     sim$rstCurrentBurn[] <- 0L
     sim$rstCurrentBurn[fires$pixels] <- 1L #as.numeric(factor(fires$initialPixels))
@@ -343,6 +362,11 @@ Burn <- function(sim) {
 }
 
 .inputObjects <- function(sim) {
+  cacheTags <- c(currentModule(sim), "function:.inputObjects")
+  dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
+  if (getOption("LandR.verbose", TRUE) > 0)
+    message(currentModule(sim), ": using dataPath '", dPath, "'.")
+
   # Make random forest cover map
   nOT <- if (P(sim)$flushCachedRandomFRI) Sys.time() else NULL
   numDefaultPolygons <- 4L
@@ -361,18 +385,15 @@ Burn <- function(sim) {
   }
 
   if (!suppliedElsewhere("studyArea", sim)) {
-    message("'studyArea' was not provided by user. Using a polygon in southwestern Alberta, Canada,")
+    if (getOption("LandR.verbose", TRUE) > 0)
+      message("'studyArea' was not provided by user. Using a polygon in southwestern Alberta, Canada,")
 
     sim$studyArea <- randomStudyArea(seed = 1234)
   }
 
-  if (!suppliedElsewhere("studyAreaLarge", sim)) {
-    message("'studyAreaLarge' was not provided by user. Using the same as 'studyArea'.")
-    sim$studyAreaLarge <- sim$studyArea
-  }
-
   if (!suppliedElsewhere("studyAreaReporting", sim)) {
-    message("'studyAreaReporting' was not provided by user. Using the same as 'studyArea'.")
+    if (getOption("LandR.verbose", TRUE) > 0)
+      message("'studyAreaReporting' was not provided by user. Using the same as 'studyArea'.")
     sim$studyAreaReporting <- sim$studyArea
   }
 
@@ -389,7 +410,7 @@ Burn <- function(sim) {
     #vals <- factor(sim$fireReturnInterval[],
     #               levels = 1:numDefaultPolygons,
     #               labels = c(60, 100, 120, 250))
-    sim$fireReturnInterval[] <- as.numeric(as.character(vals)) ## TODO: need vals
+    sim$fireReturnInterval[] <- as.integer(as.character(vals)) ## TODO: need vals
   }
 
   if (!suppliedElsewhere("cohortData", sim)) {
@@ -417,7 +438,7 @@ Burn <- function(sim) {
   if (!suppliedElsewhere("rstTimeSinceFire", sim)) {
     #if (is.null(sim$rstTimeSinceFire)) {
     sim$rstTimeSinceFire <- raster(sim$pixelGroupMap)
-    sim$rstTimeSinceFire[] <- 200
+    sim$rstTimeSinceFire[] <- 200L
   }
 
   if (!suppliedElsewhere("species", sim)) {
@@ -448,18 +469,6 @@ Burn <- function(sim) {
   #     }
   #   }
   # }
-
-  return(invisible(sim))
-}
-
-meanTruncPareto <- function(k, lower, upper, alpha) {
-  k * lower^k * (upper^(1 - k) - alpha^(1 - k)) / ((1 - k) * (1 - (alpha/upper)^k))
-}
-
-override.LandMine.inputObjects <- function(sim) {
-  if (grepl("doubleFRI", P(sim)$runName)) {
-    sim$fireReturnInterval[] <- fireReturnInterval[] * 2
-  }
 
   return(invisible(sim))
 }
