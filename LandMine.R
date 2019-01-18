@@ -322,8 +322,11 @@ Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   sizeCutoffs <- 10^c(2.202732, 4.696060)
 
   if (!all(is.na(thisYrStartCells)) & length(thisYrStartCells) > 0) {
-    if (data.table::getDTthreads() < P(sim)$.useParallel)
-      data.table::setDTthreads(P(sim)$.useParallel)
+    if (is.numeric(P(sim)$.useParallel)) {
+      a <- data.table::setDTthreads(P(sim)$.useParallel)
+      message("Burn should be using >100% CPU")
+      on.exit(setDTthreads(a))
+    }
     fires <- burn1(sim$fireReturnInterval,
                    startCells = thisYrStartCells,
                    fireSizes = fireSizesInPixels,
