@@ -325,7 +325,7 @@ Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     if (is.numeric(P(sim)$.useParallel)) {
       a <- data.table::setDTthreads(P(sim)$.useParallel)
       message("Burn should be using >100% CPU")
-      on.exit(setDTthreads(a))
+      on.exit(data.table::setDTthreads(a), add = TRUE)
     }
     fires <- burn1(sim$fireReturnInterval,
                    startCells = thisYrStartCells,
