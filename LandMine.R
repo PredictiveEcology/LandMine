@@ -28,8 +28,14 @@ defineModule(sim, list(
                     "If no Fire Return Interval map is supplied, then a random one will be created and cached. Use this to make a new one."),
     defineParameter("minPropBurn", "numeric", 0.90, 0.00, 1.00,
                     "Minimum proportion burned pixels to use when triggering warnings about simulatied fires."),
-    defineParameter("randomDefaultData", "logical", FALSE, NA, NA,
-                    "Only used for creating a starting dataset. If TRUE, then it will be randomly generated; FALSE, deterministic and identical each time."),
+    defineParameter("ROStype", "character", "original", NA, NA,
+                    paste("How to modify the 'raste of spread' parameters for different veg types.",
+                          "One of 'equal', 'log', or 'original'.")),
+    defineParameter("useSeed", "integer", NULL, NA, NA,
+                    paste("Only used for creating a starting cohortData dataset.",
+                          "If NULL, then it will be randomly generated;",
+                          "If non-NULL, will pass this value to set.seed and be deterministic and identical each time.",
+                          "WARNING: setting the seed to a specific value will cause all simulations to be identical!")),
     defineParameter("vegLeadingProportion", "numeric", 0.8, 0, 1,
                     "a number that define whether a species is leading for a given pixel"),
     defineParameter(".plotInitialTime", "numeric", start(sim, "year") + 1, NA, NA,
@@ -45,9 +51,12 @@ defineModule(sim, list(
                     "Used in burning. Will be passed to data.table::setDTthreads")
   ),
   inputObjects = bind_rows(
-    expectsInput("cohortData", "data.table", "Columns: B, pixelGroup, speciesCode, Indicating several features about ages and current vegetation of stand"),
-    expectsInput("fireReturnInterval","Raster", "A raster layer that is a factor raster, with at least 1 column called fireReturnInterval, representing the fire return interval in years"),
-    expectsInput("pixelGroupMap", "RasterLayer", "Pixels with identical values share identical stand features"),
+    expectsInput("cohortData", "data.table",
+                 desc = "Columns: B, pixelGroup, speciesCode, Indicating several features about ages and current vegetation of stand"),
+    expectsInput("fireReturnInterval","Raster",
+                 desc = "A raster layer that is a factor raster, with at least 1 column called fireReturnInterval, representing the fire return interval in years"),
+    expectsInput("pixelGroupMap", "RasterLayer",
+                 desc = "Pixels with identical values share identical stand features"),
     expectsInput("rasterToMatch", "RasterLayer",
                  #desc = "this raster contains two pieces of information: Full study area with fire return interval attribute",
                  desc = "DESCRIPTION NEEDED", # TODO: is this correct?
@@ -60,8 +69,10 @@ defineModule(sim, list(
                  desc = paste("A raster layer, with 0, 1 and NA, where 1 indicates areas",
                               "that are flammable, 0 not flammable (e.g., lakes)",
                               "and NA not applicable (e.g., masked)")),
-    expectsInput("rstTimeSinceFire", "Raster", "a time since fire raster layer", NA),
-    expectsInput("species", "data.table", "Columns: species, speciesCode, Indicating several features about species"),
+    expectsInput("rstTimeSinceFire", "Raster",
+                 desc = "a time since fire raster layer", NA),
+    expectsInput("species", "data.table",
+                 desc = "Columns: species, speciesCode, Indicating several features about species"),
     expectsInput("studyAreaReporting", "SpatialPolygonsDataFrame",
                  desc = paste("multipolygon (typically smaller/unbuffered than studyArea) to use for plotting/reporting.",
                               "Defaults to an area in Southwestern Alberta, Canada."),
@@ -154,6 +165,19 @@ EstimateTruncPareto <- function(sim, verbose = getOption("LandR.verbose", TRUE))
 }
 
 Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
+  if (!suppliedElsewhere("cohortData", sim)) {
+    if (!is.null(P(sim)$useSeed)) {
+      set.seed(P(sim)$useSeed)
+    }
+
+    sampleV <- Vectorize(sample, "size", SIMPLIFY = TRUE)
+    repV <- Vectorize(rep.int, c("x","times"))
+    numCohortsPerPG <- sample(1:2, replace = TRUE, mod$numDefaultPixelGroups)
+    sim$cohortData <- data.table(speciesCode = unlist(sampleV(1:2, numCohortsPerPG)),
+                                 B = runif(sum(numCohortsPerPG), 100, 1000),
+                                 pixelGroup = unlist(repV(1:mod$numDefaultPixelGroups, times = numCohortsPerPG)))
+  }
+
   if (verbose > 0)
     message("Initializing fire maps")
   sim$fireTimestep <- P(sim)$fireTimestep
@@ -369,8 +393,8 @@ Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
   # Make random forest cover map
   nOT <- if (P(sim)$flushCachedRandomFRI) Sys.time() else NULL
-  numDefaultPolygons <- 4L
-  numDefaultPixelGroups <- 20L
+  mod$numDefaultPixelGroups <- 20L
+  mod$numDefaultPolygons <- 4L
   numDefaultSpeciesCodes <- 2L
   emptyRas <- raster(extent(0, 2e4, 0, 2e4), res = 250)
 
@@ -404,34 +428,18 @@ Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
   if (!suppliedElsewhere("fireReturnInterval", sim)) {
     sim$fireReturnInterval <- Cache(randomPolygons, emptyRas,
-                                    numTypes = numDefaultPolygons, notOlderThan = nOT,
+                                    numTypes = mod$numDefaultPolygons, notOlderThan = nOT,
                                     cacheRepo = cachePath(sim))
 
     #vals <- factor(sim$fireReturnInterval[],
-    #               levels = 1:numDefaultPolygons,
+    #               levels = 1:mod$numDefaultPolygons,
     #               labels = c(60, 100, 120, 250))
     sim$fireReturnInterval[] <- as.integer(as.character(vals)) ## TODO: need vals
   }
 
-  if (!suppliedElsewhere("cohortData", sim)) {
-    if (!P(sim)$randomDefaultData) {
-      ranNum <- runif(1)
-      set.seed(123)
-    }
-    sampleV <- Vectorize(sample, "size", SIMPLIFY = TRUE)
-    repV <- Vectorize(rep.int, c("x","times"))
-    numCohortsPerPG <- sample(1:2, replace = TRUE, numDefaultPixelGroups)
-    sim$cohortData <- data.table(speciesCode = unlist(sampleV(1:2, numCohortsPerPG)),
-                                 B = runif(sum(numCohortsPerPG), 100, 1000),
-                                 pixelGroup = unlist(repV(1:numDefaultPixelGroups, times = numCohortsPerPG)))
-    if (!P(sim)$randomDefaultData) {
-      set.seed(ranNum)
-    }
-  }
-
   # Upgrades to use suppliedElsewhere -- Eliot Oct 21 2018
   if (!suppliedElsewhere("pixelGroupMap", sim)) {
-    sim$pixelGroupMap <- Cache(randomPolygons, emptyRas, numTypes = numDefaultPixelGroups,
+    sim$pixelGroupMap <- Cache(randomPolygons, emptyRas, numTypes = mod$numDefaultPixelGroups,
                                notOlderThan = nOT, cacheRepo = cachePath(sim))
   }
 
