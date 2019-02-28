@@ -165,6 +165,12 @@ EstimateTruncPareto <- function(sim, verbose = getOption("LandR.verbose", TRUE))
 }
 
 Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
+  ## DEBUGGING: random seed issues
+  #fseed <- file.path(outputPath(sim), "seed.txt")
+  #writeEventInfo(sim, fseed, append = TRUE)
+  #writeRNGInfo(fseed, append = TRUE)
+  ## END DEBUGGING
+
   if (!suppliedElsewhere("cohortData", sim)) {
     if (!is.null(P(sim)$useSeed)) {
       set.seed(P(sim)$useSeed)
@@ -296,6 +302,12 @@ plotFn <- function(sim) {
 
 ### burn events
 Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
+  ## DEBUGGING: random seed issues
+  #fseed <- file.path(outputPath(sim), "seed.txt")
+  #writeEventInfo(sim, fseed, append = TRUE)
+  #writeRNGInfo(fseed, append = TRUE)
+  ## END DEBUGGING
+
   sim$numFiresPerYear <- na.omit(sim$numFiresPerYear)
   NA_ids <- as.integer(attr(sim$numFiresPerYear, "na.action"))
   numFiresThisPeriod <- rnbinom(length(sim$numFiresPerYear),
@@ -386,6 +398,12 @@ Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 }
 
 .inputObjects <- function(sim) {
+  ## DEBUGGING: random seed issues
+  #fseed <- file.path(outputPath(sim), "seed.txt")
+  #writeEventInfo(sim, fseed, append = TRUE)
+  #writeRNGInfo(fseed, append = TRUE)
+  ## END DEBUGGING
+
   cacheTags <- c(currentModule(sim), "function:.inputObjects")
   dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
   if (getOption("LandR.verbose", TRUE) > 0)
