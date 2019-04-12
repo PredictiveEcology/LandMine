@@ -1,6 +1,6 @@
 defineModule(sim, list(
   name = "LandMine",
-  description = "Rewrite of Andison (1999) LandMine fire model",
+  description = "Reimplementation of Andison (1999) LandMine fire model",
   keywords = c("Fire", "Landscape", "Percolation", "Pixel-based"),
   authors = c(
     person(c("Eliot", "J", "B"), "McIntire", email = "eliot.mcintire@canada.ca", role = c("aut", "cre")),
@@ -27,9 +27,9 @@ defineModule(sim, list(
     defineParameter("flushCachedRandomFRI", "logical", FALSE, NA, NA,
                     "If no Fire Return Interval map is supplied, then a random one will be created and cached. Use this to make a new one."),
     defineParameter("minPropBurn", "numeric", 0.90, 0.00, 1.00,
-                    "Minimum proportion burned pixels to use when triggering warnings about simulatied fires."),
+                    "Minimum proportion burned pixels to use when triggering warnings about simulated fires."),
     defineParameter("ROStype", "character", "original", NA, NA,
-                    paste("How to modify the 'raste of spread' parameters for different veg types.",
+                    paste("How to modify the 'rate of spread' parameters for different veg types.",
                           "One of 'equal', 'log', or 'original'.")),
     defineParameter("useSeed", "integer", NULL, NA, NA,
                     paste("Only used for creating a starting cohortData dataset.",
@@ -79,8 +79,9 @@ defineModule(sim, list(
                  sourceURL = NA)
   ),
   outputObjects = bind_rows(
-    createsOutput("fireInitialTime", "numeric",
-                  "The initial event time of the burn event. This is simply a reassignment from P(sim)$burnInitialTime."
+    createsOutput("fireInitialTime", "numeric", paste(
+      "The initial event time of the burn event.",
+      "This is simply a reassignment from P(sim)$burnInitialTime.")
     ),
     createsOutput("fireReturnInterval", "RasterLayer", paste(
       "A Raster map showing the fire return interval. THis is created from the rstCurrentBurn.")
@@ -88,10 +89,11 @@ defineModule(sim, list(
     createsOutput("fireReturnIntervalsByPolygonNumeric", "numeric", paste(
       "A vector of the fire return intervals, ordered by the numeric representation of polygon ID")
     ),
-    createsOutput("fireTimestep", "numeric",
-                  "The number of time units between successive fire events in a fire module."
+    createsOutput("fireTimestep", "numeric", paste(
+      "The number of time units between successive fire events in a fire module.")
     ),
-    createsOutput("kBest", "numeric", "A numeric scalar that is the optimal value of K in the Truncated Pareto distribution (rtruncpareto)"),
+    createsOutput("kBest", "numeric", paste(
+      "A numeric scalar that is the optimal value of K in the Truncated Pareto distribution (rtruncpareto)")),
     createsOutput("numFiresPerYear", "numeric", paste(
       "The average number of fires per year, by fire return interval level on rstCurrentBurn.")
     ),
