@@ -73,6 +73,9 @@ defineModule(sim, list(
                  desc = "a time since fire raster layer", NA),
     expectsInput("species", "data.table",
                  desc = "Columns: species, speciesCode, Indicating several features about species"),
+    expectsInput("sppColorVect", "character",
+                 desc = "named character vector of hex colour codes corresponding to each species",
+                 sourceURL = ""),
     expectsInput("studyAreaReporting", "SpatialPolygonsDataFrame",
                  desc = paste("multipolygon (typically smaller/unbuffered than studyArea) to use for plotting/reporting.",
                               "Defaults to an area in Southwestern Alberta, Canada."),
@@ -348,7 +351,7 @@ Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   ## Rate of Spread
   vegTypeMap <- vegTypeMapGenerator(sim$cohortData, sim$pixelGroupMap,
                                     P(sim)$vegLeadingProportion,
-                                    colors = sim$sppColors,
+                                    colors = sim$sppColorVect,
                                     unitTest = P(sim)$.unitTest)
 
   ROSmap <- raster(sim$pixelGroupMap)
