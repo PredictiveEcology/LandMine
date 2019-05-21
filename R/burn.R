@@ -91,7 +91,7 @@
 #' @importFrom raster res
 #' @importFrom SpaDES.tools spread2
 burn1 <- function(landscape, startCells, fireSizes = 5, nActiveCells1 = c(10, 36),
-                  spawnNewActive = c(0.46, 0.2, 0.26, 0.11),
+                  spawnNewActive = c(0.46, 0.2, 0.26, 0.11), maxRetriesPerID = 10,
                   sizeCutoffs = c(8e3, 2e4), spreadProbRel = spreadProbRel, spreadProb = 0.77) {
   # convert to pixels
   sizeCutoffs <- sizeCutoffs / (prod(res(landscape)) / 1e4)
@@ -102,6 +102,7 @@ burn1 <- function(landscape, startCells, fireSizes = 5, nActiveCells1 = c(10, 36
                spreadProbRel = spreadProbRel, #persistence = 0,
                neighProbs = c(1-spawnNewActive[1], spawnNewActive[1]), iterations = 1,
                #mask=NULL,
+               maxRetriesPerID = maxRetriesPerID,
                asRaster = FALSE, exactSize = fireSizes, directions = 8, #returnIndices = TRUE,
                #id = TRUE, plot.it = FALSE
                )
@@ -149,6 +150,7 @@ burn1 <- function(landscape, startCells, fireSizes = 5, nActiveCells1 = c(10, 36
                  exactSize = attr(a, "spreadState")$cluster$maxSize,
                  #mask = NULL,
                  #maxSize = fireSizes,
+                 maxRetriesPerID = maxRetriesPerID,
                  directions = 8, #returnIndices = TRUE,
                  #id = TRUE, plot.it = FALSE
                  )

@@ -28,6 +28,8 @@ defineModule(sim, list(
                     "If no Fire Return Interval map is supplied, then a random one will be created and cached. Use this to make a new one."),
     defineParameter("minPropBurn", "numeric", 0.90, 0.00, 1.00,
                     "Minimum proportion burned pixels to use when triggering warnings about simulated fires."),
+    defineParameter("maxRetriesPerID", "integer", 10L, 0L, 20L,
+                    "Minimum proportion burned pixels to use when triggering warnings about simulated fires."),
     defineParameter("ROStype", "character", "original", NA, NA,
                     paste("How to modify the 'rate of spread' parameters for different veg types.",
                           "One of 'equal', 'log', or 'original'.")),
@@ -376,6 +378,7 @@ Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
                    spreadProbRel = ROSmap,
                    #spawnNewActive = c(0.65, 0.6, 0.2, 0.2),
                    sizeCutoffs = sizeCutoffs,
+                   maxRetriesPerID = P(sim)$maxRetriesPerID,
                    spawnNewActive = spawnNewActive,
                    #spawnNewActive = c(0.76, 0.45, 1.0, 0.00),
                    spreadProb = spreadProb)
