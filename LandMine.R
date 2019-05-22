@@ -88,6 +88,11 @@ defineModule(sim, list(
       "The initial event time of the burn event.",
       "This is simply a reassignment from P(sim)$burnInitialTime.")
     ),
+    createsOutput("fireSizes", "list", paste(
+      "A list of data.tables, one per burn event, each with two columns, size and maxSize.",
+      " These indicate the actual sizes and expected sizes burned, respectively.",
+      "These can be put into a single data.table with rbindlist(sim$fireSizes, idcol = 'year')")
+    ),
     createsOutput("fireReturnInterval", "RasterLayer", paste(
       "A Raster map showing the fire return interval. THis is created from the rstCurrentBurn.")
     ),
@@ -177,6 +182,7 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   #writeEventInfo(sim, fseed, append = TRUE)
   #writeRNGInfo(fseed, append = TRUE)
   ## END DEBUGGING
+  sim$fireSizes <- list()
 
   if (!suppliedElsewhere("cohortData", sim)) {
     if (!is.null(P(sim)$useSeed)) {
@@ -391,6 +397,9 @@ Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
                      proportionBurned = sum(size) / sum(maxSize))]
     if (verbose > 0)
       print(fa1)
+
+    fa[, maxSize := asInteger(maxSize)]
+    sim$fireSizes[[round(time(sim) - P(sim)$burnInitialTime + 1, 0)]] <- fa[, c("size", "maxSize")]
 
     if (getOption("LandR.assertions", TRUE))
       if (any(tail(fa1$proportionBurned, 10)  < P(sim)$minPropBurn)) {
