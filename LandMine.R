@@ -141,8 +141,6 @@ doEvent.LandMine <- function(sim, eventTime, eventType, debug = FALSE) {
     sim <- plotFn(sim)
     dev(devCur)
     sim <- scheduleEvent(sim, P(sim)$.plotInterval, "LandMine", "plot")
-
-  } else if (eventType == "save") {
   } else if (eventType == "Burn") {
     sim <- Burn(sim)
     sim <- scheduleEvent(sim, time(sim) + P(sim)$fireTimestep, "LandMine", "Burn", 2.5)
