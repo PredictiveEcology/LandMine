@@ -49,8 +49,9 @@ defineModule(sim, list(
                     "Should this entire module be run with caching activated? This is generally intended for data-type modules, where stochasticity and time are not relevant"),
     defineParameter(".unitTest", "logical", TRUE, NA, NA,
                     "Some functions can have internal testing. This will turn those on or off, if any exist"),
-    defineParameter(".useParallel", "numeric", parallel::detectCores(), NA, NA,
-                    "Used in burning. Will be passed to data.table::setDTthreads")
+    defineParameter(".useParallel", "numeric", 2, NA, NA,
+                    paste("Used in burning. Will be passed to data.table::setDTthreads.",
+                          "NOTE: should be <= 2 as the additonal RAM overhead too high given marginal speedup."))
   ),
   inputObjects = bind_rows(
     expectsInput("cohortData", "data.table",
