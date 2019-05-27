@@ -319,7 +319,7 @@ Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
                                 mu = sim$numFiresPerYear * P(sim)$fireTimestep,
                                 size = 1.3765) # Eliot lowered this from 1.8765 on Oct 23, 2018 because too constant
 
-  thisYrStartCells <- data.table(pixel = 1:ncell(sim$fireReturnInterval),
+  thisYrStartCells <- data.table(pixel = seq(ncell(sim$fireReturnInterval)),
                                  polygonNumeric = sim$fireReturnInterval[],
                                  key = "polygonNumeric")
 
