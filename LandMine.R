@@ -182,6 +182,9 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   ## END DEBUGGING
   sim$fireSizes <- list()
 
+  if (!is.integer(sim$fireReturnInterval[]))
+    sim$fireReturnInterval[] <- as.integer(sim$fireReturnInterval[])
+
   if (!suppliedElsewhere("cohortData", sim)) {
     if (!is.null(P(sim)$useSeed)) {
       set.seed(P(sim)$useSeed)
@@ -201,8 +204,8 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   sim$fireInitialTime <- P(sim)$burnInitialTime
 
   # check sim$fireReturnInterval should have no zeros
-  zeros <- sim$fireReturnInterval[] == 0
-  if (any(zeros, na.rm = TRUE)) sim$fireReturnInterval[zeros] <- NA
+  zeros <- sim$fireReturnInterval[] == 0L
+  if (any(zeros, na.rm = TRUE)) sim$fireReturnInterval[zeros] <- NA_integer_
   numPixelsPerPolygonNumeric <- Cache(freq, sim$fireReturnInterval, useNA = "no", cacheRepo = cachePath(sim)) %>%
     na.omit()
   colnames(numPixelsPerPolygonNumeric) <- c("fri", "count")
@@ -226,15 +229,6 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
                                     alpha = 1)
   numFiresByPolygonNumeric <- numHaPerPolygonNumeric / meanFireSizeHa
   sim$numFiresPerYear <- numFiresByPolygonNumeric / returnInterval
-
-  if (verbose > 0)
-    message("Write fire return interval map to disk")
-
-  #sim$fireReturnInterval <- raster(sim$rasterToMatch)
-  #sim$fireReturnInterval[] <- raster::factorValues(sim$rasterToMatch, sim$rasterToMatch[], att = "fireReturnInterval")[, 1]
-  #fireReturnIntFilename <- file.path(cachePath(sim), "rasters/fireReturnInterval.tif")
-  #sim$fireReturnInterval <- writeRaster(sim$fireReturnInterval, filename = fireReturnIntFilename,
-  #                                      datatype = "INT2U", overwrite = TRUE)
 
   sim$rstCurrentBurn <- raster(sim$fireReturnInterval) ## creates no-value raster
   sim$rstCurrentBurn[] <- 0L
