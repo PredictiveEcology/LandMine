@@ -522,8 +522,8 @@ fireROS <- function(sim, type = "original", vegTypeMap) {
 
   ROS <- rep(NA_integer_, NROW(vegType))
   # New algorithm -- faster than protected with FALSE section below
-  #   less transparent -- needs to be documented -- not the ROStable in next section which
-  #   produces these numbers
+  #   currently this is less transparent -- needs to be documented --
+  #   note the ROStable in next section which produces these numbers
   remapMature <- data.table(speciesNum = seq(NROW(vegTypes)), remap = c(17L, 30L, 21L, 9L, 27L))
   remapImmature <- data.table(speciesNum = seq(NROW(vegTypes)), remap = c(12L, 20L, 14L, 6L, 18L))
   remapYoungPine <- data.table(speciesNum = 3, remap = 22L)
@@ -532,9 +532,13 @@ fireROS <- function(sim, type = "original", vegTypeMap) {
     remapImmature[, remap := log(remap)]
     remapYoungPine[, remap := log(remap)]
   }
-  ROS[mature] <- plyr::mapvalues(vegType[mature], remapMature$speciesNum, remapMature$remap)
-  ROS[!mature] <- plyr::mapvalues(vegType[!mature], remapImmature$speciesNum, remapImmature$remap)
-  ROS[young & vegType == pine] <- remapYoungPine$remap
+  # which deals with NAs
+  whMature <- which(mature)
+  whNotMature <- which(!mature)
+  whYoung <- which(young & vetType == pine)
+  ROS[whMature] <- plyr::mapvalues(vegType[whMature], remapMature$speciesNum, remapMature$remap)
+  ROS[whNotMature] <- plyr::mapvalues(vegType[whNotMature], remapImmature$speciesNum, remapImmature$remap)
+  ROS[whYoung] <- remapYoungPine$remap
 
   # Other vegetation that can burn -- e.g., grasslands, lichen, shrub
   ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 30L
