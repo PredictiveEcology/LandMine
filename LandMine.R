@@ -535,7 +535,7 @@ fireROS <- function(sim, type = "original", vegTypeMap) {
   # which deals with NAs
   whMature <- which(mature)
   whNotMature <- which(!mature)
-  remapYoungPine <- which(young & vetType == pine)
+  remapYoungPine <- which(young & vegType == pine)
   ROS[whMature] <- plyr::mapvalues(vegType[whMature], remapMature$speciesNum, remapMature$remap)
   ROS[whNotMature] <- plyr::mapvalues(vegType[whNotMature], remapImmature$speciesNum, remapImmature$remap)
   ROS[remapYoungPine] <- remapYoungPine$remap
