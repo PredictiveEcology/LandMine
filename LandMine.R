@@ -127,15 +127,13 @@ doEvent.LandMine <- function(sim, eventTime, eventType, debug = FALSE) {
     sim <- EstimateTruncPareto(sim)
     sim <- Init(sim)
 
-    mod$LandMineDevice <- max(dev.list()) + 1
-
     # schedule future event(s)
     sim <- scheduleEvent(sim, P(sim)$burnInitialTime, "LandMine", "Burn", 2.5)
     sim <- scheduleEvent(sim, P(sim)$.plotInitialTime, "LandMine", "plot")
     sim <- scheduleEvent(sim, P(sim)$.saveInitialTime, "LandMine", "save")
   } else if (eventType == "plot") {
-    # ! ----- EDIT BELOW ----- ! #
-    # do stuff for this event
+    if (!is.na(P(sim)$.plotInitialTime) && (P(sim)$.plotInitialTime == start(sim)))
+      mod$LandMineDevice <- max(dev.list()) + 1
 
     devCur <- dev.cur()
     quickPlot::dev(mod$LandMineDevice, width= 18, height = 12)
