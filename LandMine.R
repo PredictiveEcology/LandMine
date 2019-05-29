@@ -13,7 +13,7 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = list("README.txt", "LandMine.Rmd"),
-  reqdPkgs = list("data.table", "grDevices", "magrittr", "raster", "RColorBrewer", "VGAM",
+  reqdPkgs = list("data.table", "grDevices", "magrittr", "plyr", "raster", "RColorBrewer", "VGAM",
                   "PredictiveEcology/LandR@development",
                   "PredictiveEcology/pemisc@development",
                   "PredictiveEcology/SpaDES.tools@development"),
@@ -515,50 +515,85 @@ fireROS <- function(sim, type = "original", vegTypeMap) {
   vegType <- getValues(vegTypeMap)
   vegTypes <- data.frame(raster::levels(vegTypeMap)[[1]][, 2, drop = FALSE]) # 2nd column in levels
   #vegTypes <- factorValues(vegTypeMap, seq_len(NROW(levels(vegTypeMap)[[1]]))) # [vegType, "Factor"]
-
-  ## note: these are defined differently than in LandWeb, and that's ok?
-  mature <- sim$rstTimeSinceFire[] > 120
-  immature <- (sim$rstTimeSinceFire[] > 40) & !mature
-  young <- !immature & !mature
-
-  ROS <- rep(NA_integer_, NROW(vegType))
-  mixed <- grep(tolower(vegTypes$Factor), pattern = "mix")
-  spruce <- grep(tolower(vegTypes$Factor), pattern = "spruce")
+  
   pine <- grep(tolower(vegTypes$Factor), pattern = "pine")
-  decid <- grep(tolower(vegTypes$Factor), pattern = "deci")
-  softwood <- grep(tolower(vegTypes$Factor), pattern = "soft")
-
-  ROS[!mature & vegType %in% decid] <- 6L
-  ROS[mature & vegType %in% decid] <- 9L
-
-  ROS[!mature & vegType %in% mixed] <- 12L
-  ROS[mature & vegType %in% mixed] <- 17L
-
-  ROS[immature & vegType %in% pine] <- 14L
-  ROS[mature & vegType %in% pine] <- 21L
-  ROS[young & vegType %in% pine] <- 22L
-
-  ROS[!mature & vegType %in% softwood] <- 18L
-  ROS[mature & vegType %in% softwood] <- 27L
-
-  ROS[!mature & vegType %in% spruce] <- 20L
-  ROS[mature & vegType %in% spruce] <- 30L
+  mature <- rstTimeSinceFire[] > 120
+  young <- rstTimeSinceFire[] <= 40
+  
+  ROS <- rep(NA_integer_, NROW(vegType))
+  # New algorithm -- faster than protected with FALSE section below
+  #   less transparent -- needs to be documented -- not the ROStable in next section which 
+  #   produces these numbers
+  remapMature <- data.table(speciesNum = seq(NROW(vegTypes)), remap = c(17L, 30L, 21L, 9L, 27L))
+  remapImmature <- data.table(speciesNum = seq(NROW(vegTypes)), remap = c(12L, 20L, 14L, 6L, 18L))
+  remapYoungPine <- data.table(speciesNum = 3, remap = 22L)
+  if (type == "log") {
+    remapMature[, remap := log(remap)]  
+    remapImmature[, remap := log(remap)]  
+    remapYoungPine[, remap := log(remap)]  
+  }
+  ROS[mature] <- plyr::mapvalues(vegType[mature], remapMature$speciesNum, remapMature$remap)
+  ROS[!mature] <- plyr::mapvalues(vegType[!mature], remapImmature$speciesNum, remapImmature$remap)
+  ROS[young & vegType == pine] <- remapYoungPine$remap
 
   # Other vegetation that can burn -- e.g., grasslands, lichen, shrub
   ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 30L
-
-  if (type == "equal") {
-    ## equal rates of spread
-    ROS[young & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
-    ROS[immature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
-    ROS[mature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
-    ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 1L
+  
+  if (FALSE) {  ## note: these are defined differently than in LandWeb, and that's ok?
+    
+    ROStable <- data.table(age = c(rep("mature", length.out = NROW(vegTypes)),
+                                   rep("immature_young", length.out = NROW(vegTypes)-1),
+                                   "immature", "young"),
+                           leading = c(as.character(vegTypes$Factor), as.character(vegTypes$Factor[vegTypes$Factor!="pine"]),
+                                       rep("pine", 2)),
+                           ros = c(17, 30, 21, 9, 27, 
+                                   12, 20, 6, 18, 
+                                   14, 22)) # pine
+    
+    
+    mature <- sim$rstTimeSinceFire[] > 120
+    immature <- (sim$rstTimeSinceFire[] > 40) & !mature
+    young <- !immature & !mature
+    
+    ROS <- rep(NA_integer_, NROW(vegType))
+    mixed <- grep(tolower(vegTypes$Factor), pattern = "mix")
+    spruce <- grep(tolower(vegTypes$Factor), pattern = "spruce")
+    pine <- grep(tolower(vegTypes$Factor), pattern = "pine")
+    decid <- grep(tolower(vegTypes$Factor), pattern = "deci")
+    softwood <- grep(tolower(vegTypes$Factor), pattern = "soft")
+    
+    ROS[!mature & vegType %in% decid] <- 6L
+    ROS[mature & vegType %in% decid] <- 9L
+    
+    ROS[!mature & vegType %in% mixed] <- 12L
+    ROS[mature & vegType %in% mixed] <- 17L
+    
+    ROS[immature & vegType %in% pine] <- 14L
+    ROS[mature & vegType %in% pine] <- 21L
+    ROS[young & vegType %in% pine] <- 22L
+    
+    ROS[!mature & vegType %in% softwood] <- 18L
+    ROS[mature & vegType %in% softwood] <- 27L
+    
+    ROS[!mature & vegType %in% spruce] <- 20L
+    ROS[mature & vegType %in% spruce] <- 30L
+    
+    # Other vegetation that can burn -- e.g., grasslands, lichen, shrub
+    ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 30L
+    
+    if (type == "equal") {
+      ## equal rates of spread
+      ROS[young & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
+      ROS[immature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
+      ROS[mature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
+      ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 1L
+    }
+    
+    ## log(rates of spread), which maintains relationships but makes more equal
+    if (type == "log") {
+      ROS[] <- log(ROS[])
+    }
   }
-
-  ## log(rates of spread), which maintains relationships but makes more equal
-  if (type == "log") {
-    ROS[] <- log(ROS[])
-  }
-
+  
   ROS
 }
