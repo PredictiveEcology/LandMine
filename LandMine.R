@@ -553,9 +553,6 @@ fireROS <- function(sim, vegTypeMap) {
   sppEquiv[(used == "no") & grepl("(^|_)mature", age), used := "mature"]
   sppEquiv[(used == "no") & grepl("(^|_)immature", age), used := "immature"]
   sppEquiv[(used == "no") & grepl("(^|_)young", age), used := "young"]
-  if (type == "log") {
-    sppEquiv[, ros := log(ros)]
-  }
   setkeyv(sppEquiv, "used")
 
   # if there are no "mature_immature"
