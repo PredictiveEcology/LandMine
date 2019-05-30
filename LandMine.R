@@ -571,7 +571,6 @@ fireROS <- function(sim, type = "original", vegTypeMap) {
     sppEquiv <- sppEquiv[landWebOnRaster, on = "leading"]
 
     # New algorithm -- faster than protected with FALSE section below
-    browser()
     sppEquiv[, used := "no"]
     sppEquiv[(used == "no") & grepl("(^|_)mature", age), used := "mature"]
     sppEquiv[(used == "no") & grepl("(^|_)immature", age), used := "immature"]
@@ -583,30 +582,54 @@ fireROS <- function(sim, type = "original", vegTypeMap) {
 
     # if there are no "mature_immature"
     cuts <- list()
-    if (!any(grepl("_mature|_mature", sppEquiv$age)))
-      cuts[["mature"]] <- sim$rstTimeSinceFire[] > 120
+    if (!any(grepl("_mature$|^mature_|_mature_", sppEquiv$age))) {
+      cuts[[1]] <- sim$rstTimeSinceFire[] > 120
+    } else {
+      cuts[[1]] <- !is.na(sim$rstTimeSinceFire[])
+    }
 
+    if (!any(grepl("_immature$|^immature_|_immature_", sppEquiv$age))) {
+      cuts[[2]] <- sim$rstTimeSinceFire[] > 40 & sim$rstTimeSinceFire[] <= 120
+    } else {
+      cuts[[2]] <- sim$rstTimeSinceFire[] <= 120
+    }
 
-    young <- sim$rstTimeSinceFire[] <= 40
+    cuts[[3]] <- sim$rstTimeSinceFire[] <= 40
 
     # Now go through from mature through immature through young
     if (!all(sppEquiv["mature"]$pixelValue %in% vegTypes[[1]]))
-      mature <- mature & vegType %in% sppEquiv["mature"]$pixelValue
+      cuts[["mature"]] <- cuts[["mature"]] & vegType %in% sppEquiv["mature"]$pixelValue
 
     if (!all(sppEquiv["immature"]$pixelValue %in% vegTypes[[1]]))
-      immature <- immature & vegType %in% sppEquiv["immature"]$pixelValue
+      cuts[[2]] <- cuts[[2]] & vegType %in% sppEquiv["immature"]$pixelValue
 
-    if (all(sppEquiv["mature"]$pixelValue %in% vegTypes[[1]]))
-      young <- young & vegType %in% sppEquiv["young"]$pixelValue
+    if (all(sppEquiv["young"]$pixelValue %in% vegTypes[[1]]))
+      cuts[[3]] <- cuts[[3]] & vegType %in% sppEquiv["young"]$pixelValue
 
-    mature <- which(mature)
-    immature <- which(!mature)
-    young <- which(young)
+    mature <- which(cuts[[1]])
+    immature <- which(cuts[[2]])
+    young <- which(cuts[[3]])
 
     ROS[mature] <- plyr::mapvalues(vegType[mature], sppEquiv["mature"]$pixelValue, sppEquiv["mature"]$ros)
     ROS[immature] <- plyr::mapvalues(vegType[immature], sppEquiv["immature"]$pixelValue, sppEquiv["immature"]$ros)
     ROS[young] <- plyr::mapvalues(vegType[young], sppEquiv["young"]$pixelValue, sppEquiv["young"]$ros)
 
+    if (getOption("LandR.assertions")) {
+      names(cuts) <- c("mature", "immature", "young")
+      dt <- data.table(ROS = ROS,
+                       pixelValue = vegType,
+                       age = cut(sim$rstTimeSinceFire[], breaks = c(0, 40, 120, 999),
+                                      labels = c("young", "immature", "mature")),
+                       as.data.table(cuts))
+      dt <- na.omit(dt, cols = c("ROS", "age"))
+      dtSumm <- dt[, list(derivedROS = unique(ROS)), by = c("pixelValue", "age")]
+      dtSumm <- dtSumm[sppEquiv, on = c("pixelValue", "age" = "used"), nomatch = NA]
+      if( !(identical(dtSumm$derivedROS, dtSumm$ros))) {
+        stop("fireROS failed its test")
+      }
+
+
+    }
     # Other vegetation that can burn -- e.g., grasslands, lichen, shrub
     ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 30L
   }
