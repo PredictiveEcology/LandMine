@@ -13,7 +13,8 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = list("README.txt", "LandMine.Rmd"),
-  reqdPkgs = list("data.table", "grDevices", "magrittr", "plyr", "raster", "RColorBrewer", "VGAM",
+  reqdPkgs = list("data.table", "grDevices", "magrittr", "ggplot2",
+                  "raster", "RColorBrewer", "VGAM",
                   "PredictiveEcology/LandR@development",
                   "PredictiveEcology/pemisc@development",
                   "PredictiveEcology/SpaDES.tools@development"),
@@ -607,9 +608,15 @@ fireROS <- function(sim, vegTypeMap) {
   immature <- which(cuts[[2]])
   young <- which(cuts[[3]])
 
-  ROS[mature] <- plyr::mapvalues(vegType[mature], sppEquiv["mature"]$pixelValue, sppEquiv["mature"]$ros)
-  ROS[immature] <- plyr::mapvalues(vegType[immature], sppEquiv["immature"]$pixelValue, sppEquiv["immature"]$ros)
-  ROS[young] <- plyr::mapvalues(vegType[young], sppEquiv["young"]$pixelValue, sppEquiv["young"]$ros)
+  if (length(mature))
+    ROS[mature] <- sppEquiv["mature"]$ros[match(vegType[mature], sppEquiv["mature"]$pixelValue)]
+    #ROS[mature] <- plyr::mapvalues(vegType[mature], sppEquiv["mature"]$pixelValue, sppEquiv["mature"]$ros)
+  if (length(immature))
+    ROS[immature] <- sppEquiv["immature"]$ros[match(vegType[immature], sppEquiv["immature"]$pixelValue)]
+    #ROS[immature] <- plyr::mapvalues(vegType[immature], sppEquiv["immature"]$pixelValue, sppEquiv["immature"]$ros)
+  if (length(young))
+    ROS[young] <- sppEquiv["young"]$ros[match(vegType[young], sppEquiv["young"]$pixelValue)]
+    #ROS[young] <- plyr::mapvalues(vegType[young], sppEquiv["young"]$pixelValue, sppEquiv["young"]$ros)
 
   if (getOption("LandR.assertions")) {
     names(cuts) <- c("mature", "immature", "young")
