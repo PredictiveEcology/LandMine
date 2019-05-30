@@ -31,7 +31,7 @@ defineModule(sim, list(
                     "Minimum proportion burned pixels to use when triggering warnings about simulated fires."),
     defineParameter("maxRetriesPerID", "integer", 10L, 0L, 20L,
                     "Minimum proportion burned pixels to use when triggering warnings about simulated fires."),
-    defineParameter("sppEquivCol", "character", "LandWeb", NA, NA,
+    defineParameter("sppEquivCol", "character", "LandR", NA, NA,
                     "The column in sim$specieEquivalency data.table to use as a naming convention"),
     defineParameter("useSeed", "integer", NULL, NA, NA,
                     paste("Only used for creating a starting cohortData dataset.",
