@@ -30,9 +30,8 @@ defineModule(sim, list(
                     "Minimum proportion burned pixels to use when triggering warnings about simulated fires."),
     defineParameter("maxRetriesPerID", "integer", 10L, 0L, 20L,
                     "Minimum proportion burned pixels to use when triggering warnings about simulated fires."),
-    defineParameter("ROStype", "character", "original", NA, NA,
-                    paste("How to modify the 'rate of spread' parameters for different veg types.",
-                          "One of 'equal', 'log', or 'original'.")),
+    defineParameter("sppEquivCol", "character", "LandWeb", NA, NA,
+                    "The column in sim$specieEquivalency data.table to use as a naming convention"),
     defineParameter("useSeed", "integer", NULL, NA, NA,
                     paste("Only used for creating a starting cohortData dataset.",
                           "If NULL, then it will be randomly generated;",
@@ -55,11 +54,15 @@ defineModule(sim, list(
   ),
   inputObjects = bind_rows(
     expectsInput("cohortData", "data.table",
-                 desc = "Columns: B, pixelGroup, speciesCode, Indicating several features about ages and current vegetation of stand"),
+                 desc = "Columns: B, pixelGroup, speciesCode, Indicating several features about ages and current vegetation of stand",
+                 sourceURL = NA),
     expectsInput("fireReturnInterval","Raster",
-                 desc = "A raster layer that is a factor raster, with at least 1 column called fireReturnInterval, representing the fire return interval in years"),
+                 desc = paste("A raster layer that is a factor raster, with at least 1 column called fireReturnInterval,",
+                              "representing the fire return interval in years"),
+                 sourceURL = NA),
     expectsInput("pixelGroupMap", "RasterLayer",
-                 desc = "Pixels with identical values share identical stand features"),
+                 desc = "Pixels with identical values share identical stand features",
+                 sourceURL = NA),
     expectsInput("rasterToMatch", "RasterLayer",
                  #desc = "this raster contains two pieces of information: Full study area with fire return interval attribute",
                  desc = "DESCRIPTION NEEDED", # TODO: is this correct?
@@ -73,19 +76,20 @@ defineModule(sim, list(
                               "can be 'mature', 'immature', 'young' and compound versions of these, e.g., 'immature_young'",
                               "which can be used when 2 or more age classes share same 'ros'. 'leading' should be",
                               ""),
-                 sourceURL = "http://tree.pfc.forestry.ca/kNN-StructureBiomass.tar"),
-
+                 sourceURL = NA),
     expectsInput("rstFlammable", "Raster",
                  desc = paste("A raster layer, with 0, 1 and NA, where 1 indicates areas",
                               "that are flammable, 0 not flammable (e.g., lakes)",
                               "and NA not applicable (e.g., masked)")),
     expectsInput("rstTimeSinceFire", "Raster",
-                 desc = "a time since fire raster layer", NA),
+                 desc = "a time since fire raster layer",
+                 sourceURL = NA),
     expectsInput("species", "data.table",
-                 desc = "Columns: species, speciesCode, Indicating several features about species"),
+                 desc = "Columns: species, speciesCode, Indicating several features about species",
+                 sourceURL = NA),
     expectsInput("sppColorVect", "character",
                  desc = "named character vector of hex colour codes corresponding to each species",
-                 sourceURL = ""),
+                 sourceURL = NA),
     expectsInput("studyAreaReporting", "SpatialPolygonsDataFrame",
                  desc = paste("multipolygon (typically smaller/unbuffered than studyArea) to use for plotting/reporting.",
                               "Defaults to an area in Southwestern Alberta, Canada."),
@@ -472,6 +476,23 @@ Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     sim$fireReturnInterval[] <- as.integer(as.character(vals)) ## TODO: need vals
   }
 
+  if (!suppliedElsewhere(sim$ROSTable)) {
+    sim$ROSTable <- rbindlist(list(
+      list("mature", "decid", 9L),
+      list("immature_young", "decid", 6L),
+      list("immature_young", "mixed", 12L),
+      list("mature", "mixed", 17L),
+      list("immature", "pine", 14L),
+      list("mature", "pine", 21L),
+      list("young", "pine", 22L),
+      list("immature_young", "softwood", 18L),
+      list("mature", "softwood", 27L),
+      list("immature_young", "spruce", 20L),
+      list("mature", "spruce", 30L)
+    ))
+    setnames(sim$ROSTable, old = 1:3, new = c("age", "leading", "ros"))
+  }
+
   # Upgrades to use suppliedElsewhere -- Eliot Oct 21 2018
   if (!suppliedElsewhere("pixelGroupMap", sim)) {
     sim$pixelGroupMap <- Cache(randomPolygons, emptyRas, numTypes = mod$numDefaultPixelGroups,
@@ -479,39 +500,14 @@ Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   }
 
   if (!suppliedElsewhere("rstTimeSinceFire", sim)) {
-    #if (is.null(sim$rstTimeSinceFire)) {
     sim$rstTimeSinceFire <- raster(sim$pixelGroupMap)
     sim$rstTimeSinceFire[] <- 200L
   }
 
   if (!suppliedElsewhere("species", sim)) {
-    #if (is.null(sim$species)) {
     sim$species <- data.table(species = c("Pinu_sp", "Pice_gla"),
                               speciesCode = 1:numDefaultSpeciesCodes)
   }
-
-  # if (!suppliedElsewhere("rstCurrentBurnCumulative))", sim)) {
-  #   #if (is.null(sim$rstCurrentBurnCumulative)) {
-  #   sim$rstCurrentBurnCumulative <- raster(sim$pixelGroupMap)
-  #   sim$rstCurrentBurnCumulative[sim$rstTimeSinceFire[] == 0] <- 1
-  # }
-
-  # see https://github.com/PredictiveEcology/SpaDES.tools/issues#17 for discussion about this
-  # meta <- depends(sim)@dependencies
-  # mods <- unlist(modules(sim))
-  # if (all(names(meta) %in% mods)) {
-  #   # means there is more than just this module in the simList
-  #
-  #   outputs <- lapply(meta, function(x) {x@outputObjects$objectName})
-  #   otherMods <- mods[!(mods %in% currentModule(sim))]
-  #
-  #   # is it or will it be supplied by another module, if yes, don't load a default here
-  #   if (!("rstCurrentBurnCumulative" %in% unlist(outputs[otherMods]))) {
-  #     if (is.null(sim$rstCurrentBurnCumulative)) {
-  #       sim$rstCurrentBurnCumulative <- raster(sim$pixelGroupMap)
-  #     }
-  #   }
-  # }
 
   return(invisible(sim))
 }
@@ -525,34 +521,18 @@ fireROS <- function(sim, type = "original", vegTypeMap) {
     vegTypes <- data.table(raster::levels(vegTypeMap)[[1]]) # 2nd column in levels
     #vegTypes <- factorValues(vegTypeMap, seq_len(NROW(levels(vegTypeMap)[[1]]))) # [vegType, "Factor"]
 
-    landWebNames <- equivalentName(vegTypes[[2]], sim$sppEquiv, "LandWeb")
-    landWebOnRaster <- rbindlist(list(
-      list("mixed", which(is.na(landWebNames))),
-      list("spruce", grep(landWebNames, pattern = "Pice")),
-      list("pine", grep(landWebNames, pattern = "Pinu")),
-      list("decid", grep(landWebNames, pattern = "Popu")),
-      list("softwood", grep(landWebNames, pattern = "Pice|Pinu|Popu", invert = TRUE))
+    sppNames <- equivalentName(vegTypes[[2]], sim$sppEquiv, P(sim)$sppEquivCol)
+    onRaster <- rbindlist(list(
+      list("mixed", which(is.na(sppNames))),
+      list("spruce", grep(sppNames, pattern = "Pice")),
+      list("pine", grep(sppNames, pattern = "Pinu")),
+      list("decid", grep(sppNames, pattern = "Popu")),
+      list("softwood", grep(sppNames, pattern = "Pice|Pinu|Popu", invert = TRUE))
     ))
     # remove duplicates of softwood, which is NA
-    landWebOnRaster <- unique(landWebOnRaster, by = "V2")
-    setnames(landWebOnRaster, old = 1:2, new = c("leading", "pixelValue"))
+    onRaster <- unique(onRaster, by = "V2")
+    setnames(onRaster, old = 1:2, new = c("leading", "pixelValue"))
 
-    if (is.null(sim$ROSTable)) {
-      sim$ROSTable <- rbindlist(list(
-        list("mature", "decid", 9L),
-        list("immature_young", "decid", 6L),
-        list("immature_young", "mixed", 12L),
-        list("mature", "mixed", 17L),
-        list("immature", "pine", 14L),
-        list("mature", "pine", 21L),
-        list("young", "pine", 22L),
-        list("immature_young", "softwood", 18L),
-        list("mature", "softwood", 27L),
-        list("immature_young", "spruce", 20L),
-        list("mature", "spruce", 30L)
-      ))
-      setnames(sim$ROSTable, old = 1:3, new = c("age", "leading", "ros"))
-    }
     knownSpecies <- c(Pice_mar = "spruce", Pice_gla = "spruce",
                       Pinu_con = "pine", Pinu_ban = "pine",
                       Popu_tre = "decid", Betu_pap = "decid",
@@ -568,7 +548,7 @@ fireROS <- function(sim, type = "original", vegTypeMap) {
     sppEquiv <- sppEquiv[sim$ROSTable, on = "leading", allow.cartesian = TRUE, nomatch = NA]
     sppEquiv <- sppEquiv[, c("leading", "age", "ros")]
     sppEquiv <- unique(sppEquiv, by = c("age", "leading"))
-    sppEquiv <- sppEquiv[landWebOnRaster, on = "leading"]
+    sppEquiv <- sppEquiv[onRaster, on = "leading"]
 
     # New algorithm -- faster than protected with FALSE section below
     sppEquiv[, used := "no"]
@@ -627,17 +607,12 @@ fireROS <- function(sim, type = "original", vegTypeMap) {
       if( !(identical(dtSumm$derivedROS, dtSumm$ros))) {
         stop("fireROS failed its test")
       }
-
-
     }
     # Other vegetation that can burn -- e.g., grasslands, lichen, shrub
     ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 30L
   }
 
   if (FALSE) {  ## note: these are defined differently than in LandWeb, and that's ok?
-
-
-
     mature <- sim$rstTimeSinceFire[] > 120
     immature <- (sim$rstTimeSinceFire[] > 40) & !mature
     young <- !immature & !mature
