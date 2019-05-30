@@ -255,6 +255,13 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
                                        nPixelsBurned = numeric(0),
                                        haBurned = numeric(0),
                                        FRI = numeric(0))
+  
+  mod$knownSpecies <- c(Pice_mar = "spruce", Pice_gla = "spruce",
+                    Pinu_con = "pine", Pinu_ban = "pine",
+                    Popu_tre = "decid", Betu_pap = "decid",
+                    Abie_bal = "softwood", Abie_las = "softwood", Abie_sp = "softwood")
+  sim$sppEquiv[, LandMine := mod$knownSpecies[LandR]]
+  
   return(invisible(sim))
 }
 
@@ -540,37 +547,34 @@ fireROS <- function(sim, vegTypeMap) {
 
   vegType <- getValues(vegTypeMap)
   vegTypes <- data.table(raster::levels(vegTypeMap)[[1]]) # 2nd column in levels
-  #vegTypes <- factorValues(vegTypeMap, seq_len(NROW(levels(vegTypeMap)[[1]]))) # [vegType, "Factor"]
-
-  sppNames <- equivalentName(vegTypes[[2]], sim$sppEquiv, P(sim)$sppEquivCol)
-  onRaster <- rbindlist(list(
+  
+  sppNames <- equivalentName(as.character(vegTypes[[2]]), sim$sppEquiv, P(sim)$sppEquivCol)
+  suppressWarnings(onRaster <- rbindlist(list(
     list("mixed", which(is.na(sppNames))),
     list("spruce", grep(sppNames, pattern = "Pice")),
     list("pine", grep(sppNames, pattern = "Pinu")),
     list("decid", grep(sppNames, pattern = "Popu")),
     list("softwood", grep(sppNames, pattern = "Pice|Pinu|Popu", invert = TRUE))
-  ))
+  )))
   # remove duplicates of softwood, which is NA
-  onRaster <- unique(onRaster, by = "V2")
+  onRaster <- na.omit(unique(onRaster, by = "V2"))
   setnames(onRaster, old = 1:2, new = c("leading", "pixelValue"))
 
-  knownSpecies <- c(Pice_mar = "spruce", Pice_gla = "spruce",
-                    Pinu_con = "pine", Pinu_ban = "pine",
-                    Popu_tre = "decid", Betu_pap = "decid",
-                    Abie_bal = "softwood", Abie_las = "softwood", Abie_sp = "softwood")
-  haveAllKnown <- sim$sppEquiv$LandR %in% names(knownSpecies)
+  sppEquiv <- sim$sppEquiv[, c("LandMine", "LandR")][, leading := mod$knownSpecies[LandR]]
+  sppEquiv <- na.omit(sppEquiv, on = "LandMine")
+  sppEquiv <- sppEquiv[onRaster, on = c("LandMine" = "leading")]
+  
+  haveAllKnown <- sppEquiv$LandR %in% names(mod$knownSpecies)
   if (!all(haveAllKnown)) {
     stop("LandMine only has rate of spread burn rates for\n",
-         paste(names(knownSpecies), collapse = ", "),
+         paste(names(mod$knownSpecies), collapse = ", "),
          "\nMissing rate of spread for ", paste(sim$sppEquiv$LandR[!haveAllKnown], collapse = ", "))
   }
-  sppEquiv <- sim$sppEquiv[, c("LandWeb", "LandR")][, leading := knownSpecies[LandR]]
-  sppEquiv <- unique(sppEquiv, by = c("LandWeb", "leading"))
-  sppEquiv <- sppEquiv[sim$ROSTable, on = "leading", allow.cartesian = TRUE, nomatch = NA]
-  sppEquiv <- sppEquiv[, c("leading", "age", "ros")]
+  sppEquiv <- unique(sppEquiv, by = c("LandMine", "leading"))
+  sppEquiv <- sppEquiv[sim$ROSTable, on = "leading", allow.cartesian = TRUE, nomatch = NULL]
+  sppEquiv <- sppEquiv[, c("leading", "age", "ros", "pixelValue")]
   sppEquiv <- unique(sppEquiv, by = c("age", "leading"))
-  sppEquiv <- sppEquiv[onRaster, on = "leading"]
-
+  
   # New algorithm -- faster than protected with FALSE section below
   sppEquiv[, used := "no"]
   sppEquiv[(used == "no") & grepl("(^|_)mature", age), used := "mature"]
