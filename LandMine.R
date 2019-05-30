@@ -631,8 +631,8 @@ fireROS <- function(sim, vegTypeMap) {
                      as.data.table(cuts))
     dt <- na.omit(dt, cols = c("ROS", "age"))
     dtSumm <- dt[, list(derivedROS = unique(ROS)), by = c("pixelValue", "age")]
-    dtSumm <- dtSumm[sppEquiv, on = c("pixelValue", "age" = "used"), nomatch = NA]
-    if( !(identical(dtSumm$derivedROS, dtSumm$ros))) {
+    dtSumm <- dtSumm[sppEquiv, on = c("pixelValue", "age" = "used"), nomatch = NULL]
+    if ( !(identical(dtSumm$derivedROS, dtSumm$ros))) {
       stop("fireROS failed its test")
     }
   }
