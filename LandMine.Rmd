@@ -68,6 +68,7 @@ Paths will have be changed for a different user.
 
 ```{r setup_paths, eval=TRUE}
 library(reproducible)
+library(magrittr)
 
 workingDir <- file.path("~/GitHub/LandWeb")
 moduleDir <- file.path(workingDir, "m") %>% checkPath()
