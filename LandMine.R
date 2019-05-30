@@ -563,12 +563,13 @@ fireROS <- function(sim, vegTypeMap) {
   sppEquiv <- sim$sppEquiv[, c("LandMine", "LandR")][, leading := mod$knownSpecies[LandR]]
   sppEquiv <- na.omit(sppEquiv, on = "LandMine")
   sppEquiv <- sppEquiv[onRaster, on = c("LandMine" = "leading")]
-  
-  haveAllKnown <- sppEquiv$LandR %in% names(mod$knownSpecies)
+
+  sppEquivHere <- na.omit(sppEquiv$LandR)
+  haveAllKnown <- sppEquivHere %in% names(mod$knownSpecies)
   if (!all(haveAllKnown)) {
     stop("LandMine only has rate of spread burn rates for\n",
          paste(names(mod$knownSpecies), collapse = ", "),
-         "\nMissing rate of spread for ", paste(sim$sppEquiv$LandR[!haveAllKnown], collapse = ", "))
+         "\nMissing rate of spread for ", paste(sppEquivHere[!haveAllKnown], collapse = ", "))
   }
   sppEquiv <- unique(sppEquiv, by = c("LandMine", "leading"))
   sppEquiv <- sppEquiv[sim$ROSTable, on = "leading", allow.cartesian = TRUE, nomatch = NULL]
