@@ -54,7 +54,7 @@ defineModule(sim, list(
   ),
   inputObjects = bind_rows(
     expectsInput("cohortData", "data.table",
-                 desc = "Columns: B, pixelGroup, speciesCode, Indicating several features about ages and current vegetation of stand",
+                 desc = "Columns: B, pixelGroup, speciesCode (as a factor of the names), Indicating several features about ages and current vegetation of stand",
                  sourceURL = NA),
     expectsInput("fireReturnInterval","Raster",
                  desc = paste("A raster layer that is a factor raster, with at least 1 column called fireReturnInterval,",
@@ -89,6 +89,11 @@ defineModule(sim, list(
                  sourceURL = NA),
     expectsInput("sppColorVect", "character",
                  desc = "named character vector of hex colour codes corresponding to each species",
+                 sourceURL = NA),
+    expectsInput("sppEquiv", "data.table",
+                 desc = paste("Multi-columned data.table indicating species name equivalencies. Default",
+                              "is taken from LandR sppEquivalencies_CA which has names for species of",
+                              "trees in Canada"),
                  sourceURL = NA),
     expectsInput("studyAreaReporting", "SpatialPolygonsDataFrame",
                  desc = paste("multipolygon (typically smaller/unbuffered than studyArea) to use for plotting/reporting.",
@@ -435,23 +440,12 @@ Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   mod$numDefaultPixelGroups <- 20L
   mod$numDefaultPolygons <- 4L
   numDefaultSpeciesCodes <- 2L
-  emptyRas <- raster(extent(0, 2e4, 0, 2e4), res = 250)
-
-  if (is.null(sim$rasterToMatch)) {
-    if (!suppliedElsewhere("rasterToMatch", sim)) {
-      stop("There is no 'rasterToMatch' supplied")
-    }
-  }
-
-  if (!suppliedElsewhere("rasterToMatchReporting")) {
-    sim$rasterToMatchReporting <- sim$rasterToMatch
-  }
-
+  
   if (!suppliedElsewhere("studyArea", sim)) {
     if (getOption("LandR.verbose", TRUE) > 0)
       message("'studyArea' was not provided by user. Using a polygon in southwestern Alberta, Canada,")
 
-    sim$studyArea <- randomStudyArea(seed = 1234)
+    sim$studyArea <- randomStudyArea(seed = 1234, size = 1e9)
   }
 
   if (!suppliedElsewhere("studyAreaReporting", sim)) {
@@ -459,20 +453,30 @@ Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
       message("'studyAreaReporting' was not provided by user. Using the same as 'studyArea'.")
     sim$studyAreaReporting <- sim$studyArea
   }
-
+  
+  if (is.null(sim$rasterToMatch)) {
+    if (!suppliedElsewhere("rasterToMatch", sim)) {
+      sim$rasterToMatch <- raster(sim$studyArea, res = 100)
+    }
+  }
+  
+  if (!suppliedElsewhere("rasterToMatchReporting")) {
+    sim$rasterToMatchReporting <- sim$rasterToMatch
+  }
+  
+  
   if (!suppliedElsewhere("rstFlammable", sim)) {
     sim$rstFlammable <- sim$rasterToMatch
     sim$rstFlammable[] <- 1L  # 1 means flammable
   }
 
   if (!suppliedElsewhere("fireReturnInterval", sim)) {
-    sim$fireReturnInterval <- Cache(randomPolygons, emptyRas,
-                                    numTypes = mod$numDefaultPolygons, notOlderThan = nOT,
-                                    cacheRepo = cachePath(sim))
+    sim$fireReturnInterval <- Cache(randomPolygons, sim$rasterToMatch,
+                                    numTypes = mod$numDefaultPolygons)
 
-    #vals <- factor(sim$fireReturnInterval[],
-    #               levels = 1:mod$numDefaultPolygons,
-    #               labels = c(60, 100, 120, 250))
+    vals <- factor(sim$fireReturnInterval[],
+                   levels = 1:mod$numDefaultPolygons,
+                   labels = c(60, 100, 120, 250))
     sim$fireReturnInterval[] <- as.integer(as.character(vals)) ## TODO: need vals
   }
 
@@ -495,8 +499,8 @@ Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
   # Upgrades to use suppliedElsewhere -- Eliot Oct 21 2018
   if (!suppliedElsewhere("pixelGroupMap", sim)) {
-    sim$pixelGroupMap <- Cache(randomPolygons, emptyRas, numTypes = mod$numDefaultPixelGroups,
-                               notOlderThan = nOT, cacheRepo = cachePath(sim))
+    sim$pixelGroupMap <- Cache(randomPolygons, sim$rasterToMatch, 
+                               numTypes = mod$numDefaultPixelGroups)
   }
 
   if (!suppliedElsewhere("rstTimeSinceFire", sim)) {
@@ -508,6 +512,24 @@ Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     sim$species <- data.table(species = c("Pinu_sp", "Pice_gla"),
                               speciesCode = 1:numDefaultSpeciesCodes)
   }
+  if (!suppliedElsewhere("cohortData", sim)) {
+    sim$cohortData <- data.table(pixelGroup = seq(mod$numDefaultPixelGroups), 
+                                 speciesCode = factor(sample(sim$species$species, 
+                                                      size = mod$numDefaultPixelGroups, 
+                                                      replace = TRUE)),
+                                 B = sample(10:20, size = mod$numDefaultPixelGroups, replace = TRUE)*100,
+                                 age = sample(5:20, size = mod$numDefaultPixelGroups, replace = TRUE)*10)
+  }
+  if (!suppliedElsewhere("sppColorVect", sim)) {
+    sim$sppColorVect <- c("Red", "Green")
+    names(sim$sppColorVect) <- sim$species$species
+  }
+  if (!suppliedElsewhere("sppEquiv", sim)) {
+    data(sppEquivalencies_CA, envir = envir(sim))
+    sim$sppEquiv <- sim$sppEquivalencies_CA
+    rm("sppEquivalencies_CA", envir = envir(sim))
+  }
+  
 
   return(invisible(sim))
 }
