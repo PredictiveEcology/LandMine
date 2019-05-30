@@ -365,7 +365,7 @@ Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
                                     unitTest = P(sim)$.unitTest)
 
   ROSmap <- raster(sim$pixelGroupMap)
-  ROSmap[] <- fireROS(sim, type = P(sim)$ROStype, vegTypeMap = vegTypeMap)
+  ROSmap[] <- fireROS(sim, vegTypeMap = vegTypeMap)
 
   # From DEoptim fitting - run in the LandMine.Rmd file
   spawnNewActive <- sns <- 10^c(-0.731520, -0.501823, -0.605968, -1.809726)
@@ -512,105 +512,102 @@ Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   return(invisible(sim))
 }
 
-fireROS <- function(sim, type = "original", vegTypeMap) {
+fireROS <- function(sim, vegTypeMap) {
   ROS <- rep(NA_integer_, ncell(vegTypeMap))
-  if (type == "equal") {
-    ROS[sim$rstFlammable[] == 1L] <- 1
-  } else {
-    vegType <- getValues(vegTypeMap)
-    vegTypes <- data.table(raster::levels(vegTypeMap)[[1]]) # 2nd column in levels
-    #vegTypes <- factorValues(vegTypeMap, seq_len(NROW(levels(vegTypeMap)[[1]]))) # [vegType, "Factor"]
 
-    sppNames <- equivalentName(vegTypes[[2]], sim$sppEquiv, P(sim)$sppEquivCol)
-    onRaster <- rbindlist(list(
-      list("mixed", which(is.na(sppNames))),
-      list("spruce", grep(sppNames, pattern = "Pice")),
-      list("pine", grep(sppNames, pattern = "Pinu")),
-      list("decid", grep(sppNames, pattern = "Popu")),
-      list("softwood", grep(sppNames, pattern = "Pice|Pinu|Popu", invert = TRUE))
-    ))
-    # remove duplicates of softwood, which is NA
-    onRaster <- unique(onRaster, by = "V2")
-    setnames(onRaster, old = 1:2, new = c("leading", "pixelValue"))
+  vegType <- getValues(vegTypeMap)
+  vegTypes <- data.table(raster::levels(vegTypeMap)[[1]]) # 2nd column in levels
+  #vegTypes <- factorValues(vegTypeMap, seq_len(NROW(levels(vegTypeMap)[[1]]))) # [vegType, "Factor"]
 
-    knownSpecies <- c(Pice_mar = "spruce", Pice_gla = "spruce",
-                      Pinu_con = "pine", Pinu_ban = "pine",
-                      Popu_tre = "decid", Betu_pap = "decid",
-                      Abie_bal = "softwood", Abie_las = "softwood", Abie_sp = "softwood")
-    haveAllKnown <- sim$sppEquiv$LandR %in% names(knownSpecies)
-    if (!all(haveAllKnown)) {
-      stop("LandMine only has rate of spread burn rates for\n",
-           paste(names(knownSpecies), collapse = ", "),
-           "\nMissing rate of spread for ", paste(sim$sppEquiv$LandR[!haveAllKnown], collapse = ", "))
-    }
-    sppEquiv <- sim$sppEquiv[, c("LandWeb", "LandR")][, leading := knownSpecies[LandR]]
-    sppEquiv <- unique(sppEquiv, by = c("LandWeb", "leading"))
-    sppEquiv <- sppEquiv[sim$ROSTable, on = "leading", allow.cartesian = TRUE, nomatch = NA]
-    sppEquiv <- sppEquiv[, c("leading", "age", "ros")]
-    sppEquiv <- unique(sppEquiv, by = c("age", "leading"))
-    sppEquiv <- sppEquiv[onRaster, on = "leading"]
+  sppNames <- equivalentName(vegTypes[[2]], sim$sppEquiv, P(sim)$sppEquivCol)
+  onRaster <- rbindlist(list(
+    list("mixed", which(is.na(sppNames))),
+    list("spruce", grep(sppNames, pattern = "Pice")),
+    list("pine", grep(sppNames, pattern = "Pinu")),
+    list("decid", grep(sppNames, pattern = "Popu")),
+    list("softwood", grep(sppNames, pattern = "Pice|Pinu|Popu", invert = TRUE))
+  ))
+  # remove duplicates of softwood, which is NA
+  onRaster <- unique(onRaster, by = "V2")
+  setnames(onRaster, old = 1:2, new = c("leading", "pixelValue"))
 
-    # New algorithm -- faster than protected with FALSE section below
-    sppEquiv[, used := "no"]
-    sppEquiv[(used == "no") & grepl("(^|_)mature", age), used := "mature"]
-    sppEquiv[(used == "no") & grepl("(^|_)immature", age), used := "immature"]
-    sppEquiv[(used == "no") & grepl("(^|_)young", age), used := "young"]
-    if (type == "log") {
-      sppEquiv[, ros := log(ros)]
-    }
-    setkeyv(sppEquiv, "used")
-
-    # if there are no "mature_immature"
-    cuts <- list()
-    if (!any(grepl("_mature$|^mature_|_mature_", sppEquiv$age))) {
-      cuts[[1]] <- sim$rstTimeSinceFire[] > 120
-    } else {
-      cuts[[1]] <- !is.na(sim$rstTimeSinceFire[])
-    }
-
-    if (!any(grepl("_immature$|^immature_|_immature_", sppEquiv$age))) {
-      cuts[[2]] <- sim$rstTimeSinceFire[] > 40 & sim$rstTimeSinceFire[] <= 120
-    } else {
-      cuts[[2]] <- sim$rstTimeSinceFire[] <= 120
-    }
-
-    cuts[[3]] <- sim$rstTimeSinceFire[] <= 40
-
-    # Now go through from mature through immature through young
-    if (!all(sppEquiv["mature"]$pixelValue %in% vegTypes[[1]]))
-      cuts[["mature"]] <- cuts[["mature"]] & vegType %in% sppEquiv["mature"]$pixelValue
-
-    if (!all(sppEquiv["immature"]$pixelValue %in% vegTypes[[1]]))
-      cuts[[2]] <- cuts[[2]] & vegType %in% sppEquiv["immature"]$pixelValue
-
-    if (all(sppEquiv["young"]$pixelValue %in% vegTypes[[1]]))
-      cuts[[3]] <- cuts[[3]] & vegType %in% sppEquiv["young"]$pixelValue
-
-    mature <- which(cuts[[1]])
-    immature <- which(cuts[[2]])
-    young <- which(cuts[[3]])
-
-    ROS[mature] <- plyr::mapvalues(vegType[mature], sppEquiv["mature"]$pixelValue, sppEquiv["mature"]$ros)
-    ROS[immature] <- plyr::mapvalues(vegType[immature], sppEquiv["immature"]$pixelValue, sppEquiv["immature"]$ros)
-    ROS[young] <- plyr::mapvalues(vegType[young], sppEquiv["young"]$pixelValue, sppEquiv["young"]$ros)
-
-    if (getOption("LandR.assertions")) {
-      names(cuts) <- c("mature", "immature", "young")
-      dt <- data.table(ROS = ROS,
-                       pixelValue = vegType,
-                       age = cut(sim$rstTimeSinceFire[], breaks = c(0, 40, 120, 999),
-                                      labels = c("young", "immature", "mature")),
-                       as.data.table(cuts))
-      dt <- na.omit(dt, cols = c("ROS", "age"))
-      dtSumm <- dt[, list(derivedROS = unique(ROS)), by = c("pixelValue", "age")]
-      dtSumm <- dtSumm[sppEquiv, on = c("pixelValue", "age" = "used"), nomatch = NA]
-      if( !(identical(dtSumm$derivedROS, dtSumm$ros))) {
-        stop("fireROS failed its test")
-      }
-    }
-    # Other vegetation that can burn -- e.g., grasslands, lichen, shrub
-    ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 30L
+  knownSpecies <- c(Pice_mar = "spruce", Pice_gla = "spruce",
+                    Pinu_con = "pine", Pinu_ban = "pine",
+                    Popu_tre = "decid", Betu_pap = "decid",
+                    Abie_bal = "softwood", Abie_las = "softwood", Abie_sp = "softwood")
+  haveAllKnown <- sim$sppEquiv$LandR %in% names(knownSpecies)
+  if (!all(haveAllKnown)) {
+    stop("LandMine only has rate of spread burn rates for\n",
+         paste(names(knownSpecies), collapse = ", "),
+         "\nMissing rate of spread for ", paste(sim$sppEquiv$LandR[!haveAllKnown], collapse = ", "))
   }
+  sppEquiv <- sim$sppEquiv[, c("LandWeb", "LandR")][, leading := knownSpecies[LandR]]
+  sppEquiv <- unique(sppEquiv, by = c("LandWeb", "leading"))
+  sppEquiv <- sppEquiv[sim$ROSTable, on = "leading", allow.cartesian = TRUE, nomatch = NA]
+  sppEquiv <- sppEquiv[, c("leading", "age", "ros")]
+  sppEquiv <- unique(sppEquiv, by = c("age", "leading"))
+  sppEquiv <- sppEquiv[onRaster, on = "leading"]
+
+  # New algorithm -- faster than protected with FALSE section below
+  sppEquiv[, used := "no"]
+  sppEquiv[(used == "no") & grepl("(^|_)mature", age), used := "mature"]
+  sppEquiv[(used == "no") & grepl("(^|_)immature", age), used := "immature"]
+  sppEquiv[(used == "no") & grepl("(^|_)young", age), used := "young"]
+  if (type == "log") {
+    sppEquiv[, ros := log(ros)]
+  }
+  setkeyv(sppEquiv, "used")
+
+  # if there are no "mature_immature"
+  cuts <- list()
+  if (!any(grepl("_mature$|^mature_|_mature_", sppEquiv$age))) {
+    cuts[[1]] <- sim$rstTimeSinceFire[] > 120
+  } else {
+    cuts[[1]] <- !is.na(sim$rstTimeSinceFire[])
+  }
+
+  if (!any(grepl("_immature$|^immature_|_immature_", sppEquiv$age))) {
+    cuts[[2]] <- sim$rstTimeSinceFire[] > 40 & sim$rstTimeSinceFire[] <= 120
+  } else {
+    cuts[[2]] <- sim$rstTimeSinceFire[] <= 120
+  }
+
+  cuts[[3]] <- sim$rstTimeSinceFire[] <= 40
+
+  # Now go through from mature through immature through young
+  if (!all(sppEquiv["mature"]$pixelValue %in% vegTypes[[1]]))
+    cuts[["mature"]] <- cuts[["mature"]] & vegType %in% sppEquiv["mature"]$pixelValue
+
+  if (!all(sppEquiv["immature"]$pixelValue %in% vegTypes[[1]]))
+    cuts[[2]] <- cuts[[2]] & vegType %in% sppEquiv["immature"]$pixelValue
+
+  if (all(sppEquiv["young"]$pixelValue %in% vegTypes[[1]]))
+    cuts[[3]] <- cuts[[3]] & vegType %in% sppEquiv["young"]$pixelValue
+
+  mature <- which(cuts[[1]])
+  immature <- which(cuts[[2]])
+  young <- which(cuts[[3]])
+
+  ROS[mature] <- plyr::mapvalues(vegType[mature], sppEquiv["mature"]$pixelValue, sppEquiv["mature"]$ros)
+  ROS[immature] <- plyr::mapvalues(vegType[immature], sppEquiv["immature"]$pixelValue, sppEquiv["immature"]$ros)
+  ROS[young] <- plyr::mapvalues(vegType[young], sppEquiv["young"]$pixelValue, sppEquiv["young"]$ros)
+
+  if (getOption("LandR.assertions")) {
+    names(cuts) <- c("mature", "immature", "young")
+    dt <- data.table(ROS = ROS,
+                     pixelValue = vegType,
+                     age = cut(sim$rstTimeSinceFire[], breaks = c(0, 40, 120, 999),
+                                    labels = c("young", "immature", "mature")),
+                     as.data.table(cuts))
+    dt <- na.omit(dt, cols = c("ROS", "age"))
+    dtSumm <- dt[, list(derivedROS = unique(ROS)), by = c("pixelValue", "age")]
+    dtSumm <- dtSumm[sppEquiv, on = c("pixelValue", "age" = "used"), nomatch = NA]
+    if( !(identical(dtSumm$derivedROS, dtSumm$ros))) {
+      stop("fireROS failed its test")
+    }
+  }
+  # Other vegetation that can burn -- e.g., grasslands, lichen, shrub
+  ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 30L
 
   if (FALSE) {  ## note: these are defined differently than in LandWeb, and that's ok?
     mature <- sim$rstTimeSinceFire[] > 120
