@@ -257,11 +257,11 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
                                        FRI = numeric(0))
   
   mod$knownSpecies <- c(Pice_mar = "spruce", Pice_gla = "spruce",
-                    Pinu_con = "pine", Pinu_ban = "pine",
-                    Popu_tre = "decid", Betu_pap = "decid",
-                    Abie_bal = "softwood", Abie_las = "softwood", Abie_sp = "softwood")
+                        Pinu_con = "pine", Pinu_ban = "pine",
+                        Popu_tre = "decid", Betu_pap = "decid",
+                        Abie_bal = "softwood", Abie_las = "softwood", Abie_sp = "softwood")
   sim$sppEquiv[, LandMine := mod$knownSpecies[LandR]]
-  
+
   return(invisible(sim))
 }
 
@@ -448,7 +448,7 @@ Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   mod$numDefaultPixelGroups <- 20L
   mod$numDefaultPolygons <- 4L
   numDefaultSpeciesCodes <- 2L
-  
+
   if (!suppliedElsewhere("studyArea", sim)) {
     if (getOption("LandR.verbose", TRUE) > 0)
       message("'studyArea' was not provided by user. Using a polygon in southwestern Alberta, Canada,")
@@ -461,18 +461,18 @@ Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
       message("'studyAreaReporting' was not provided by user. Using the same as 'studyArea'.")
     sim$studyAreaReporting <- sim$studyArea
   }
-  
+
   if (is.null(sim$rasterToMatch)) {
     if (!suppliedElsewhere("rasterToMatch", sim)) {
       sim$rasterToMatch <- raster(sim$studyArea, res = 100)
     }
   }
-  
+
   if (!suppliedElsewhere("rasterToMatchReporting")) {
     sim$rasterToMatchReporting <- sim$rasterToMatch
   }
-  
-  
+
+
   if (!suppliedElsewhere("rstFlammable", sim)) {
     sim$rstFlammable <- sim$rasterToMatch
     sim$rstFlammable[] <- 1L  # 1 means flammable
@@ -507,7 +507,7 @@ Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
   # Upgrades to use suppliedElsewhere -- Eliot Oct 21 2018
   if (!suppliedElsewhere("pixelGroupMap", sim)) {
-    sim$pixelGroupMap <- Cache(randomPolygons, sim$rasterToMatch, 
+    sim$pixelGroupMap <- Cache(randomPolygons, sim$rasterToMatch,
                                numTypes = mod$numDefaultPixelGroups)
   }
 
@@ -520,24 +520,26 @@ Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     sim$species <- data.table(species = c("Pinu_sp", "Pice_gla"),
                               speciesCode = 1:numDefaultSpeciesCodes)
   }
+
   if (!suppliedElsewhere("cohortData", sim)) {
-    sim$cohortData <- data.table(pixelGroup = seq(mod$numDefaultPixelGroups), 
-                                 speciesCode = factor(sample(sim$species$species, 
-                                                      size = mod$numDefaultPixelGroups, 
+    sim$cohortData <- data.table(pixelGroup = seq(mod$numDefaultPixelGroups),
+                                 speciesCode = factor(sample(sim$species$species,
+                                                      size = mod$numDefaultPixelGroups,
                                                       replace = TRUE)),
                                  B = sample(10:20, size = mod$numDefaultPixelGroups, replace = TRUE)*100,
                                  age = sample(5:20, size = mod$numDefaultPixelGroups, replace = TRUE)*10)
   }
+
   if (!suppliedElsewhere("sppColorVect", sim)) {
     sim$sppColorVect <- c("Red", "Green")
     names(sim$sppColorVect) <- sim$species$species
   }
+
   if (!suppliedElsewhere("sppEquiv", sim)) {
     data(sppEquivalencies_CA, envir = envir(sim))
     sim$sppEquiv <- sim$sppEquivalencies_CA
     rm("sppEquivalencies_CA", envir = envir(sim))
   }
-  
 
   return(invisible(sim))
 }
@@ -547,15 +549,17 @@ fireROS <- function(sim, vegTypeMap) {
 
   vegType <- getValues(vegTypeMap)
   vegTypes <- data.table(raster::levels(vegTypeMap)[[1]]) # 2nd column in levels
-  
+
   sppNames <- equivalentName(as.character(vegTypes[[2]]), sim$sppEquiv, P(sim)$sppEquivCol)
-  suppressWarnings(onRaster <- rbindlist(list(
-    list("mixed", which(is.na(sppNames))),
-    list("spruce", grep(sppNames, pattern = "Pice")),
-    list("pine", grep(sppNames, pattern = "Pinu")),
-    list("decid", grep(sppNames, pattern = "Popu")),
-    list("softwood", grep(sppNames, pattern = "Pice|Pinu|Popu", invert = TRUE))
-  )))
+  suppressWarnings({
+    onRaster <- rbindlist(list(
+      list("mixed", which(is.na(sppNames))),
+      list("spruce", grep(sppNames, pattern = "Pice")),
+      list("pine", grep(sppNames, pattern = "Pinu")),
+      list("decid", grep(sppNames, pattern = "Popu")),
+      list("softwood", grep(sppNames, pattern = "Pice|Pinu|Popu", invert = TRUE))
+    ))
+  })
   # remove duplicates of softwood, which is NA
   onRaster <- na.omit(unique(onRaster, by = "V2"))
   setnames(onRaster, old = 1:2, new = c("leading", "pixelValue"))
@@ -575,7 +579,7 @@ fireROS <- function(sim, vegTypeMap) {
   sppEquiv <- sppEquiv[sim$ROSTable, on = "leading", allow.cartesian = TRUE, nomatch = NULL]
   sppEquiv <- sppEquiv[, c("leading", "age", "ros", "pixelValue")]
   sppEquiv <- unique(sppEquiv, by = c("age", "leading"))
-  
+
   # New algorithm -- faster than protected with FALSE section below
   sppEquiv[, used := "no"]
   sppEquiv[(used == "no") & grepl("(^|_)mature", age), used := "mature"]
