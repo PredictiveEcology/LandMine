@@ -149,7 +149,7 @@ doEvent.LandMine <- function(sim, eventTime, eventType, debug = FALSE) {
     sim <- scheduleEvent(sim, P(sim)$.plotInitialTime, "LandMine", "plot")
     sim <- scheduleEvent(sim, P(sim)$.saveInitialTime, "LandMine", "save")
   } else if (eventType == "plot") {
-    if (!is.na(P(sim)$.plotInitialTime) && (P(sim)$.plotInitialTime == start(sim)))
+    if (!is.na(P(sim)$.plotInitialTime) && (P(sim)$.plotInitialTime == time(sim)))
       mod$LandMineDevice <- max(dev.list()) + 1
 
     devCur <- dev.cur()
