@@ -255,7 +255,7 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
                                        nPixelsBurned = numeric(0),
                                        haBurned = numeric(0),
                                        FRI = numeric(0))
-  
+
   mod$knownSpecies <- c(Pice_mar = "spruce", Pice_gla = "spruce",
                         Pinu_con = "pine", Pinu_ban = "pine",
                         Popu_tre = "decid", Betu_pap = "decid",
