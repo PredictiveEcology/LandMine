@@ -131,9 +131,8 @@ defineModule(sim, list(
     ),
     createsOutput("rstCurrentBurnCumulative", "RasterLayer", "Cumulative number of times a pixel has burned"),
     createsOutput("sppEquiv", "data.table",
-                 desc = paste("Same as input, but with new column, LandMine"),
-                 sourceURL = NA)
-
+                  desc = paste("Same as input, but with new column, LandMine"),
+                  sourceURL = NA)
   )
 ))
 
