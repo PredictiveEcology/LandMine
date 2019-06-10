@@ -47,7 +47,7 @@ defineModule(sim, list(
     defineParameter(".saveInterval", "numeric", NA, NA, NA, "This describes the simulation time interval between save events"),
     defineParameter(".useCache", "logical", FALSE, NA, NA,
                     "Should this entire module be run with caching activated? This is generally intended for data-type modules, where stochasticity and time are not relevant"),
-    defineParameter(".unitTest", "logical", TRUE, NA, NA,
+    defineParameter(".unitTest", "logical", getOption("LandR.assertions", TRUE), NA, NA,
                     "Some functions can have internal testing. This will turn those on or off, if any exist"),
     defineParameter(".useParallel", "numeric", 2, NA, NA,
                     paste("Used in burning. Will be passed to data.table::setDTthreads.",
