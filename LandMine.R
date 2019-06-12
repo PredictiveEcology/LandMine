@@ -155,7 +155,7 @@ doEvent.LandMine <- function(sim, eventTime, eventType, debug = FALSE) {
       mod$LandMineDevice <- max(dev.list()) + 1
 
     devCur <- dev.cur()
-    quickPlot::dev(mod$LandMineDevice, width= 18, height = 12)
+    quickPlot::dev(mod$LandMineDevice, width = 18, height = 12)
     sim <- plotFn(sim)
     dev(devCur)
     sim <- scheduleEvent(sim, P(sim)$.plotInterval, "LandMine", "plot")
