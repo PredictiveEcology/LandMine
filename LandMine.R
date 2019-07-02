@@ -304,7 +304,6 @@ plotFn <- function(sim) {
   mod$areaBurnedOverTime <- rbind(mod$areaBurnedOverTime, burnedDF)
 
   if (length(unique(mod$areaBurnedOverTime$time)) > 1) {
-
     gg_areaBurnedOverTime <- ggplot(mod$areaBurnedOverTime,
                                     aes(x = time, y = haBurned, fill = FRI, ymin = 0)) +
       #geom_line(size = 1.5) +
