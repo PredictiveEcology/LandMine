@@ -376,7 +376,7 @@ Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   vegTypeMap <- vegTypeMapGenerator(sim$cohortData, sim$pixelGroupMap,
                                     P(sim)$vegLeadingProportion,
                                     colors = sim$sppColorVect,
-                                    unitTest = P(sim)$.unitTest)
+                                    doAssertion = P(sim)$.unitTest)
 
   ROSmap <- raster(sim$pixelGroupMap)
   ROSmap[] <- fireROS(sim, vegTypeMap = vegTypeMap)
