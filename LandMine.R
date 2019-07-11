@@ -29,6 +29,9 @@ defineModule(sim, list(
                     "If no Fire Return Interval map is supplied, then a random one will be created and cached. Use this to make a new one."),
     defineParameter("minPropBurn", "numeric", 0.90, 0.00, 1.00,
                     "Minimum proportion burned pixels to use when triggering warnings about simulated fires."),
+    defineParameter("mixedType", "numeric", 2,
+                    desc = paste("How to define mixed stands: 1 for any species admixture;",
+                                 "2 for deciduous > conifer. See ?vegTypeMapGenerator.")),
     defineParameter("maxRetriesPerID", "integer", 10L, 0L, 20L,
                     "Minimum proportion burned pixels to use when triggering warnings about simulated fires."),
     defineParameter("sppEquivCol", "character", "LandR", NA, NA,
@@ -374,7 +377,8 @@ Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
   ## Rate of Spread
   vegTypeMap <- vegTypeMapGenerator(sim$cohortData, sim$pixelGroupMap,
-                                    P(sim)$vegLeadingProportion,
+                                    P(sim)$vegLeadingProportion, mixedType = P(sim)$mixedType,
+                                    sppEquiv = sim$sppEquiv, sppEquivCol = P(sim)$sppEquivCol,
                                     colors = sim$sppColorVect,
                                     doAssertion = P(sim)$.unitTest)
 
