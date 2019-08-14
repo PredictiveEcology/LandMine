@@ -271,7 +271,7 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 }
 
 ### plot events
-plotFn <- function(sim) {
+plotFn <- compiler::cmpfun(function(sim) {
   if (is.null(sim$rstCurrentBurnCumulative)) {
     sim$rstCurrentBurnCumulative <- raster(sim$rstCurrentBurn)
   }
@@ -330,10 +330,10 @@ plotFn <- function(sim) {
 
   # ! ----- STOP EDITING ----- ! #
   return(invisible(sim))
-}
+})
 
 ### burn events
-Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
+Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   ## DEBUGGING: random seed issues
   #fseed <- file.path(outputPath(sim), "seed.txt")
   #writeEventInfo(sim, fseed, append = TRUE)
@@ -434,7 +434,7 @@ Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   }
 
   return(invisible(sim))
-}
+})
 
 .inputObjects <- function(sim) {
   ## DEBUGGING: random seed issues
@@ -549,7 +549,7 @@ Burn <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   return(invisible(sim))
 }
 
-fireROS <- function(sim, vegTypeMap) {
+fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
   ROS <- rep(NA_integer_, ncell(vegTypeMap))
 
   vegType <- getValues(vegTypeMap)
@@ -695,4 +695,4 @@ fireROS <- function(sim, vegTypeMap) {
   }
 
   ROS
-}
+})

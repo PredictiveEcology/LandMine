@@ -52,34 +52,38 @@
 #' @return A \code{data.table} with 4 columns
 #'
 #' @export
-# burn <- function(landscape, startCells, fireSizes = 5, nActiveCells1 = c(10, 36),
+#'
+# burn <- compiler::cmpfun(function(landscape, startCells, fireSizes = 5, nActiveCells1 = c(10, 36),
 #                  spawnNewActive = c(0.46, 0.2, 0.26, 0.11),
 #                  sizeCutoffs = c(8e3, 2e4), spreadProbRel = 0.23) {
-#   a = spread(landscape, loci = startCells, spreadProbRel = spreadProbRel, persistence = 0,
-#              neighProbs = c(1-spawnNewActive[1], spawnNewActive[1]), iterations = 1,
-#              mask=NULL, maxSize = fireSizes, directions=8, returnIndices = TRUE,
-#              id = TRUE, plot.it = FALSE, exactSizes = TRUE);
-#   while(sum(a$active)>0) {
-#     b <- a[,list(numActive = sum(active), size = .N),by=id]
-#     set(b, , "pSpawnNewActive", 0) # This is undescribed in Andison -- NF>36 & FS >8,000 ha -- They look too circular, without this, so make this zero, no new spawn
-#     #set(b, , "pSpawnNewActive", spawnNewActive[1])
-#     b[numActive<nActiveCells1[1], pSpawnNewActive:=spawnNewActive[1]]
-#     b[numActive>=nActiveCells1[1] & numActive<nActiveCells1[2] & size < sizeCutoffs[2], pSpawnNewActive:=spawnNewActive[2]]
-#     b[numActive>nActiveCells1[2] & size < sizeCutoffs[1], pSpawnNewActive:=spawnNewActive[4]]
-#     b[numActive<nActiveCells1[2] & size > sizeCutoffs[2], pSpawnNewActive:=spawnNewActive[3]]
+#   a <- spread(landscape, loci = startCells, spreadProbRel = spreadProbRel, persistence = 0,
+#               neighProbs = c(1-spawnNewActive[1], spawnNewActive[1]), iterations = 1,
+#               mask = NULL, maxSize = fireSizes, directions = 8, returnIndices = TRUE,
+#               id = TRUE, plot.it = FALSE, exactSizes = TRUE)
+#
+#   while(sum(a$active) > 0) {
+#     b <- a[,list(numActive = sum(active), size = .N), by = id]
+#     ## This is undescribed in Andison -- NF >36 & FS >8,000 ha --
+#     ## They look too circular, without this, so make this zero, no new spawn
+#     set(b, NULL, "pSpawnNewActive", 0)
+#     #set(b, NULL, "pSpawnNewActive", spawnNewActive[1])
+#     b[numActive < nActiveCells1[1], pSpawnNewActive := spawnNewActive[1]]
+#     b[numActive >= nActiveCells1[1] & numActive<nActiveCells1[2] & size < sizeCutoffs[2], pSpawnNewActive:=spawnNewActive[2]]
+#     b[numActive > nActiveCells1[2] & size < sizeCutoffs[1], pSpawnNewActive := spawnNewActive[4]]
+#     b[numActive < nActiveCells1[2] & size > sizeCutoffs[2], pSpawnNewActive := spawnNewActive[3]]
 #     set(b, , "pNoNewSpawn", 1-b$pSpawnNewActive)
 #
-#     # spawnNewActive must be joined sent in here as list...
+#     ## spawnNewActive must be joined sent in here as list...
 #     b <- b[a]
 #     a <- spread(landscape, spreadProbRel = spreadProbRel, spreadProb = spreadProb,
 #                 spreadState = a, persistence = 0,
-#                 neighProbs = transpose(as.list(b[active==TRUE,c("pNoNewSpawn", "pSpawnNewActive")])),
+#                 neighProbs = transpose(as.list(b[active == TRUE, c("pNoNewSpawn", "pSpawnNewActive")])),
 #                 iterations = 1, quick = TRUE,
-#                 mask=NULL, maxSize = fireSizes, directions=8, returnIndices = TRUE,
+#                 mask = NULL, maxSize = fireSizes, directions = 8, returnIndices = TRUE,
 #                 id = TRUE, plot.it = FALSE, exactSizes = TRUE)
 #   }
 #   return(a)
-# }
+# })
 
 
 #' @param sizeCutoffs Numeric vector, length 2, indicating in the units of the map (e.g., m), not
@@ -90,9 +94,9 @@
 #' @importFrom purrr transpose
 #' @importFrom raster res
 #' @importFrom SpaDES.tools spread2
-burn1 <- function(landscape, startCells, fireSizes = 5, nActiveCells1 = c(10, 36),
-                  spawnNewActive = c(0.46, 0.2, 0.26, 0.11), maxRetriesPerID = 10,
-                  sizeCutoffs = c(8e3, 2e4), spreadProbRel = spreadProbRel, spreadProb = 0.77) {
+burn1 <- compiler::cmpfun(function(landscape, startCells, fireSizes = 5, nActiveCells1 = c(10, 36),
+                                   spawnNewActive = c(0.46, 0.2, 0.26, 0.11), maxRetriesPerID = 10,
+                                   sizeCutoffs = c(8e3, 2e4), spreadProbRel = spreadProbRel, spreadProb = 0.77) {
   # convert to pixels
   sizeCutoffs <- sizeCutoffs / (prod(res(landscape)) / 1e4)
   # add a little bit of stochasticity
@@ -159,4 +163,4 @@ burn1 <- function(landscape, startCells, fireSizes = 5, nActiveCells1 = c(10, 36
     whActive <- attr(a, "spreadState")$whActive#a$state=="activeSource"
   }
   return(a)
-}
+})
