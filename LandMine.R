@@ -178,7 +178,7 @@ EstimateTruncPareto <- function(sim, verbose = getOption("LandR.verbose", TRUE))
     message("Estimate Truncated Pareto parameters")
 
   findK_upper <- function(params = c(0.4), upper1) {
-    fs <- round(rtruncpareto(1e6, 1, upper = upper1, shape = params[1]))
+    fs <- round(VGAM::rtruncpareto(1e6, 1, upper = upper1, shape = params[1]))
     #meanFS <- meanTruncPareto(k = params[1], lower = 1, upper = upper1, alpha = 1)
     #diff1 <- abs(quantile(fs, 0.95) - meanFS)
     #abs(sum(fs[fs>quantile(fs, 0.95)])/sum(fs) - 0.9) # "90% of area is in 5% of fires" # from Dave rule of thumb
@@ -358,9 +358,9 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   # If fire sizes are in hectares, must adjust based on resolution of maps
   #  NOTE: round causes fires < 0.5 pixels to NOT EXIST ... i.e., 3.25 ha fires are
   #  "not detectable" if resolution is 6.25 ha
-  fireSizesThisPeriod <- rtruncpareto(length(thisYrStartCells), lower = 1,
-                                      upper = P(sim)$biggestPossibleFireSizeHa,
-                                      shape = sim$kBest)
+  fireSizesThisPeriod <- VGAM::rtruncpareto(length(thisYrStartCells), lower = 1,
+                                            upper = P(sim)$biggestPossibleFireSizeHa,
+                                            shape = sim$kBest)
 
   # Because annual number of fires includes fires <6.25 ha, sometimes this will round down to 0 pixels.
   #   This calculation makes that probabilistic.
