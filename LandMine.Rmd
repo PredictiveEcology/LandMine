@@ -68,6 +68,7 @@ Paths will have be changed for a different user.
 
 ```{r setup_paths, eval=TRUE}
 library(reproducible)
+library(magrittr)
 
 workingDir <- file.path("~/GitHub/LandWeb")
 moduleDir <- file.path(workingDir, "m") %>% checkPath()
@@ -96,9 +97,7 @@ parameters <- list(
   #LandMine = list(flushCachedRandomFRI = TRUE) 
 )
 modules <- list("LandMine")
-rstFlammable <- raster(extent(0,1e5, 0, 1e5), res = 250, vals = 0)
 
-objects <- list(rstFlammable = rstFlammable)
 paths <- list(
   cachePath = cacheDir,
   modulePath = moduleDir,
@@ -107,9 +106,11 @@ paths <- list(
 )
 ```
 
+
 ```{r Run-the-module, eval=FALSE}
 mySim <- simInit(times = times, params = parameters, modules = modules,
-                 objects = objects, paths = paths)
+                 # objects = objects, 
+                 paths = paths)
 
 dev()
 mySimOut <- spades(mySim, .plotInitialTime = times$start, debug = TRUE)
