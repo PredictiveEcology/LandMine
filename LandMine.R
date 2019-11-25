@@ -212,7 +212,7 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     }
 
     sampleV <- Vectorize(sample, "size", SIMPLIFY = TRUE)
-    repV <- Vectorize(rep.int, c("x","times"))
+    repV <- Vectorize(rep.int, c("x", "times"))
     numCohortsPerPG <- sample(1:2, replace = TRUE, mod$numDefaultPixelGroups)
     sim$cohortData <- data.table(speciesCode = unlist(sampleV(1:2, numCohortsPerPG)),
                                  B = runif(sum(numCohortsPerPG), 100, 1000),
