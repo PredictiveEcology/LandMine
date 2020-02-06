@@ -4,7 +4,7 @@ defineModule(sim, list(
   keywords = c("Fire", "Landscape", "Percolation", "Pixel-based"),
   authors = c(
     person(c("Eliot", "J", "B"), "McIntire", email = "eliot.mcintire@canada.ca", role = c("aut", "cre")),
-    person(c("Alex", "M."), "Chubaty", email = "achubaty@friresearch.ca", role = c("ctb"))
+    person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb"))
   ),
   childModules = character(0),
   version = list(SpaDES.core = "0.2.3.9009", LandMine = numeric_version("0.0.1")),
@@ -212,7 +212,7 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     }
 
     sampleV <- Vectorize(sample, "size", SIMPLIFY = TRUE)
-    repV <- Vectorize(rep.int, c("x","times"))
+    repV <- Vectorize(rep.int, c("x", "times"))
     numCohortsPerPG <- sample(1:2, replace = TRUE, mod$numDefaultPixelGroups)
     sim$cohortData <- data.table(speciesCode = unlist(sampleV(1:2, numCohortsPerPG)),
                                  B = runif(sum(numCohortsPerPG), 100, 1000),
