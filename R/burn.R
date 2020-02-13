@@ -104,14 +104,14 @@ burn1 <- compiler::cmpfun(function(landscape, startCells, fireSizes = 5, nActive
 
   a <- spread2(landscape, start = startCells, spreadProb = 1,  # initial step can have spreadProb 1 so guarantees something
                spreadProbRel = spreadProbRel, #persistence = 0,
-               neighProbs = c(1-spawnNewActive[1], spawnNewActive[1]), iterations = 1,
+               neighProbs = c(1 - spawnNewActive[1], spawnNewActive[1]), iterations = 1,
                #mask=NULL,
                maxRetriesPerID = maxRetriesPerID,
                asRaster = FALSE, exactSize = fireSizes, directions = 8, #returnIndices = TRUE,
                #id = TRUE, plot.it = FALSE
                )
   whActive <- attr(a, "spreadState")$whActive#a$state=="activeSource"
-  while(any(whActive)) {
+  while (any(whActive)) {
     #a2 <- data.table::copy(a)
     # microbenchmark(times = 6, a = {
     #   a <- data.table::copy(a2)
@@ -119,7 +119,7 @@ burn1 <- compiler::cmpfun(function(landscape, startCells, fireSizes = 5, nActive
     #
     #  }, b = {
     #   a <- data.table::copy(a2)
-       set(a, , "numActive", 0L)
+       set(a, NULL, "numActive", 0L)
        a[whActive, numActive := .N, by = initialPixels]
        b <- attr(a, "spreadState")$cluster
        b <- a[b, mult = "last"]
