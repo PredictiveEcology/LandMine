@@ -202,7 +202,7 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   #writeRNGInfo(fseed, append = TRUE)
   ## END DEBUGGING
 
-  compareRaster(sim$rasterToMatch, sim$fireReturnInterval, sim$rstFlammable)
+  compareRaster(sim$rasterToMatch, sim$fireReturnInterval, sim$rstFlammable, sim$rstTimeSinceFire)
 
   sim$fireSizes <- list()
 
