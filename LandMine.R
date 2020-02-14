@@ -115,7 +115,7 @@ defineModule(sim, list(
       "These can be put into a single data.table with rbindlist(sim$fireSizes, idcol = 'year')")
     ),
     createsOutput("fireReturnInterval", "RasterLayer", paste(
-      "A Raster map showing the fire return interval. THis is created from the rstCurrentBurn.")
+      "A Raster map showing the fire return interval. This is created from the rstCurrentBurn.")
     ),
     createsOutput("fireReturnIntervalsByPolygonNumeric", "numeric", paste(
       "A vector of the fire return intervals, ordered by the numeric representation of polygon ID")
@@ -214,9 +214,11 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     sampleV <- Vectorize(sample, "size", SIMPLIFY = TRUE)
     repV <- Vectorize(rep.int, c("x", "times"))
     numCohortsPerPG <- sample(1:2, replace = TRUE, mod$numDefaultPixelGroups)
-    sim$cohortData <- data.table(speciesCode = unlist(sampleV(1:2, numCohortsPerPG)),
-                                 B = runif(sum(numCohortsPerPG), 100, 1000),
-                                 pixelGroup = unlist(repV(1:mod$numDefaultPixelGroups, times = numCohortsPerPG)))
+    sim$cohortData <- data.table(
+      speciesCode = unlist(sampleV(1:2, numCohortsPerPG)),
+      B = runif(sum(numCohortsPerPG), 100, 1000),
+      pixelGroup = unlist(repV(1:mod$numDefaultPixelGroups, times = numCohortsPerPG))
+    )
   }
 
   if (verbose > 0)
@@ -477,10 +479,9 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
     sim$rasterToMatchReporting <- sim$rasterToMatch
   }
 
-
   if (!suppliedElsewhere("rstFlammable", sim)) {
     sim$rstFlammable <- sim$rasterToMatch
-    sim$rstFlammable[] <- 1L  # 1 means flammable
+    sim$rstFlammable[] <- 1L  # 1 means flammable  ## TODO: use LandR::defineFlammable()
   }
 
   if (!suppliedElsewhere("fireReturnInterval", sim)) {
