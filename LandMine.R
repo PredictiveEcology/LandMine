@@ -297,7 +297,7 @@ plotFn <- compiler::cmpfun(function(sim) {
          gp = gpar(col = "black", fill = 0))
   }
 
-  currBurn <- raster::mask(sim$rstCurrentBurn, sim$studyAreaReporting) %>% stack()
+  currBurn <- raster::mask(sim$rstCurrentBurn, sim$studyAreaReporting) %>% raster::stack()
   fris <- unique(na.omit(sim$fireReturnInterval[]))
   npix <- vapply(fris, function(x) {
     ids <- which(sim$fireReturnInterval[] == x)
