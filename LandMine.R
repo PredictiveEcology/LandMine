@@ -58,7 +58,8 @@ defineModule(sim, list(
   ),
   inputObjects = bind_rows(
     expectsInput("cohortData", "data.table",
-                 desc = "Columns: B, pixelGroup, speciesCode (as a factor of the names), Indicating several features about ages and current vegetation of stand",
+                 desc = paste("Columns: B, pixelGroup, speciesCode (as a factor of the names),",
+                              "indicating several features about ages and current vegetation of stand"),
                  sourceURL = NA),
     expectsInput("fireReturnInterval","Raster",
                  desc = paste("A raster layer that is a factor raster, with at least 1 column called fireReturnInterval,",
@@ -285,16 +286,14 @@ plotFn <- compiler::cmpfun(function(sim) {
     friRast[] <- as.factor(sim$fireReturnInterval[])
     Plot(friRast, title = "Fire Return Interval", cols = c("pink", "darkred"), new = TRUE)
     sar <- sim$studyAreaReporting
-    Plot(sar, addTo = "friRast", title = "",
-         gp = gpar(col = "black", fill = 0))
+    Plot(sar, addTo = "friRast", title = "", gp = gpar(col = "black", fill = 0))
 
     sim$rstCurrentBurnCumulative[!is.na(sim$rstCurrentBurn)] <- 0L
 
     rstFlammable <- raster(sim$rstFlammable)
     rstFlammable[] <- getValues(sim$rstFlammable)
     Plot(rstFlammable, title = "Land Type (rstFlammable)", cols = c("mediumblue", "firebrick"), new = TRUE)
-    Plot(sar, addTo = "rstFlammable", title = "",
-         gp = gpar(col = "black", fill = 0))
+    Plot(sar, addTo = "rstFlammable", title = "", gp = gpar(col = "black", fill = 0))
   }
 
   currBurn <- raster::mask(sim$rstCurrentBurn, sim$studyAreaReporting) %>% raster::stack()
@@ -325,12 +324,9 @@ plotFn <- compiler::cmpfun(function(sim) {
     sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn + sim$rstCurrentBurnCumulative
     title2 <- if (firstPlot) "Cumulative Fire Map" else ""
     rcbc <- sim$rstCurrentBurnCumulative
-    Plot(rcbc, new = TRUE,
-         title = title2,
-         cols = c("pink", "red"), zero.color = "transparent")
+    Plot(rcbc, new = TRUE, title = title2, cols = c("pink", "red"), zero.color = "transparent")
     sar <- sim$studyAreaReporting
-    Plot(sar, addTo = "rcbc", title = "",
-         gp = gpar(col = "black", fill = 0))
+    Plot(sar, addTo = "rcbc", title = "", gp = gpar(col = "black", fill = 0))
   }
 
   # ! ----- STOP EDITING ----- ! #
