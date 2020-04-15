@@ -216,21 +216,6 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   if (!is.integer(sim$fireReturnInterval[]))
     sim$fireReturnInterval[] <- as.integer(sim$fireReturnInterval[])
 
-  if (!suppliedElsewhere("cohortData", sim)) {
-    if (!is.null(P(sim)$useSeed)) {
-      set.seed(P(sim)$useSeed)
-    }
-
-    sampleV <- Vectorize(sample, "size", SIMPLIFY = TRUE)
-    repV <- Vectorize(rep.int, c("x", "times"))
-    numCohortsPerPG <- sample(1:2, replace = TRUE, mod$numDefaultPixelGroups)
-    sim$cohortData <- data.table(
-      speciesCode = unlist(sampleV(1:2, numCohortsPerPG)),
-      B = runif(sum(numCohortsPerPG), 100, 1000),
-      pixelGroup = unlist(repV(1:mod$numDefaultPixelGroups, times = numCohortsPerPG))
-    )
-  }
-
   if (verbose > 0)
     message("Initializing fire maps")
   sim$fireTimestep <- P(sim)$fireTimestep
