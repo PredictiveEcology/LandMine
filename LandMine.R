@@ -45,15 +45,20 @@ defineModule(sim, list(
                     "a number that define whether a species is leading for a given pixel"),
     defineParameter(".plotInitialTime", "numeric", start(sim, "year") + 1, NA, NA,
                     "This describes the simulation time at which the first plot event should occur"),
-    defineParameter(".plotInterval", "numeric", 1, NA, NA, "This describes the simulation time interval between plot events"),
-    defineParameter(".saveInitialTime", "numeric", NA, NA, NA, "This describes the simulation time at which the first save event should occur"),
-    defineParameter(".saveInterval", "numeric", NA, NA, NA, "This describes the simulation time interval between save events"),
+    defineParameter(".plotInterval", "numeric", 1, NA, NA,
+                    "This describes the simulation time interval between plot events"),
+    defineParameter(".saveInitialTime", "numeric", NA, NA, NA,
+                    "This describes the simulation time at which the first save event should occur"),
+    defineParameter(".saveInterval", "numeric", NA, NA, NA,
+                    "This describes the simulation time interval between save events"),
     defineParameter(".useCache", "logical", FALSE, NA, NA,
-                    "Should this entire module be run with caching activated? This is generally intended for data-type modules, where stochasticity and time are not relevant"),
+                    paste("Should this entire module be run with caching activated?",
+                          "This is generally intended for data-type modules,",
+                          "where stochasticity and time are not relevant")),
     defineParameter(".unitTest", "logical", getOption("LandR.assertions", TRUE), NA, NA,
                     "Some functions can have internal testing. This will turn those on or off, if any exist"),
     defineParameter(".useParallel", "numeric", 2, NA, NA,
-                    paste("Used in burning. Will be passed to data.table::setDTthreads.",
+                    paste("Used in burning. Will be passed to data.table::setDTthreads().",
                           "NOTE: should be <= 2 as the additonal RAM overhead too high given marginal speedup."))
   ),
   inputObjects = bind_rows(
@@ -77,10 +82,11 @@ defineModule(sim, list(
                               "Defaults to the kNN biomass map masked with `studyArea`"),
                  sourceURL = "http://tree.pfc.forestry.ca/kNN-StructureBiomass.tar"),
     expectsInput("ROSTable", "data.table",
-                 desc = paste("A data.table with 3 columns, 'age', 'leading', and 'ros'. The values under the 'age' column",
-                              "can be 'mature', 'immature', 'young' and compound versions of these, e.g., 'immature_young'",
-                              "which can be used when 2 or more age classes share same 'ros'. 'leading' should be",
-                              ""),
+                 desc = paste("A data.table with 3 columns, 'age', 'leading', and 'ros'.",
+                              "The values under the 'age' column can be 'mature', 'immature',",
+                              "'young' and compound versions of these, e.g., 'immature_young'",
+                              "which can be used when 2 or more age classes share same 'ros'.",
+                              "'leading' should be"), ## TODO: incomplete description
                  sourceURL = NA),
     expectsInput("rstFlammable", "Raster",
                  desc = paste("A raster layer, with 0, 1 and NA, where 1 indicates areas",
@@ -96,9 +102,9 @@ defineModule(sim, list(
                  desc = "named character vector of hex colour codes corresponding to each species",
                  sourceURL = NA),
     expectsInput("sppEquiv", "data.table",
-                 desc = paste("Multi-columned data.table indicating species name equivalencies. Default",
-                              "is taken from LandR sppEquivalencies_CA which has names for species of",
-                              "trees in Canada"),
+                 desc = paste("Multi-columned data.table indicating species name equivalencies.",
+                              "Default taken from LandR sppEquivalencies_CA which has names for",
+                              "species of trees in Canada"),
                  sourceURL = NA),
     expectsInput("studyAreaReporting", "SpatialPolygonsDataFrame",
                  desc = paste("multipolygon (typically smaller/unbuffered than studyArea) to use for plotting/reporting.",
@@ -495,8 +501,8 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
 
   if (!suppliedElsewhere(sim$ROSTable)) {
     sim$ROSTable <- rbindlist(list(
-      list("mature", "decid", 9L),
       list("immature_young", "decid", 6L),
+      list("mature", "decid", 9L),
       list("immature_young", "mixed", 12L),
       list("mature", "mixed", 17L),
       list("immature", "pine", 14L),
@@ -649,50 +655,5 @@ fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
   # Other vegetation that can burn -- e.g., grasslands, lichen, shrub
   ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 30L
 
-  if (FALSE) {  ## note: these are defined differently than in LandWeb, and that's ok?
-    mature <- sim$rstTimeSinceFire[] > 120
-    immature <- (sim$rstTimeSinceFire[] > 40) & !mature
-    young <- !immature & !mature
-
-    ROS <- rep(NA_integer_, NROW(vegType))
-    mixed <- grep(tolower(vegTypes$Factor), pattern = "mix")
-    spruce <- grep(tolower(vegTypes$Factor), pattern = "spruce")
-    pine <- grep(tolower(vegTypes$Factor), pattern = "pine")
-    decid <- grep(tolower(vegTypes$Factor), pattern = "deci")
-    softwood <- grep(tolower(vegTypes$Factor), pattern = "soft")
-
-    ROS[!mature & vegType %in% decid] <- 6L
-    ROS[mature & vegType %in% decid] <- 9L
-
-    ROS[!mature & vegType %in% mixed] <- 12L
-    ROS[mature & vegType %in% mixed] <- 17L
-
-    ROS[immature & vegType %in% pine] <- 14L
-    ROS[mature & vegType %in% pine] <- 21L
-    ROS[young & vegType %in% pine] <- 22L
-
-    ROS[!mature & vegType %in% softwood] <- 18L
-    ROS[mature & vegType %in% softwood] <- 27L
-
-    ROS[!mature & vegType %in% spruce] <- 20L
-    ROS[mature & vegType %in% spruce] <- 30L
-
-    # Other vegetation that can burn -- e.g., grasslands, lichen, shrub
-    ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 30L
-
-    if (type == "equal") {
-      ## equal rates of spread
-      ROS[young & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
-      ROS[immature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
-      ROS[mature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
-      ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 1L
-    }
-
-    ## log(rates of spread), which maintains relationships but makes more equal
-    if (type == "log") {
-      ROS[] <- log(ROS[])
-    }
-  }
-
-  ROS
+  return(ROS)
 })
