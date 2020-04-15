@@ -34,6 +34,9 @@ defineModule(sim, list(
                                  "2 for deciduous > conifer. See ?vegTypeMapGenerator.")),
     defineParameter("maxRetriesPerID", "integer", 10L, 0L, 20L,
                     "Minimum proportion burned pixels to use when triggering warnings about simulated fires."),
+    defineParameter("ROSother", "integer", 30L, NA, NA,
+                    paste0("default ROS value for non-forest vegetation classes.",
+                           "this is needed when passing a modified ROSTable, e.g. using log-transformed values.")),
     defineParameter("sppEquivCol", "character", "LandR", NA, NA,
                     "The column in sim$specieEquivalency data.table to use as a naming convention"),
     defineParameter("useSeed", "integer", NULL, NA, NA,
@@ -637,8 +640,15 @@ fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
       stop("fireROS failed its test")
     }
   }
-  # Other vegetation that can burn -- e.g., grasslands, lichen, shrub
-  ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 30L
+
+  ## Other vegetation that can burn -- e.g., grasslands, lichen, shrub
+  ## The original default value is the same as that of mature spruce stands (30L)
+  matureSpruceROS <- sim$ROSTable[leading == "spruce" & age == "mature", ros]
+  assertthat::assert_that(
+    isTRUE(inRange(P(sim)$ROSother, min(sim$ROSTable$ros), max(sim$ROSTable$ros))),
+    isTRUE(inRange(P(sim)$ROSother, 0.95*matureSpruceROS, 1.05*matureSpruceROS))
+  )
+  ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- as.integer(P(sim)$ROSother)
 
   return(ROS)
 })
