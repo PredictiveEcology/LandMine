@@ -564,19 +564,19 @@ fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
 
   sppEquiv <- sim$sppEquiv[, c("LandMine", "LandR")][, leading := mod$knownSpecies[LandR]]
   sppEquiv <- na.omit(sppEquiv, on = "LandMine")
-  sppEquiv <- sppEquiv[onRaster, on = c("LandMine" = "leading")]
+  sppEquiv <- unique(sppEquiv[onRaster, on = c("LandMine" = "leading")])
 
-  sppEquivHere <- na.omit(sppEquiv$LandR)
+  sppEquivHere <- unique(na.omit(sppEquiv$LandR))
   haveAllKnown <- sppEquivHere %in% names(mod$knownSpecies)
   if (!all(haveAllKnown)) {
     stop("LandMine only has rate of spread burn rates for\n",
          paste(names(mod$knownSpecies), collapse = ", "),
          "\nMissing rate of spread for ", paste(sppEquivHere[!haveAllKnown], collapse = ", "))
   }
-  sppEquiv <- unique(sppEquiv, by = c("LandMine", "leading"))
+  sppEquiv <- unique(sppEquiv, by = c("LandMine", "leading", "pixelValue"))
   sppEquiv <- sppEquiv[sim$ROSTable, on = "leading", allow.cartesian = TRUE, nomatch = NULL]
   sppEquiv <- sppEquiv[, c("leading", "age", "ros", "pixelValue")]
-  sppEquiv <- unique(sppEquiv, by = c("age", "leading"))
+  sppEquiv <- unique(sppEquiv, by = c("age", "leading", "pixelValue"))
 
   sppEquiv[, used := "no"]
   sppEquiv[(used == "no") & grepl("(^|_)mature", age), used := "mature"]
