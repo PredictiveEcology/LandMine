@@ -86,7 +86,8 @@ defineModule(sim, list(
                               "The values under the 'age' column can be 'mature', 'immature',",
                               "'young' and compound versions of these, e.g., 'immature_young'",
                               "which can be used when 2 or more age classes share same 'ros'.",
-                              "'leading' should be"), ## TODO: incomplete description
+                              "'leading' should be vegetation type.",
+                              "'ros' gives the rate of spread values for each age and type."),
                  sourceURL = NA),
     expectsInput("rstFlammable", "Raster",
                  desc = paste("A raster layer, with 0, 1 and NA, where 1 indicates areas",
@@ -377,7 +378,7 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   ROSmap <- raster(sim$pixelGroupMap)
   ROSmap[] <- fireROS(sim, vegTypeMap = vegTypeMap)
 
-  # From DEoptim fitting - run in the LandMine.Rmd file
+  ## from DEoptim fitting - run in the LandMine.Rmd file
   spawnNewActive <- sns <- 10^c(-0.731520, -0.501823, -0.605968, -1.809726)
   spreadProb <- 0.9
   sizeCutoffs <- 10^c(2.202732, 4.696060)
@@ -394,11 +395,9 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
                    startCells = thisYrStartCells,
                    fireSizes = fireSizesInPixels,
                    spreadProbRel = ROSmap,
-                   #spawnNewActive = c(0.65, 0.6, 0.2, 0.2),
                    sizeCutoffs = sizeCutoffs,
                    maxRetriesPerID = P(sim)$maxRetriesPerID,
                    spawnNewActive = spawnNewActive,
-                   #spawnNewActive = c(0.76, 0.45, 1.0, 0.00),
                    spreadProb = spreadProb)
     fa <- attr(fires, "spreadState")$clusterDT
     if (verbose > 0)
@@ -518,12 +517,12 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   }
 
   if (!suppliedElsewhere("cohortData", sim)) {
-    sim$cohortData <- data.table(pixelGroup = seq(mod$numDefaultPixelGroups),
-                                 speciesCode = factor(sample(sim$species$species,
-                                                      size = mod$numDefaultPixelGroups,
-                                                      replace = TRUE)),
-                                 B = sample(10:20, size = mod$numDefaultPixelGroups, replace = TRUE)*100,
-                                 age = sample(5:20, size = mod$numDefaultPixelGroups, replace = TRUE)*10)
+    sim$cohortData <- data.table(
+      pixelGroup = seq(mod$numDefaultPixelGroups),
+      speciesCode = factor(sample(sim$species$species, size = mod$numDefaultPixelGroups, replace = TRUE)),
+      B = sample(10:20, size = mod$numDefaultPixelGroups, replace = TRUE) * 100,
+      age = sample(5:20, size = mod$numDefaultPixelGroups, replace = TRUE) * 10
+    )
   }
 
   if (!suppliedElsewhere("sppColorVect", sim)) {
@@ -576,7 +575,6 @@ fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
   sppEquiv <- sppEquiv[, c("leading", "age", "ros", "pixelValue")]
   sppEquiv <- unique(sppEquiv, by = c("age", "leading"))
 
-  # New algorithm -- faster than protected with FALSE section below
   sppEquiv[, used := "no"]
   sppEquiv[(used == "no") & grepl("(^|_)mature", age), used := "mature"]
   sppEquiv[(used == "no") & grepl("(^|_)immature", age), used := "immature"]
@@ -625,15 +623,17 @@ fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
 
   if (getOption("LandR.assertions")) {
     names(cuts) <- c("mature", "immature", "young")
-    dt <- data.table(ROS = ROS,
-                     pixelValue = vegType,
-                     age = cut(sim$rstTimeSinceFire[], breaks = c(0, 40, 120, 999),
-                                    labels = c("young", "immature", "mature")),
-                     as.data.table(cuts))
+    dt <- data.table(
+      ROS = ROS,
+      pixelValue = vegType,
+      age = cut(sim$rstTimeSinceFire[], breaks = c(0, 40, 120, 999),
+                labels = c("young", "immature", "mature")),
+      as.data.table(cuts)
+    )
     dt <- na.omit(dt, cols = c("ROS", "age"))
     dtSumm <- dt[, list(derivedROS = unique(ROS)), by = c("pixelValue", "age")]
     dtSumm <- dtSumm[sppEquiv, on = c("pixelValue", "age" = "used"), nomatch = NULL]
-    if ( !(identical(dtSumm$derivedROS, dtSumm$ros))) {
+    if (!(identical(dtSumm$derivedROS, dtSumm$ros))) {
       stop("fireROS failed its test")
     }
   }
