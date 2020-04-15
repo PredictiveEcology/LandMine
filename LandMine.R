@@ -624,7 +624,7 @@ fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
     ROS[young] <- sppEquiv["young"]$ros[match(vegType[young], sppEquiv["young"]$pixelValue)]
     #ROS[young] <- plyr::mapvalues(vegType[young], sppEquiv["young"]$pixelValue, sppEquiv["young"]$ros)
 
-  if (getOption("LandR.assertions")) {
+  if (getOption("LandR.assertions", TRUE)) {
     names(cuts) <- c("mature", "immature", "young")
     dt <- data.table(
       ROS = ROS,
