@@ -315,6 +315,7 @@ plotFn <- compiler::cmpfun(function(sim) {
     firstPlot <- isTRUE(time(sim) == P(sim)$.plotInitialTime + P(sim)$.plotInterval)
     title1 <- if (firstPlot) "Current area burned (ha)" else ""
     Plot(gg_areaBurnedOverTime, title = title1, new = TRUE, addTo = "areaBurnedOverTime")
+    ggsave(file.path(outputPath(sim), "figures", "areaBurnedOverTime.png"), gg_areaBurnedOverTime)
 
     sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn + sim$rstCurrentBurnCumulative
     title2 <- if (firstPlot) "Cumulative Fire Map" else ""
