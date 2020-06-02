@@ -273,9 +273,6 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
 ### plot events
 plotFn <- compiler::cmpfun(function(sim) {
-  if (is.null(sim$rstCurrentBurnCumulative)) {
-    sim$rstCurrentBurnCumulative <- raster(sim$rstCurrentBurn)
-  }
   if (time(sim) == P(sim)$.plotInitialTime) {
     friRast <- sim$fireReturnInterval
     friRast[] <- as.factor(sim$fireReturnInterval[])
@@ -291,39 +288,15 @@ plotFn <- compiler::cmpfun(function(sim) {
     Plot(sar, addTo = "rstFlammable", title = "", gp = gpar(col = "black", fill = 0))
   }
 
-  currBurn <- raster::mask(sim$rstCurrentBurn, sim$studyAreaReporting) %>% raster::stack()
-  fris <- unique(na.omit(sim$fireReturnInterval[]))
-  npix <- vapply(fris, function(x) {
-    ids <- which(sim$fireReturnInterval[] == x)
-    unname(table(currBurn[ids])[2])
-  }, numeric(1)) %>% unname()
-  npix[is.na(npix)] <- 0 # Show that zero pixels burned in a year with no pixels burned, rather than NA
-  polys <- sim$fireReturnInterval
-  burnedDF <- data.frame(time = as.numeric(times(sim)$current),
-                         nPixelsBurned = npix,
-                         haBurned = npix * prod(res(sim$rstCurrentBurn)) / 100^2, ## area in ha
-                         FRI = as.factor(fris))
-  mod$areaBurnedOverTime <- rbind(mod$areaBurnedOverTime, burnedDF)
+  firstPlot <- isTRUE(time(sim) == P(sim)$.plotInitialTime + P(sim)$.plotInterval)
+  title1 <- if (firstPlot) "Current area burned (ha)" else ""
+  Plot(mod$gg_areaBurnedOverTime, title = title1, new = TRUE, addTo = "areaBurnedOverTime")
 
-  if (length(unique(mod$areaBurnedOverTime$time)) > 1) {
-    gg_areaBurnedOverTime <- ggplot(mod$areaBurnedOverTime,
-                                    aes(x = time, y = haBurned, fill = FRI, ymin = 0)) +
-      #geom_line(size = 1.5) +
-      geom_area() +
-      theme(legend.text = element_text(size = 6))
-
-    firstPlot <- isTRUE(time(sim) == P(sim)$.plotInitialTime + P(sim)$.plotInterval)
-    title1 <- if (firstPlot) "Current area burned (ha)" else ""
-    Plot(gg_areaBurnedOverTime, title = title1, new = TRUE, addTo = "areaBurnedOverTime")
-    ggsave(file.path(outputPath(sim), "figures", "areaBurnedOverTime.png"), gg_areaBurnedOverTime)
-
-    sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn + sim$rstCurrentBurnCumulative
-    title2 <- if (firstPlot) "Cumulative Fire Map" else ""
-    rcbc <- sim$rstCurrentBurnCumulative
-    Plot(rcbc, new = TRUE, title = title2, cols = c("pink", "red"), zero.color = "transparent")
-    sar <- sim$studyAreaReporting
-    Plot(sar, addTo = "rcbc", title = "", gp = gpar(col = "black", fill = 0))
-  }
+  title2 <- if (firstPlot) "Cumulative Fire Map" else ""
+  rcbc <- sim$rstCurrentBurnCumulative
+  Plot(rcbc, new = TRUE, title = title2, cols = c("pink", "red"), zero.color = "transparent")
+  sar <- sim$studyAreaReporting
+  Plot(sar, addTo = "rcbc", title = "", gp = gpar(col = "black", fill = 0))
 
   # ! ----- STOP EDITING ----- ! #
   return(invisible(sim))
@@ -427,6 +400,35 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
     sim$rstCurrentBurn[] <- 0L
     sim$rstCurrentBurn[fires$pixels] <- 1L #as.numeric(factor(fires$initialPixels))
   }
+
+  if (is.null(sim$rstCurrentBurnCumulative)) {
+    sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn
+    sim$rstCurrentBurnCumulative[!is.na(sim$rstCurrentBurnCumulative[])] <- 0
+  } else {
+    sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn + sim$rstCurrentBurnCumulative
+  }
+
+  currBurn <- raster::mask(sim$rstCurrentBurn, sim$studyAreaReporting) %>% raster::stack()
+  fris <- unique(na.omit(sim$fireReturnInterval[]))
+  npix <- vapply(fris, function(x) {
+    ids <- which(sim$fireReturnInterval[] == x)
+    unname(table(currBurn[ids])[2])
+  }, numeric(1)) %>% unname()
+  npix[is.na(npix)] <- 0 # Show that zero pixels burned in a year with no pixels burned, rather than NA
+  polys <- sim$fireReturnInterval
+  burnedDF <- data.frame(time = as.numeric(times(sim)$current),
+                         nPixelsBurned = npix,
+                         haBurned = npix * prod(res(sim$rstCurrentBurn)) / 100^2, ## area in ha
+                         FRI = as.factor(fris))
+  mod$areaBurnedOverTime <- rbind(mod$areaBurnedOverTime, burnedDF)
+  mod$gg_areaBurnedOverTime <- ggplot(mod$areaBurnedOverTime,
+                                      aes(x = time, y = haBurned, fill = FRI, ymin = 0)) +
+    #geom_line(size = 1.5) +
+    geom_area() +
+    theme(legend.text = element_text(size = 6))
+
+  if (time(sim) == end(sim))
+    ggsave(file.path(outputPath(sim), "figures", "areaBurnedOverTime.png"), mod$gg_areaBurnedOverTime)
 
   return(invisible(sim))
 })
