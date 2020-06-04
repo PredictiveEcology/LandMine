@@ -652,6 +652,7 @@ fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
     isTRUE(inRange(P(sim)$ROSother, 0.95*matureSpruceROS, 1.05*matureSpruceROS))
   )
   ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- as.integer(P(sim)$ROSother)
+  ROS[sim$rstFlammable[] == 0L | is.na(sim$rstFlammable[])] <- NA ## non-flammable pixels
 
   return(ROS)
 })
