@@ -34,6 +34,9 @@ defineModule(sim, list(
                                  "2 for deciduous > conifer. See ?vegTypeMapGenerator.")),
     defineParameter("maxRetriesPerID", "integer", 10L, 0L, 20L,
                     "Minimum proportion burned pixels to use when triggering warnings about simulated fires."),
+    defineParameter("ROSother", "integer", 30L, NA, NA,
+                    paste0("default ROS value for non-forest vegetation classes.",
+                           "this is needed when passing a modified ROSTable, e.g. using log-transformed values.")),
     defineParameter("sppEquivCol", "character", "LandR", NA, NA,
                     "The column in sim$specieEquivalency data.table to use as a naming convention"),
     defineParameter("useSeed", "integer", NULL, NA, NA,
@@ -45,24 +48,30 @@ defineModule(sim, list(
                     "a number that define whether a species is leading for a given pixel"),
     defineParameter(".plotInitialTime", "numeric", start(sim, "year") + 1, NA, NA,
                     "This describes the simulation time at which the first plot event should occur"),
-    defineParameter(".plotInterval", "numeric", 1, NA, NA, "This describes the simulation time interval between plot events"),
-    defineParameter(".saveInitialTime", "numeric", NA, NA, NA, "This describes the simulation time at which the first save event should occur"),
-    defineParameter(".saveInterval", "numeric", NA, NA, NA, "This describes the simulation time interval between save events"),
+    defineParameter(".plotInterval", "numeric", 1, NA, NA,
+                    "This describes the simulation time interval between plot events"),
+    defineParameter(".saveInitialTime", "numeric", NA, NA, NA,
+                    "This describes the simulation time at which the first save event should occur"),
+    defineParameter(".saveInterval", "numeric", NA, NA, NA,
+                    "This describes the simulation time interval between save events"),
     defineParameter(".useCache", "logical", FALSE, NA, NA,
-                    "Should this entire module be run with caching activated? This is generally intended for data-type modules, where stochasticity and time are not relevant"),
+                    paste("Should this entire module be run with caching activated?",
+                          "This is generally intended for data-type modules,",
+                          "where stochasticity and time are not relevant")),
     defineParameter(".unitTest", "logical", getOption("LandR.assertions", TRUE), NA, NA,
                     "Some functions can have internal testing. This will turn those on or off, if any exist"),
     defineParameter(".useParallel", "numeric", 2, NA, NA,
-                    paste("Used in burning. Will be passed to data.table::setDTthreads.",
+                    paste("Used in burning. Will be passed to data.table::setDTthreads().",
                           "NOTE: should be <= 2 as the additonal RAM overhead too high given marginal speedup."))
   ),
   inputObjects = bind_rows(
     expectsInput("cohortData", "data.table",
-                 desc = "Columns: B, pixelGroup, speciesCode (as a factor of the names), Indicating several features about ages and current vegetation of stand",
+                 desc = paste("Columns: B, pixelGroup, speciesCode (as a factor of the names), age.",
+                              "indicating several features about the current vegetation of stand."),
                  sourceURL = NA),
-    expectsInput("fireReturnInterval","Raster",
-                 desc = paste("A raster layer that is a factor raster, with at least 1 column called fireReturnInterval,",
-                              "representing the fire return interval in years"),
+    expectsInput("fireReturnInterval", "Raster",
+                 desc = paste("A raster layer that is a factor raster, with at least 1 column called",
+                              "'fireReturnInterval', representing the fire return interval in years."),
                  sourceURL = NA),
     expectsInput("pixelGroupMap", "RasterLayer",
                  desc = "Pixels with identical values share identical stand features",
@@ -76,10 +85,12 @@ defineModule(sim, list(
                               "Defaults to the kNN biomass map masked with `studyArea`"),
                  sourceURL = "http://tree.pfc.forestry.ca/kNN-StructureBiomass.tar"),
     expectsInput("ROSTable", "data.table",
-                 desc = paste("A data.table with 3 columns, 'age', 'leading', and 'ros'. The values under the 'age' column",
-                              "can be 'mature', 'immature', 'young' and compound versions of these, e.g., 'immature_young'",
-                              "which can be used when 2 or more age classes share same 'ros'. 'leading' should be",
-                              ""),
+                 desc = paste("A data.table with 3 columns, 'age', 'leading', and 'ros'.",
+                              "The values under the 'age' column can be 'mature', 'immature',",
+                              "'young' and compound versions of these, e.g., 'immature_young'",
+                              "which can be used when 2 or more age classes share same 'ros'.",
+                              "'leading' should be vegetation type.",
+                              "'ros' gives the rate of spread values for each age and type."),
                  sourceURL = NA),
     expectsInput("rstFlammable", "Raster",
                  desc = paste("A raster layer, with 0, 1 and NA, where 1 indicates areas",
@@ -95,9 +106,9 @@ defineModule(sim, list(
                  desc = "named character vector of hex colour codes corresponding to each species",
                  sourceURL = NA),
     expectsInput("sppEquiv", "data.table",
-                 desc = paste("Multi-columned data.table indicating species name equivalencies. Default",
-                              "is taken from LandR sppEquivalencies_CA which has names for species of",
-                              "trees in Canada"),
+                 desc = paste("Multi-columned data.table indicating species name equivalencies.",
+                              "Default taken from LandR sppEquivalencies_CA which has names for",
+                              "species of trees in Canada"),
                  sourceURL = NA),
     expectsInput("studyAreaReporting", "SpatialPolygonsDataFrame",
                  desc = paste("multipolygon (typically smaller/unbuffered than studyArea) to use for plotting/reporting.",
@@ -202,27 +213,12 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   #writeRNGInfo(fseed, append = TRUE)
   ## END DEBUGGING
 
-  compareRaster(sim$rasterToMatch, sim$fireReturnInterval, sim$rstFlammable)
+  compareRaster(sim$rasterToMatch, sim$fireReturnInterval, sim$rstFlammable, sim$rstTimeSinceFire)
 
   sim$fireSizes <- list()
 
   if (!is.integer(sim$fireReturnInterval[]))
     sim$fireReturnInterval[] <- as.integer(sim$fireReturnInterval[])
-
-  if (!suppliedElsewhere("cohortData", sim)) {
-    if (!is.null(P(sim)$useSeed)) {
-      set.seed(P(sim)$useSeed)
-    }
-
-    sampleV <- Vectorize(sample, "size", SIMPLIFY = TRUE)
-    repV <- Vectorize(rep.int, c("x", "times"))
-    numCohortsPerPG <- sample(1:2, replace = TRUE, mod$numDefaultPixelGroups)
-    sim$cohortData <- data.table(
-      speciesCode = unlist(sampleV(1:2, numCohortsPerPG)),
-      B = runif(sum(numCohortsPerPG), 100, 1000),
-      pixelGroup = unlist(repV(1:mod$numDefaultPixelGroups, times = numCohortsPerPG))
-    )
-  }
 
   if (verbose > 0)
     message("Initializing fire maps")
@@ -277,61 +273,30 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
 ### plot events
 plotFn <- compiler::cmpfun(function(sim) {
-  if (is.null(sim$rstCurrentBurnCumulative)) {
-    sim$rstCurrentBurnCumulative <- raster(sim$rstCurrentBurn)
-  }
   if (time(sim) == P(sim)$.plotInitialTime) {
     friRast <- sim$fireReturnInterval
     friRast[] <- as.factor(sim$fireReturnInterval[])
     Plot(friRast, title = "Fire Return Interval", cols = c("pink", "darkred"), new = TRUE)
     sar <- sim$studyAreaReporting
-    Plot(sar, addTo = "friRast", title = "",
-         gp = gpar(col = "black", fill = 0))
+    Plot(sar, addTo = "friRast", title = "", gp = gpar(col = "black", fill = 0))
 
     sim$rstCurrentBurnCumulative[!is.na(sim$rstCurrentBurn)] <- 0L
 
     rstFlammable <- raster(sim$rstFlammable)
     rstFlammable[] <- getValues(sim$rstFlammable)
     Plot(rstFlammable, title = "Land Type (rstFlammable)", cols = c("mediumblue", "firebrick"), new = TRUE)
-    Plot(sar, addTo = "rstFlammable", title = "",
-         gp = gpar(col = "black", fill = 0))
+    Plot(sar, addTo = "rstFlammable", title = "", gp = gpar(col = "black", fill = 0))
   }
 
-  currBurn <- raster::mask(sim$rstCurrentBurn, sim$studyAreaReporting) %>% stack()
-  fris <- unique(na.omit(sim$fireReturnInterval[]))
-  npix <- vapply(fris, function(x) {
-    ids <- which(sim$fireReturnInterval[] == x)
-    unname(table(currBurn[ids])[2])
-  }, numeric(1)) %>% unname()
-  npix[is.na(npix)] <- 0 # Show that zero pixels burned in a year with no pixels burned, rather than NA
-  polys <- sim$fireReturnInterval
-  burnedDF <- data.frame(time = as.numeric(times(sim)$current),
-                         nPixelsBurned = npix,
-                         haBurned = npix * prod(res(sim$rstCurrentBurn)) / 100^2, ## area in ha
-                         FRI = as.factor(fris))
-  mod$areaBurnedOverTime <- rbind(mod$areaBurnedOverTime, burnedDF)
+  firstPlot <- isTRUE(time(sim) == P(sim)$.plotInitialTime + P(sim)$.plotInterval)
+  title1 <- if (firstPlot) "Current area burned (ha)" else ""
+  Plot(mod$gg_areaBurnedOverTime, title = title1, new = TRUE, addTo = "areaBurnedOverTime")
 
-  if (length(unique(mod$areaBurnedOverTime$time)) > 1) {
-    gg_areaBurnedOverTime <- ggplot(mod$areaBurnedOverTime,
-                                    aes(x = time, y = haBurned, fill = FRI, ymin = 0)) +
-      #geom_line(size = 1.5) +
-      geom_area() +
-      theme(legend.text = element_text(size = 6))
-
-    firstPlot <- isTRUE(time(sim) == P(sim)$.plotInitialTime + P(sim)$.plotInterval)
-    title1 <- if (firstPlot) "Current area burned (ha)" else ""
-    Plot(gg_areaBurnedOverTime, title = title1, new = TRUE, addTo = "areaBurnedOverTime")
-
-    sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn + sim$rstCurrentBurnCumulative
-    title2 <- if (firstPlot) "Cumulative Fire Map" else ""
-    rcbc <- sim$rstCurrentBurnCumulative
-    Plot(rcbc, new = TRUE,
-         title = title2,
-         cols = c("pink", "red"), zero.color = "transparent")
-    sar <- sim$studyAreaReporting
-    Plot(sar, addTo = "rcbc", title = "",
-         gp = gpar(col = "black", fill = 0))
-  }
+  title2 <- if (firstPlot) "Cumulative Fire Map" else ""
+  rcbc <- sim$rstCurrentBurnCumulative
+  Plot(rcbc, new = TRUE, title = title2, cols = c("pink", "red"), zero.color = "transparent")
+  sar <- sim$studyAreaReporting
+  Plot(sar, addTo = "rcbc", title = "", gp = gpar(col = "black", fill = 0))
 
   # ! ----- STOP EDITING ----- ! #
   return(invisible(sim))
@@ -390,7 +355,7 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   ROSmap <- raster(sim$pixelGroupMap)
   ROSmap[] <- fireROS(sim, vegTypeMap = vegTypeMap)
 
-  # From DEoptim fitting - run in the LandMine.Rmd file
+  ## from DEoptim fitting - run in the LandMine.Rmd file
   spawnNewActive <- sns <- 10^c(-0.731520, -0.501823, -0.605968, -1.809726)
   spreadProb <- 0.9
   sizeCutoffs <- 10^c(2.202732, 4.696060)
@@ -407,11 +372,9 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
                    startCells = thisYrStartCells,
                    fireSizes = fireSizesInPixels,
                    spreadProbRel = ROSmap,
-                   #spawnNewActive = c(0.65, 0.6, 0.2, 0.2),
                    sizeCutoffs = sizeCutoffs,
                    maxRetriesPerID = P(sim)$maxRetriesPerID,
                    spawnNewActive = spawnNewActive,
-                   #spawnNewActive = c(0.76, 0.45, 1.0, 0.00),
                    spreadProb = spreadProb)
     fa <- attr(fires, "spreadState")$clusterDT
     if (verbose > 0)
@@ -437,6 +400,35 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
     sim$rstCurrentBurn[] <- 0L
     sim$rstCurrentBurn[fires$pixels] <- 1L #as.numeric(factor(fires$initialPixels))
   }
+
+  if (is.null(sim$rstCurrentBurnCumulative)) {
+    sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn
+    sim$rstCurrentBurnCumulative[!is.na(sim$rstCurrentBurnCumulative[])] <- 0
+  } else {
+    sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn + sim$rstCurrentBurnCumulative
+  }
+
+  currBurn <- raster::mask(sim$rstCurrentBurn, sim$studyAreaReporting) %>% raster::stack()
+  fris <- unique(na.omit(sim$fireReturnInterval[]))
+  npix <- vapply(fris, function(x) {
+    ids <- which(sim$fireReturnInterval[] == x)
+    unname(table(currBurn[ids])[2])
+  }, numeric(1)) %>% unname()
+  npix[is.na(npix)] <- 0 # Show that zero pixels burned in a year with no pixels burned, rather than NA
+  polys <- sim$fireReturnInterval
+  burnedDF <- data.frame(time = as.numeric(times(sim)$current),
+                         nPixelsBurned = npix,
+                         haBurned = npix * prod(res(sim$rstCurrentBurn)) / 100^2, ## area in ha
+                         FRI = as.factor(fris))
+  mod$areaBurnedOverTime <- rbind(mod$areaBurnedOverTime, burnedDF)
+  mod$gg_areaBurnedOverTime <- ggplot(mod$areaBurnedOverTime,
+                                      aes(x = time, y = haBurned, fill = FRI, ymin = 0)) +
+    #geom_line(size = 1.5) +
+    geom_area() +
+    theme(legend.text = element_text(size = 6))
+
+  if (time(sim) == end(sim))
+    ggsave(file.path(outputPath(sim), "figures", "areaBurnedOverTime.png"), mod$gg_areaBurnedOverTime)
 
   return(invisible(sim))
 })
@@ -499,8 +491,8 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
 
   if (!suppliedElsewhere(sim$ROSTable)) {
     sim$ROSTable <- rbindlist(list(
-      list("mature", "decid", 9L),
       list("immature_young", "decid", 6L),
+      list("mature", "decid", 9L),
       list("immature_young", "mixed", 12L),
       list("mature", "mixed", 17L),
       list("immature", "pine", 14L),
@@ -531,12 +523,12 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   }
 
   if (!suppliedElsewhere("cohortData", sim)) {
-    sim$cohortData <- data.table(pixelGroup = seq(mod$numDefaultPixelGroups),
-                                 speciesCode = factor(sample(sim$species$species,
-                                                      size = mod$numDefaultPixelGroups,
-                                                      replace = TRUE)),
-                                 B = sample(10:20, size = mod$numDefaultPixelGroups, replace = TRUE)*100,
-                                 age = sample(5:20, size = mod$numDefaultPixelGroups, replace = TRUE)*10)
+    sim$cohortData <- data.table(
+      pixelGroup = seq(mod$numDefaultPixelGroups),
+      speciesCode = factor(sample(sim$species$species, size = mod$numDefaultPixelGroups, replace = TRUE)),
+      B = sample(10:20, size = mod$numDefaultPixelGroups, replace = TRUE) * 100,
+      age = sample(5:20, size = mod$numDefaultPixelGroups, replace = TRUE) * 10
+    )
   }
 
   if (!suppliedElsewhere("sppColorVect", sim)) {
@@ -575,21 +567,20 @@ fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
 
   sppEquiv <- sim$sppEquiv[, c("LandMine", "LandR")][, leading := mod$knownSpecies[LandR]]
   sppEquiv <- na.omit(sppEquiv, on = "LandMine")
-  sppEquiv <- sppEquiv[onRaster, on = c("LandMine" = "leading")]
+  sppEquiv <- unique(sppEquiv[onRaster, on = c("LandMine" = "leading")])
 
-  sppEquivHere <- na.omit(sppEquiv$LandR)
+  sppEquivHere <- unique(na.omit(sppEquiv$LandR))
   haveAllKnown <- sppEquivHere %in% names(mod$knownSpecies)
   if (!all(haveAllKnown)) {
     stop("LandMine only has rate of spread burn rates for\n",
          paste(names(mod$knownSpecies), collapse = ", "),
          "\nMissing rate of spread for ", paste(sppEquivHere[!haveAllKnown], collapse = ", "))
   }
-  sppEquiv <- unique(sppEquiv, by = c("LandMine", "leading"))
+  sppEquiv <- unique(sppEquiv, by = c("LandMine", "leading", "pixelValue"))
   sppEquiv <- sppEquiv[sim$ROSTable, on = "leading", allow.cartesian = TRUE, nomatch = NULL]
   sppEquiv <- sppEquiv[, c("leading", "age", "ros", "pixelValue")]
-  sppEquiv <- unique(sppEquiv, by = c("age", "leading"))
+  sppEquiv <- unique(sppEquiv, by = c("age", "leading", "pixelValue"))
 
-  # New algorithm -- faster than protected with FALSE section below
   sppEquiv[, used := "no"]
   sppEquiv[(used == "no") & grepl("(^|_)mature", age), used := "mature"]
   sppEquiv[(used == "no") & grepl("(^|_)immature", age), used := "immature"]
@@ -636,67 +627,32 @@ fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
     ROS[young] <- sppEquiv["young"]$ros[match(vegType[young], sppEquiv["young"]$pixelValue)]
     #ROS[young] <- plyr::mapvalues(vegType[young], sppEquiv["young"]$pixelValue, sppEquiv["young"]$ros)
 
-  if (getOption("LandR.assertions")) {
+  if (getOption("LandR.assertions", TRUE)) {
     names(cuts) <- c("mature", "immature", "young")
-    dt <- data.table(ROS = ROS,
-                     pixelValue = vegType,
-                     age = cut(sim$rstTimeSinceFire[], breaks = c(0, 40, 120, 999),
-                                    labels = c("young", "immature", "mature")),
-                     as.data.table(cuts))
+    dt <- data.table(
+      ROS = ROS,
+      pixelValue = vegType,
+      age = cut(sim$rstTimeSinceFire[], breaks = c(0, 40, 120, 999),
+                labels = c("young", "immature", "mature")),
+      as.data.table(cuts)
+    )
     dt <- na.omit(dt, cols = c("ROS", "age"))
     dtSumm <- dt[, list(derivedROS = unique(ROS)), by = c("pixelValue", "age")]
     dtSumm <- dtSumm[sppEquiv, on = c("pixelValue", "age" = "used"), nomatch = NULL]
-    if ( !(identical(dtSumm$derivedROS, dtSumm$ros))) {
+    if (!(identical(dtSumm$derivedROS, dtSumm$ros))) {
       stop("fireROS failed its test")
     }
   }
-  # Other vegetation that can burn -- e.g., grasslands, lichen, shrub
-  ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 30L
 
-  if (FALSE) {  ## note: these are defined differently than in LandWeb, and that's ok?
-    mature <- sim$rstTimeSinceFire[] > 120
-    immature <- (sim$rstTimeSinceFire[] > 40) & !mature
-    young <- !immature & !mature
+  ## Other vegetation that can burn -- e.g., grasslands, lichen, shrub
+  ## The original default value is the same as that of mature spruce stands (30L)
+  matureSpruceROS <- sim$ROSTable[leading == "spruce" & age == "mature", ros]
+  assertthat::assert_that(
+    isTRUE(inRange(P(sim)$ROSother, min(sim$ROSTable$ros), max(sim$ROSTable$ros))),
+    isTRUE(inRange(P(sim)$ROSother, 0.95*matureSpruceROS, 1.05*matureSpruceROS))
+  )
+  ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- as.integer(P(sim)$ROSother)
+  ROS[sim$rstFlammable[] == 0L | is.na(sim$rstFlammable[])] <- NA ## non-flammable pixels
 
-    ROS <- rep(NA_integer_, NROW(vegType))
-    mixed <- grep(tolower(vegTypes$Factor), pattern = "mix")
-    spruce <- grep(tolower(vegTypes$Factor), pattern = "spruce")
-    pine <- grep(tolower(vegTypes$Factor), pattern = "pine")
-    decid <- grep(tolower(vegTypes$Factor), pattern = "deci")
-    softwood <- grep(tolower(vegTypes$Factor), pattern = "soft")
-
-    ROS[!mature & vegType %in% decid] <- 6L
-    ROS[mature & vegType %in% decid] <- 9L
-
-    ROS[!mature & vegType %in% mixed] <- 12L
-    ROS[mature & vegType %in% mixed] <- 17L
-
-    ROS[immature & vegType %in% pine] <- 14L
-    ROS[mature & vegType %in% pine] <- 21L
-    ROS[young & vegType %in% pine] <- 22L
-
-    ROS[!mature & vegType %in% softwood] <- 18L
-    ROS[mature & vegType %in% softwood] <- 27L
-
-    ROS[!mature & vegType %in% spruce] <- 20L
-    ROS[mature & vegType %in% spruce] <- 30L
-
-    # Other vegetation that can burn -- e.g., grasslands, lichen, shrub
-    ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 30L
-
-    if (type == "equal") {
-      ## equal rates of spread
-      ROS[young & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
-      ROS[immature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
-      ROS[mature & vegType %in% c(mixed, spruce, pine, decid, softwood)] <- 1L
-      ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- 1L
-    }
-
-    ## log(rates of spread), which maintains relationships but makes more equal
-    if (type == "log") {
-      ROS[] <- log(ROS[])
-    }
-  }
-
-  ROS
+  return(ROS)
 })
