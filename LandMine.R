@@ -287,7 +287,8 @@ plotFn <- compiler::cmpfun(function(sim) {
   } else {
     firstPlot <- isTRUE(time(sim) == P(sim)$.plotInitialTime + P(sim)$.plotInterval)
     title1 <- if (firstPlot) "Current area burned (ha)" else ""
-    Plot(mod$gg_areaBurnedOverTime, title = title1, new = TRUE, addTo = "areaBurnedOverTime")
+    abot <- mod$gg_areaBurnedOverTime
+    Plot(abot, title = title1, new = TRUE, addTo = "areaBurnedOverTime")
 
     title2 <- if (firstPlot) "Cumulative Fire Map" else ""
     rcbc <- sim$rstCurrentBurnCumulative
