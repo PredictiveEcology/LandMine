@@ -13,7 +13,7 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = list("README.txt", "LandMine.Rmd"),
-  reqdPkgs = list("data.table", "grDevices", "magrittr", "ggplot2",
+  reqdPkgs = list("assertthat", "data.table", "grDevices", "magrittr", "ggplot2",
                   "raster", "RColorBrewer", "VGAM",
                   "PredictiveEcology/LandR@development",
                   "PredictiveEcology/pemisc@development",
