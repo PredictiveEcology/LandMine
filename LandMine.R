@@ -64,7 +64,7 @@ defineModule(sim, list(
                     paste("Used in burning. Will be passed to data.table::setDTthreads().",
                           "NOTE: should be <= 2 as the additonal RAM overhead too high given marginal speedup."))
   ),
-  inputObjects = bind_rows(
+  inputObjects = bindrows(
     expectsInput("cohortData", "data.table",
                  desc = paste("Columns: B, pixelGroup, speciesCode (as a factor of the names), age.",
                               "indicating several features about the current vegetation of stand."),
@@ -115,7 +115,7 @@ defineModule(sim, list(
                               "Defaults to an area in Southwestern Alberta, Canada."),
                  sourceURL = NA)
   ),
-  outputObjects = bind_rows(
+  outputObjects = bindrows(
     createsOutput("fireInitialTime", "numeric", paste(
       "The initial event time of the burn event.",
       "This is simply a reassignment from P(sim)$burnInitialTime.")
