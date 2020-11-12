@@ -427,8 +427,10 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
     geom_area() +
     theme(legend.text = element_text(size = 6))
 
-  if (time(sim) == end(sim))
-    ggsave(file.path(outputPath(sim), "figures", "areaBurnedOverTime.png"), mod$gg_areaBurnedOverTime)
+  if (time(sim) == end(sim)) {
+    figDir <- checkPath(file.path(outputPath(sim), "figures"), create = TRUE)
+    ggsave(file.path(figDir, "areaBurnedOverTime.png"), mod$gg_areaBurnedOverTime)
+  }
 
   return(invisible(sim))
 })
