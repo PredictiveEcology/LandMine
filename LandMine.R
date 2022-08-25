@@ -3,7 +3,7 @@ defineModule(sim, list(
   description = "Reimplementation of Andison (1999) LandMine fire model",
   keywords = c("Fire", "Landscape", "Percolation", "Pixel-based"),
   authors = c(
-    person(c("Eliot", "J", "B"), "McIntire", email = "eliot.mcintire@canada.ca", role = c("aut", "cre")),
+    person(c("Eliot", "J", "B"), "McIntire", email = "eliot.mcintire@nrcan-rncan.gc.ca", role = c("aut", "cre")),
     person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb"))
   ),
   childModules = character(0),
