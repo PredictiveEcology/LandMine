@@ -149,7 +149,7 @@ burn1 <- compiler::cmpfun(function(landscape, startCells, fireSizes = 5, nActive
     b <- b[a]#, on="initialPixels"]
     a <- spread2(landscape, spreadProbRel = spreadProbRel, spreadProb = spreadProb,
                  start = a, #persistence = 0,
-                 neighProbs = transpose(as.list(b[state == "activeSource", c("pNoNewSpawn", "pSpawnNewActive")])),
+                 neighProbs = data.table::transpose(as.list(b[state == "activeSource", c("pNoNewSpawn", "pSpawnNewActive")])),
                  iterations = 1, skipChecks = TRUE, asRaster = FALSE,
                  exactSize = attr(a, "spreadState")$cluster$maxSize,
                  #mask = NULL,

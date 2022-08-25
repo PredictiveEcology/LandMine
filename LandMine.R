@@ -3,7 +3,7 @@ defineModule(sim, list(
   description = "Reimplementation of Andison (1999) LandMine fire model",
   keywords = c("Fire", "Landscape", "Percolation", "Pixel-based"),
   authors = c(
-    person(c("Eliot", "J", "B"), "McIntire", email = "eliot.mcintire@canada.ca", role = c("aut", "cre")),
+    person(c("Eliot", "J", "B"), "McIntire", email = "eliot.mcintire@nrcan-rncan.gc.ca", role = c("aut", "cre")),
     person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb"))
   ),
   childModules = character(0),
@@ -33,7 +33,7 @@ defineModule(sim, list(
                     desc = paste("How to define mixed stands: 1 for any species admixture;",
                                  "2 for deciduous > conifer. See ?vegTypeMapGenerator.")),
     defineParameter("maxRetriesPerID", "integer", 10L, 0L, 20L,
-                    "Minimum proportion burned pixels to use when triggering warnings about simulated fires."),
+                    "Number of attempts that will be made per event ID, before abandoning. See `?SpaDES.tools::spread2`."),
     defineParameter("ROSother", "integer", 30L, NA, NA,
                     paste0("default ROS value for non-forest vegetation classes.",
                            "this is needed when passing a modified ROSTable, e.g. using log-transformed values.")),
