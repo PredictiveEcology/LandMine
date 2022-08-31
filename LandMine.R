@@ -34,6 +34,8 @@ defineModule(sim, list(
                                  "2 for deciduous > conifer. See ?vegTypeMapGenerator.")),
     defineParameter("maxRetriesPerID", "integer", 10L, 0L, 20L,
                     "Number of attempts that will be made per event ID, before abandoning. See `?SpaDES.tools::spread2`."),
+    defineParameter("maxReburns", "integer", 5L, 0L, 20L,
+                    "Number of attempts to reburn fires that don't reach their target fire size."),
     defineParameter("ROSother", "integer", 30L, NA, NA,
                     paste0("default ROS value for non-forest vegetation classes.",
                            "this is needed when passing a modified ROSTable, e.g. using log-transformed values.")),
@@ -216,6 +218,15 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
   compareRaster(sim$rasterToMatch, sim$fireReturnInterval, sim$rstFlammable, sim$rstTimeSinceFire)
 
+  ## from DEoptim fitting, run in the LandMine.Rmd file
+  optimPars <- sns <- c(-0.731520, -0.501823, -0.605968, -1.809726,  2.202732,  4.696060, 0.9)
+  mod$spawnNewActive <- sns <- 10^c(optimPars[1], optimPars[2], optimPars[3], optimPars[4])
+  mod$sizeCutoffs <- 10^c(optimPars[5], optimPars[6])
+
+  mod$spreadProb <- !is.na(sim$fireReturnInterval)
+  mod$spreadProb[mod$spreadProb[] == 0] <- NA_real_
+  mod$spreadProb[mod$spreadProb[] == 1] <- optimPars[7]
+
   sim$fireSizes <- list()
 
   if (!is.integer(sim$fireReturnInterval[]))
@@ -245,8 +256,9 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   numHaPerPolygonNumeric <- numPixelsPerPolygonNumeric * (prod(res(sim$fireReturnInterval)) / 1e4)
   returnInterval <- sim$fireReturnIntervalsByPolygonNumeric
 
-  if (verbose > 0)
-    message("Determine mean fire size")
+  if (verbose > 0) {
+    message("Determine mean fire size...")
+  }
   meanFireSizeHa <- meanTruncPareto(k = sim$kBest, lower = 1,
                                     upper = P(sim)$biggestPossibleFireSizeHa,
                                     alpha = 1)
@@ -316,20 +328,28 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   numFiresThisPeriod <- rnbinom(length(sim$numFiresPerYear),
                                 mu = sim$numFiresPerYear * P(sim)$fireTimestep,
                                 size = 1.3765) # Eliot lowered this from 1.8765 on Oct 23, 2018 because too constant
+  thisYrStartCellsDT <- data.table(pixel = seq(ncell(sim$fireReturnInterval)),
+                                   polygonNumeric = sim$fireReturnInterval[],
+                                   key = "polygonNumeric")
 
-  thisYrStartCells <- data.table(pixel = seq(ncell(sim$fireReturnInterval)),
-                                 polygonNumeric = sim$fireReturnInterval[],
-                                 key = "polygonNumeric")
+  ## August 2022: reburn fires that did not meet their target size
 
-  thisYrStartCells <- thisYrStartCells[polygonNumeric %in% c(0, NA_ids), polygonNumeric := NA] %>%
-    na.omit() %>%
-    .[, SpaDES.tools:::resample(pixel, numFiresThisPeriod[.GRP]), by = polygonNumeric] %>%
-    .$V1
+  ## Rate of Spread
+  vegTypeMap <- vegTypeMapGenerator(sim$cohortData, sim$pixelGroupMap,
+                                    P(sim)$vegLeadingProportion, mixedType = P(sim)$mixedType,
+                                    sppEquiv = sim$sppEquiv, sppEquivCol = P(sim)$sppEquivCol,
+                                    colors = sim$sppColorVect,
+                                    doAssertion = P(sim)$.unitTest)
+
+  ROSmap <- raster(sim$pixelGroupMap)
+  ROSmap[] <- fireROS(sim, vegTypeMap = vegTypeMap)
+
+  spreadProbThisStep <- mod$spreadProb
 
   # If fire sizes are in hectares, must adjust based on resolution of maps
   #  NOTE: round causes fires < 0.5 pixels to NOT EXIST ... i.e., 3.25 ha fires are
   #  "not detectable" if resolution is 6.25 ha
-  fireSizesThisPeriod <- VGAM::rtruncpareto(length(thisYrStartCells), lower = 1,
+  fireSizesThisPeriod <- VGAM::rtruncpareto(sum(numFiresThisPeriod), lower = 1,
                                             upper = P(sim)$biggestPossibleFireSizeHa,
                                             shape = sim$kBest)
 
@@ -342,65 +362,97 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
 
   fireSizesInPixels <- truncVals + decimalVals
 
-  firesGT0 <- fireSizesInPixels > 0L
-  thisYrStartCells <- thisYrStartCells[firesGT0]
-  fireSizesInPixels <- fireSizesInPixels[firesGT0]
+  firesList <- fireSizes <- list()
+  maxOrder <- 0L
+  iter <- 1L
+  while (sum(numFiresThisPeriod) > 0 && (iter <= P(sim)$maxReburns)) {
+    thisYrStartCells <- thisYrStartCellsDT[polygonNumeric %in% c(0, NA_ids), polygonNumeric := NA] %>%
+      na.omit() %>%
+      .[, SpaDES.tools:::resample(pixel, numFiresThisPeriod[.GRP]), by = polygonNumeric] %>%
+      .$V1
 
-  ## Rate of Spread
-  vegTypeMap <- vegTypeMapGenerator(sim$cohortData, sim$pixelGroupMap,
-                                    P(sim)$vegLeadingProportion, mixedType = P(sim)$mixedType,
-                                    sppEquiv = sim$sppEquiv, sppEquivCol = P(sim)$sppEquivCol,
-                                    colors = sim$sppColorVect,
-                                    doAssertion = P(sim)$.unitTest)
+    firesGT0 <- fireSizesInPixels > 0L
+    thisYrStartCells <- thisYrStartCells[firesGT0]
+    fireSizesInPixels <- fireSizesInPixels[firesGT0]
 
-  ROSmap <- raster(sim$pixelGroupMap)
-  ROSmap[] <- fireROS(sim, vegTypeMap = vegTypeMap)
-
-  ## from DEoptim fitting - run in the LandMine.Rmd file
-  spawnNewActive <- sns <- 10^c(-0.731520, -0.501823, -0.605968, -1.809726)
-  spreadProb <- 0.9
-  sizeCutoffs <- 10^c(2.202732, 4.696060)
-
-  if (!all(is.na(thisYrStartCells)) & length(thisYrStartCells) > 0) {
-    if (is.numeric(P(sim)$.useParallel)) {
-      a <- data.table::setDTthreads(P(sim)$.useParallel)
-      message("Burn should be using >100% CPU")
-    } else {
-      a <- data.table::setDTthreads(1)
-    }
-    on.exit(data.table::setDTthreads(a), add = TRUE)
-    fires <- burn1(sim$fireReturnInterval,
-                   startCells = thisYrStartCells,
-                   fireSizes = fireSizesInPixels,
-                   spreadProbRel = ROSmap,
-                   sizeCutoffs = sizeCutoffs,
-                   maxRetriesPerID = P(sim)$maxRetriesPerID,
-                   spawnNewActive = spawnNewActive,
-                   spreadProb = spreadProb)
-    fa <- attr(fires, "spreadState")$clusterDT
-    if (verbose > 0)
-      print(fa[order(maxSize)][(.N - pmin(7, NROW(fa))):.N])
-
-    fa1 <- fa[, list(numPixelsBurned = sum(size),
-                     expectedNumBurned = sum(maxSize),
-                     proportionBurned = sum(size) / sum(maxSize))]
-    if (verbose > 0)
-      print(fa1)
-
-    fa[, maxSize := asInteger(maxSize)]
-    sim$fireSizes[[round(time(sim) - P(sim)$burnInitialTime + 1, 0)]] <- fa[, c("size", "maxSize")]
-
-    if (getOption("LandR.assertions", TRUE))
-      if (any(tail(fa1$proportionBurned, 10)  < P(sim)$minPropBurn)) {
-        mess <- "In 'LandMine' module 'Burn()': proportion area burned is less than 'minPropBurn'!"
-        if (verbose > 0)
-          message(crayon::red(mess))
-        warning(mess, call. = FALSE)
+    if (!all(is.na(thisYrStartCells)) & length(thisYrStartCells) > 0) {
+      if (is.numeric(P(sim)$.useParallel)) {
+        a <- data.table::setDTthreads(P(sim)$.useParallel)
+        message(sprintf("Burn should be using >100%% CPU (useParallel = %s)", as.character(P(sim)$.useParallel)))
+      } else {
+        a <- data.table::setDTthreads(1)
+      }
+      on.exit(data.table::setDTthreads(a), add = TRUE)
+      fires <- burn1(sim$fireReturnInterval,
+                     startCells = thisYrStartCells,
+                     fireSizes = fireSizesInPixels,
+                     spreadProbRel = ROSmap,
+                     sizeCutoffs = mod$sizeCutoffs,
+                     maxRetriesPerID = P(sim)$maxRetriesPerID,
+                     spawnNewActive = mod$spawnNewActive,
+                     spreadProb = spreadProbThisStep)
+      fires[, order := order + maxOrder]
+      ## occasionally, `numNeighs` col appears in fires, but it's not supposed to
+      if ("numNeighs" %in% colnames(fires)) {
+        set(fires, NULL, "numNeighs", NULL)
       }
 
-    sim$rstCurrentBurn[] <- 0L
-    sim$rstCurrentBurn[fires$pixels] <- 1L #as.numeric(factor(fires$initialPixels))
+      fa <- attr(fires, "spreadState")$clusterDT
+      fa1 <- fa[, list(numPixelsBurned = sum(size),
+                       expectedNumBurned = sum(maxSize),
+                       proportionBurned = sum(size) / sum(maxSize))]
+
+      if (verbose > 0) {
+        print(fa[order(maxSize)][(.N - pmin(7, NROW(fa))):.N])
+        print(fa1)
+      }
+
+      fa[, maxSize := asInteger(maxSize)]
+
+      tooSmall <- which(fa$size != fa$maxSize)
+      if (length(tooSmall) && (iter <= P(sim)$maxReburns)) {
+        tooSmallDT <- fa[tooSmall, c("initialPixels", "maxSize")]
+        tooSmallByPoly <- thisYrStartCellsDT[tooSmallDT, on = c(pixel = "initialPixels")]
+        friByPolyDT <- data.table(polygonNumeric = sim$fireReturnIntervalsByPolygonNumeric)
+
+        firesOK <- fires[!initialPixels %in% tooSmallDT$initialPixels, ]
+        firesList <- append(firesList, list(firesOK))
+        fireSizes <- append(fireSizes, list(fa[!tooSmall, c("size", "maxSize")]))
+        maxOrder <- max(fires$order)
+
+        polysNeedMoreFires <- tooSmallByPoly[, N := .N, by = polygonNumeric]
+        polysNeedMoreFires <- polysNeedMoreFires[friByPolyDT, on = "polygonNumeric"]
+        polysNeedMoreFires[is.na(N), N := 0]
+        set(polysNeedMoreFires, NULL, "pixel", NULL)
+
+        numFiresThisPeriod <- polysNeedMoreFires[, N[1], by = "polygonNumeric"]$V1
+        fireSizesInPixels <- na.omit(polysNeedMoreFires)$maxSize
+        spreadProbThisStep[firesOK$pixels] <- NA_real_
+      } else {
+        firesList <- append(firesList, list(fires))
+        fireSizes <- append(fireSizes, list(fa[, c("size", "maxSize")]))
+
+        if (length(tooSmall) == 0) {
+          assertthat::assert_that(fa1$proportionBurned %==% 1)
+          numFiresThisPeriod <- rep(0L, length(numFiresThisPeriod))
+        } else if (isTRUE(P(sim)$.unitTest)) {
+          if (any(tail(fa1$proportionBurned, 10)  < P(sim)$minPropBurn)) {
+            mess <- "In 'LandMine' module 'Burn()': proportion area burned is less than 'minPropBurn'!"
+            if (verbose > 0)
+              message(crayon::red(mess))
+            warning(mess, call. = FALSE)
+          }
+        }
+      }
+    }
+
+    iter <- iter + 1L
   }
+
+  fires <- rbindlist(firesList)
+  sim$fireSizes[[round(time(sim) - P(sim)$burnInitialTime + 1, 0)]] <- rbindlist(fireSizes)
+  sim$rstCurrentBurn[] <- 0L
+  sim$rstCurrentBurn[fires$pixels] <- 1L #as.numeric(factor(fires$initialPixels))
 
   if (is.null(sim$rstCurrentBurnCumulative)) {
     sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn
