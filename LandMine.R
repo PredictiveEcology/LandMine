@@ -219,7 +219,10 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   compareRaster(sim$rasterToMatch, sim$fireReturnInterval, sim$rstFlammable, sim$rstTimeSinceFire)
 
   ## from DEoptim fitting, run in the LandMine.Rmd file
-  optimPars <- sns <- c(-0.731520, -0.501823, -0.605968, -1.809726,  2.202732,  4.696060, 0.9)
+  #optimPars <- c(-0.731520, -0.501823, -0.605968, -1.809726,  2.202732,  4.696060, 0.9) ## 2018 @ 100m
+  optimPars <- c(par1 = -0.306512583093718, par2 = -1.7897353579592, par3 = -1.4040293342853,
+                 par4 = -2.02250974658877, par5 = 2.52143385431958, par6 = 4.44209892185679,
+                 par7 = 0.836707289388869) ## 2022-08-06 @ 250m
   mod$spawnNewActive <- sns <- 10^c(optimPars[1], optimPars[2], optimPars[3], optimPars[4])
   mod$sizeCutoffs <- 10^c(optimPars[5], optimPars[6])
 

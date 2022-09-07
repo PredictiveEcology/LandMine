@@ -1,71 +1,18 @@
 ---
 title: "LandMine"
-author: "Eliot McIntire"
-date: "18 May 2018"
+author:
+  - Eliot McIntire (<eliot.mcintire@nrcan-rncan.gc.ca>)
+  - Alex Chubaty (<achubaty@for-cast.ca>)
+date: "18 May 2018; updated 6 Sep 2022"
 output:
   pdf_document: default
+bibliography: citations/bibliography.bib
+citation-style: citations/ecology-letters.csl
 editor_options: 
   chunk_output_type: console
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
-```
-
-# Overview
-
-Landmine is a model created for simulating the natural range of variation for landscapes in the boreal forest.
-Written in the 1990s (Andison 1996), it has been widely used by the public and the private sector for various purposes.
-This SpaDES module is a rewrite of the fire component in native R.
-
-## Model Differences
-
-The current version has not yet been fully tested and compared with the original version, but there are currently several known differences:
-
-1. Fire sizes are taken from a Truncated Pareto distribution, resulting in numerous very small fires, and few large fires;
-2. Parameters have been not been fitted to the landscapes that are under study in the LandWeb project.
-
-## Model Code
-
-Code available from <https://github.com/PredictiveEcology/LandMine>.
-
-## Known Species
-
-Landmine requires the following codes as inputs (the `genus_species` form below), and converts and groups species as follows.
-Each of the species groups has its own Rate of Spread (ROS) for fire spreading:
-
-- PINU
-
-    - Pinu_ban
-    - Pinu_con
-    - Pinu_sp
-
-- DECI
-
-    - Betu_pap
-    - Popu_bal
-    - Popu_tre
-    - Lari_lar
-
-- PICE_MAR
-
-    - Pice_mar
-
-- PICE_GLA
-
-    - Pice_gla
-
-- ABIE
-
-    - Abie_sp
-
-# Usage
-
-To run this Landmine module alone, from an R console, the following should work (*iff* raster inputs for `rstStudyRegion` and `rstFlammable` are available), assuming all R packages are available.
-
-Paths will have be changed for a different user.
-
-```{r setup, eval=TRUE}
+```{r pkg_install, eval=FALSE, echo=FALSE}
 options(repos = c(CRAN = "https://cloud.r-project.org"))
 
 if (!"pak" %in% rownames(installed.packages())) {
@@ -79,34 +26,154 @@ if (!"SDMTools" %in% rownames(installed.packages())) {
   install.packages("https://cran.r-project.org/src/contrib/Archive/SDMTools/SDMTools_1.1-221.2.tar.gz",
                    repos = NULL)
 }
+```
 
-Require::Require(c("igraph", "magrittr", "raster", "SpaDES.core"))
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
+```
 
-workingDir <- file.path("~/GitHub/LandWeb")
+```{r pkgs, echo=FALSE, eval=TRUE, include=FALSE, message=FALSE}
+library("Require")
+Require(c("igraph", "magrittr", "raster", "SpaDES.core"))
+```
+
+```{r paths, echo=FALSE, eval=TRUE, include=FALSE, message=FALSE}
+workingDir <- file.path("~/GitHub/LandWeb") ## NOTE: change this for your project
 moduleDir <- file.path(workingDir, "m") %>% checkPath()
 inputDir <- file.path(workingDir, "inputs") %>% checkPath(create = TRUE)
 outputDir <- file.path(workingDir, "outputs") %>% checkPath(create = TRUE)
 cacheDir <- file.path(outputDir, "cache") %>% checkPath(create = TRUE)
 ```
 
+# Overview
+
+Landmine is a model created for simulating the natural range of variation for landscapes in the boreal forest [@Andison:1996; @Andison:1998].
+It has been widely used by the public and the private sector for various purposes.
+This SpaDES module is a rewrite of the fire component in native R.
+
+## Model Differences
+
+The current version has not yet been fully tested and compared with the original version, but there are currently several known differences:
+
+1. Fire sizes are taken from a Truncated Pareto distribution, resulting in numerous very small fires, and few large fires;
+2. Parameters have been fitted to the landscapes that are under study in the LandWeb project.
+
+## Known Species
+
+Landmine requires the following codes as inputs (the genus and species codes below), which converts and groups species as follows.
+Each of the species groups has its own Rate of Spread (ROS) for fire spreading:
+
+```{r species-table, echo=FALSE, eval=TRUE}
+spp_df <- data.frame(
+  Species = c("Jack pine", "Lodgepole pine", "Unspecified pine species",
+              "Paper birch", "Balsam poplar", "Trembling aspen", "Larch/Tamarack",
+              "Black spruce",
+              "White spruce",
+              "Fir species"),
+  Group = c("Pine (PINU)", "Pine (PINU)", "Pine (PINU)",
+            "Deciduous (DECI)", "Deciduous (DECI)", "Deciduous (DECI)", "Deciduous (DECI)",
+            "Black spruce (PICE_MAR)",
+            "White spruce (PICE_GLA)",
+            "Fir (ABIE)"),
+  Code = c("Pinu_ban", "Pinu_con", "Pinu_sp",
+           "Betu_pap", "Popu_bal", "Popu_tre", "Lari_lar",
+           "Pice_mar",
+           "Pice_gla",
+           "Abie_sp")
+)
+knitr::kable(spp_df,
+             caption = "LandMine species codes.")
+```
+
+\newpage
+
+## Module inputs and parameters
+
+Input objects objects are described in Table 2.
+
+```{r moduleInputs-LandMine, echo = FALSE, eval = TRUE, message = FALSE}
+df_inputs <- SpaDES.core::moduleInputs("LandMine", moduleDir)[, c(1, 3)]  ## name + desc only
+knitr::kable(df_inputs,
+             caption = "LandMine module input objects and their descriptions.") %>%
+  kableExtra::kable_styling(latex_options = c("scale_down", "repeat_header"), full_width = TRUE) %>%
+  kableExtra::column_spec(column = 2, width = "30em")
+```
+
+Module parameters are described in Table 3.
+
+```{r moduleParams-LandMine, echo = FALSE, eval = TRUE, message = FALSE}
+df_params <- SpaDES.core::moduleParams("LandMine", moduleDir)[, c(1, 6)] ## name + desc only
+knitr::kable(df_params,
+             caption = "LandMine module parameters and their descriptions.") %>%
+  kableExtra::kable_styling(latex_options = c("scale_down", "repeat_header"), full_width = TRUE) %>%
+  kableExtra::column_spec(column = 2, width = "40em")
+```
+
+## Module outputs
+
+Output objects are described in Table 4.
+
+```{r moduleOutputs-Biomass-core, echo = FALSE, eval = TRUE, message = FALSE}
+df_outputs <- SpaDES.core::moduleOutputs("LandMine", moduleDir)[, c(1, 3)] ## name + desc only
+knitr::kable(df_outputs,
+             caption = "LandMine output objects and their description.") %>%
+  kableExtra::kable_styling(latex_options = c("scale_down", "repeat_header"), full_width = TRUE) %>%
+  kableExtra::column_spec(column = 2, width = "40em")
+```
+
+\newpage
+
+# Usage
+
+To run this Landmine module alone (*i.e.*, for fitting), the following should work (*iff* raster inputs for `rstStudyRegion` and `rstFlammable` are available), assuming all R packages are available.
+
+**NB:** Paths will have be changed for a different user.
+
+## Setup
+
+Package installation:
+
+```{r pkg_install}
+```
+
+Load necessary packages:
+
+```{r pkgs}
+```
+
+Configure your file paths for this project:
+
+```{r paths}
+```
+
 ## Package dependencies
 
 To determine which packages are used by `LandMine`, use:
 
-```{r module_package_deps, eval=TRUE}
-SpaDES.core::packages(modules = "LandMine", paths = moduleDir)
+```{r module-package-deps, eval=TRUE}
+SpaDES.core::packages(modules = "LandMine", paths = moduleDir)[[1]]
 ```
 
 ## Module usage
 
-```{r module_usage, eval = FALSE}
+```{r study-area}
+studyArea <- SpaDES.tools::randomStudyArea(seed = 1234, size = 1e10)
+rasterToMatch <- raster(studyArea, res = 250)
+```
+
+```{r run-sim}
 times <- list(start = 0, end = 13)
+
 parameters <- list(
-  #.progress = list(type = "text", interval = 1), # for a progress bar
-  ## If there are further modules, each can have its own set of parameters:
-  #LandMine = list(flushCachedRandomFRI = TRUE) 
+  # LandMine = list(flushCachedRandomFRI = TRUE) 
 )
+
 modules <- list("LandMine")
+
+objects <- list(
+  studyArea = studyArea,
+  rasterToMatch = rasterToMatch
+)
 
 paths <- list(
   cachePath = cacheDir,
@@ -114,46 +181,22 @@ paths <- list(
   inputPath = inputDir,
   outputPath = outputDir
 )
-```
 
-```{r run-the-module, eval = FALSE}
 mySim <- simInit(times = times, params = parameters, modules = modules,
-                 # objects = objects, 
-                 paths = paths)
+                 objects = objects, paths = paths)
 
 dev()
 mySimOut <- spades(mySim, .plotInitialTime = times$start, debug = TRUE)
 ```
 
+\newpage
+
 # Testing the burn algorithm
 
-```{r study-area}
-Require(c("geodata", "raster", "sf", "sp"))
-
-canProvs <- geodata::gadm(country = "CAN", level = 1, path = inputDir)
-
-xy <- st_point(
-  c(-95.12497, 54.62139), ## centroid of Hayes River Upland (MB)
-  # c(-102.62802, 56.32540), ## centroid of Churchill River Upland (SK)
-  "XY"
-) %>% 
-  st_sfc(., crs = crs(canProvs)) %>%
-  as_Spatial(.)
-
-studyArea <- SpaDES.tools::randomStudyArea(center = xy, seed = 1234, size = 1e10)
-rasterToMatch <- raster(studyArea, res = 250)
-
-plot(canProvs[canProvs$NAME_1 == "Manitoba", ])
-sp::plot(xy, add = TRUE)
-sp::plot(studyArea, add = TRUE)
-```
-
-```{r testing, eval = FALSE}
+```{r testing}
 s <- simInit(times = times, params = parameters, modules = modules,
-             objects = list(studyArea = studyArea, rasterToMatch = rasterToMatch),
-             paths = paths)
+             objects = objects, paths = paths)
 
-#ros <- raster(extent(0,3e4, 0, 3e4), res = 250, vals = 0)
 ros <- raster(extent(0, 2.5e5, 0, 2.5e5), res = 250, vals = 0)
 ros <- ros == 0
 fireSize <- 100000
@@ -164,9 +207,7 @@ Require(c("data.table", "DEoptim", "parallel", "SDMTools"))
 
 source(file.path(moduleDir, "LandMine", "R", "burn.R"))
 
-burnFun <- function(ros, centreCell, fireSize, 
-                    spawnNewActive, sizeCutoffs, burn1,
-                    spreadProb) {
+burnFun <- function(ros, centreCell, fireSize, spawnNewActive, sizeCutoffs, burn1, spreadProb) {
     burned <- burn1(
       landscape = ros,
       startCells = centreCell,# c(quarterCell, centreCell),
@@ -193,7 +234,7 @@ makeParallel <- function(wantParallel, numClus, cl, funs, addlPkgs) {
     funs <- c(funs)
     parallel::clusterExport(cl,  funs)
     #env <- environment()
-    parallel::clusterExport(cl,  "addlPkgs", envir = parent.frame())
+    parallel::clusterExport(cl, "addlPkgs", envir = parent.frame())
     parallel::clusterEvalQ(cl, {lapply(addlPkgs, library, character.only = TRUE)})
     return(cl)
   }
@@ -212,15 +253,14 @@ wrap <- function(cl = NULL, reps, par, burn1, burnFun, objs, addlPkgs) {
   return(list(cl = cl, out = burnMapList))
 }
 
-####################################################################
 fitSN <- function(sna, ros, centreCell, fireSizes = 10^(2:5),
                   desiredPerimeterArea = 0.004, burnFun, burn1) {
   sizeCutoffs <- 10^sna[5:6]
   spreadProb <- sna[7]
   sna <- c(10^(sna[1]), 10^(sna[2]), 10^(sna[3]), 10^(sna[4]))
-  bfs1 <<- lapply(fireSizes, function(fireSize) {
-   burnFun(ros, centreCell, fireSize, 
-           sna, sizeCutoffs, burn1 = burn1, spreadProb = spreadProb)
+  bfs1 <- lapply(fireSizes, function(fireSize) {
+    burnFun(ros, centreCell, fireSize, 
+            sna, sizeCutoffs, burn1 = burn1, spreadProb = spreadProb)
   })
   res <- lapply(seq(bfs1), function(bfCount) {
     abs(log(bfs1[[bfCount]]$LM[1,"perim.area.ratio"]) -
@@ -228,10 +268,11 @@ fitSN <- function(sna, ros, centreCell, fireSizes = 10^(2:5),
       100*(sum(bfs1[[bfCount]]$burnedMap[], na.rm = TRUE) < fireSizes[bfCount])
     # it needs to get to above 90,000 HA for it to count
   })
-  sum(unlist(res))# * log10(fireSizes)) # weigh larger ones more
+  a <- sum(unlist(res))# * log10(fireSizes)) # weigh larger ones more
+  attr(a, "bfs1") <- bfs1
+  a
 }
 
-####################################################################
 fitSN2 <- function(par, ros, centreCell, fireSizes = 10^(2:5), 
                    desiredPerimeterArea = 0.003, spreadProb = 0.9) {
   sizeCutoffs <- 10^c(par[4], par[5])
@@ -239,20 +280,21 @@ fitSN2 <- function(par, ros, centreCell, fireSizes = 10^(2:5),
     sna <- min(-0.15, par[1] + par[2]*log10(fireSize))
     sna <- 10^c(sna*par[3], sna*2*par[3], sna*3*par[3], sna*4*par[3])
     #sna <- -1
-    burnFun(ros, centreCell, fireSize, 
-            sna, sizeCutoffs, spreadProb)
+    burnFun(ros, centreCell, fireSize, sna, sizeCutoffs, burn1, spreadProb)
   })
   res <- lapply(seq(bfs1), function(bfCount) {
-    abs(log(bfs1[[bfCount]]$LM[1,"perim.area.ratio"]) -
+    abs(log(bfs1[[bfCount]]$LM[1, "perim.area.ratio"]) -
           log(desiredPerimeterArea)) + 
       100*(sum(bfs1[[bfCount]]$burnedMap[], na.rm = TRUE) < fireSizes[bfCount])
     # it needs to get to above 90,000 HA for it to count
   })
   a <- sum(unlist(res))
-  #attr(a, "bfs1") <- bfs1
+  attr(a, "bfs1") <- bfs1
   a
 }
 ```
+
+\newpage
 
 # Optimizing parameters
 
@@ -260,6 +302,7 @@ The following code chunk tries to find values of `spawnNewActive` that creates "
 
 ```{r fit-values}
 wantParallel <- TRUE
+maxRetriesPerID <- 4 ## 4 retries (5 attempts total)
 spreadProb <- 0.9
 spawnNewActive <- c(0.46, 0.2, 0.26, 0.11)
 sizeCutoffs <- c(8e3, 2e4)
@@ -284,19 +327,19 @@ addlPkgs <- c("data.table", "raster", "SDMTools", "SpaDES.tools")
 ```{r make-cluster}
 ########################################
 ### SET UP CLUSTER FOR PARALLEL
-numCores <- detectCores() / 2
+numCores <- min(detectCores() / 2, 120L)
 if (Sys.info()["sysname"] == "Windows") {
   cl <- parallel::makeCluster(numCores)
-} else if (grepl("W-VIC-A1053|for-cast.ca", Sys.info()["nodename"])) {
+} else if (grepl("W-VIC-A1053|pinus[.]for-cast[.]ca", Sys.info()["nodename"])) {
   Require("future")
   
   ## TODO: customize this to make a cluster on several machines via ssh
   clNames <- c(
     #rep("localhost", 0),
-    rep("picea.for-cast.ca", 24),
-    rep("pseudotsuga.for-cast.ca", 48)
+    rep("picea.for-cast.ca", 20),
+    rep("pseudotsuga.for-cast.ca", 50)
   )
-  stopifnot(length(clNames) == 3*24) ## why 72?
+  stopifnot(length(clNames) >= 70) ## 10 populations per parameter; 7 params.
   cl <- makeClusterPSOCK(clNames, homogeneous = FALSE, verbose = TRUE)
   
   clusterSetRNGStream(cl, sample(1e8, 1))
@@ -317,54 +360,75 @@ if (!inherits(cl[[1]], "forknode")) {
 ```
 
 ```{r optimization}
-#################### OPTIMIZATION
-outs <- DEoptim(fitSN,
-                lower = c(-2, -3, -3, -3, 1, 3.5, 0.75), 
-                upper = c(-0.1, -0.5, -0.5, -1, 3.5, 5, 1),
-                control = DEoptim.control(VTR = 0.001, itermax = 170, cluster = cl, strategy = 6),
-                ros = ros,
-                centreCell = centreCell,
-                fireSizes = c(10, 100, 1000, 10000, 100000),
-                desiredPerimeterArea = 0.003,
-                burnFun = burnFun,
-                burn1 = burn1)
+opt_sn <- DEoptim(fitSN,
+                  lower = c(-2, -3, -3, -3, 1, 3.5, 0.75), 
+                  upper = c(-0.1, -0.5, -0.5, -1, 3.5, 5, 1),
+                  control = DEoptim.control(VTR = 0.001, itermax = 170, cluster = cl, strategy = 6),
+                  ros = ros,
+                  centreCell = centreCell,
+                  fireSizes = c(10, 100, 1000, 10000, 100000),
+                  desiredPerimeterArea = 0.003,
+                  burnFun = burnFun,
+                  burn1 = burn1)
 
-assign(paste0("outs", sample(1e6, 1)), outs)
+opt_sn$optim$bestmem ## best param values
+
+saveRDS(opt_sn, file.path(moduleDir, "LandMine", "data", paste0(Sys.Date(), "_DEoptim_250m.rds")))
+
+## assign with suffix to facilitate multiple DEoptim runs
+assign(paste0("opt_sn_", format(Sys.time(), "%Y%M%d%H%M%S")), opt_sn)
 ```
 
 ```{r fitSn}
-fitSN(sna = c(-1, -1, -1, -2, 2, 4, 0.9),
-      ros = ros,
-      centreCell = centreCell,
-      fireSizes = c(10, 100, 1000, 10000, 100000),
-      desiredPerimeterArea = 0.003,
-      burnFun = burnFun,
-      burn1 = burn1)
+fs_sn <- c(10, 100, 1000, 10000, 100000)
+fit_sn <- fitSN(sna = c(-1, -1, -1, -2, 2, 4, 0.9),
+                ros = ros,
+                centreCell = centreCell,
+                fireSizes = fs_sn,
+                desiredPerimeterArea = 0.003,
+                burnFun = burnFun,
+                burn1 = burn1)
+bfs1_sn <- purrr::transpose(attr(fit_sn, "bfs1"))
+LM_sn <- do.call(rbind, bfs1_sn$LM)
+plot(fs_sn, LM_sn[, "perim.area.ratio"]) ## NOTE: visual inspection - not too round; not too sinuous
+```
+
+A second (alternative) version tries the optimization using fewer parameters, to test whether a simpler version gets better/different results.
+Although this version was not used for the final module, we preserve it here for posterity.
+
+```{r optimization2}
+fs_optim2 <- c(0.2, 1:8)*10000
+opt_sn2 <- DEoptim(fitSN2, lower = c(1, -1, 1, 3, 4), upper = c(3, -0.3, 3, 4, 5), 
+                   control = DEoptim.control(VTR = 0.001, itermax = 40, 
+                                             cluster = cl, strategy = 6), 
+                   ros = ros, centreCell = centreCell, 
+                   fireSizes = fs_optim2, desiredPerimeterArea = 0.003)
 ```
 
 ```{r relationship-btwn-perimArea-and-fireSize}
-fs <- round(runif(10, 10, 4000))
-out <- fitSN2(par = c(2, -0.63333, 1, 3.2, 4.4), 
-              ros, centreCell, fireSizes = fs, 0.003)
-bfs1 <- purrr::transpose(attr(out, "bfs1"))
-LM <- do.call(rbind,bfs1$LM)
-plot(fs, LM[,"perim.area.ratio"])
+fs_sn2 <- round(runif(10, 10, 4000))
+fit_sn2 <- fitSN2(par = c(2, -0.63333, 1, 3.2, 4.4),
+                  ros = ros,
+                  centreCell = centreCell,
+                  fireSizes = fs_sn2,
+                  desiredPerimeterArea = 0.003,
+                  spreadProb = 0.9)
+bfs1_sn2 <- purrr::transpose(attr(fit_sn2, "bfs1"))
+LM_sn2 <- do.call(rbind, bfs1_sn2$LM)
+plot(fs_sn2, LM_sn2[, "perim.area.ratio"]) ## NOTE: visual inspection - not too round; not too sinuous
 ```
 
-```{r optimization2}
-#################### OPTIMIZATION
-fs <- c(0.2,1:8)*10000
-outs <- DEoptim(fitSN2, lower = c(1, -1, 1, 3, 4), upper = c(3, -0.3, 3, 4, 5), 
-                control = DEoptim.control(VTR = 0.001, itermax = 40, 
-                                          cluster = cl, strategy = 6), 
-                ros = ros, centreCell = centreCell, 
-                fireSizes = fs, desiredPerimeterArea = 0.003)
-```
+\newpage
 
-```{r manual-run}
-############# MANUAL RUN
+# Manual inspection of optimization results
 
-#10,000 hectares burns gave this
+## Original (2018) version
+
+The original version was run using 100m pixels, despite the simulations being run using 250m pixels.
+This was corrected and rerun below.
+
+```{r manual-run-2018}
+## 10,000 hectares burns gave this
 spawnNewActive[2:3] <- c(0.0235999945606232, 0.0263073265505955)
 
 #100,000 hectare burns gave this
@@ -417,7 +481,7 @@ sns <- c(-1.47809, -0.86224, -1.34532, -1.93568, 3.27149, 4.20741)
 sns <- c(-0.923528, -1.804549, -1.760455, -1.793594,  1.683355,  4.466668)
 
 ## With spreadProb = 0.9 # Pretty GOOD!
-sns <- c(-0.731520, -0.501823, -0.605968, -1.809726,  2.202732,  4.696060, 0.9)
+sns <- c(-0.731520, -0.501823, -0.605968, -1.809726,  2.202732,  4.696060, 0.9) ## used in module
 
 ## With spreadProb = 0.9 # Optimal
 sns <- c(-0.978947, -0.540946, -0.790736, -1.583039,  2.532013,  4.267547,  0.946730)
@@ -432,7 +496,6 @@ sizeCutoffs <- 10^c(par[4], par[5])
 sna <- min(-0.15, par[1] + par[2]*log10(fireSize))
 sna <- 10^c(sna*par[3], sna*2*par[3], sna*3*par[3], sna*4*par[3])
 spawnNewActive <- sna
-
 
 ###########################
 clearPlot()
@@ -457,7 +520,7 @@ for (i in 1:5) {
 }
 ```
 
-```{r another options}
+```{r another_option}
 reps <- paste0("rep", 1:1)
 perims <- list()
 perm <- list()
@@ -503,6 +566,57 @@ for (fs in fireSizes) {
 (predict(mod[["100"]], data.frame(perim = log10(0.003))))
 log10(predict(mod[["1000"]], data.frame(perim = log10(0.003))))
 ```
+
+## Current (2022) version
+
+The original version was run using 100m pixels, despite the simulations being run using 250m pixels.
+This version uses 250m pixels.
+
+```{r manual-run-2022}
+## final optimization after 170 iterations (fitSN)
+sns <- unname(opt_sn$optim$bestmem)
+
+spawnNewActive <- 10^sns[1:4]
+sizeCutoffs <- 10^(sns[5:6])
+spreadProb <- sns[7]
+
+## from linear model version
+par <- c(1.548899,-0.396904, 2.191424, 3.903082, 4.854002)
+sizeCutoffs <- 10^c(par[4], par[5])
+sna <- min(-0.15, par[1] + par[2]*log10(fireSize))
+sna <- 10^c(sna*par[3], sna*2*par[3], sna*3*par[3], sna*4*par[3])
+spawnNewActive <- sna
+
+clearPlot()
+
+for (i in 1:5) {
+  fireSize <- 10^i
+  dim <- round(sqrt(fireSize)*5 * 250)
+  ros <- raster(extent(0, dim, 0, dim), res = 250, vals = 1)
+  centreCell <- cellFromRowCol(ros,
+                               row = nrow(ros) / 2,
+                               col = ncol(ros) / 2)
+  reps <- paste0("rep", 1:4 + (log10(fireSize) - 1)*4)
+  burnedMapList <- wrap(cl = cl, reps = reps, par = TRUE, burn1 = burn1,
+                        burnFun = burnFun, objs = objs, addlPkgs = addlPkgs)
+  names(burnedMapList$out) <- reps
+  burnedMapList <- purrr::transpose(burnedMapList$out)
+  do.call(rbind, burnedMapList$LM)
+  
+  Plot(burnedMapList$burnedMap, cols = c("red"), new = FALSE, na.color = "white",
+       legend = FALSE, visualSqueeze = 0.7, title = paste0("Fire size: ", fireSize))
+}
+```
+
+# Cleaning up
+
+```{r cleanup}
+parallel::stopCluster(cl)
+```
+
+# Code and data availability
+
+Code available from <https://github.com/PredictiveEcology/LandMine>.
 
 # References
 
