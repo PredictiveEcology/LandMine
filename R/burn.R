@@ -96,9 +96,12 @@
 #' @importFrom raster res
 #' @importFrom SpaDES.tools spread2
 burn1 <- compiler::cmpfun(function(landscape, startCells, fireSizes = 5, nActiveCells1 = c(10, 36),
-                                   spawnNewActive = c(0.46, 0.2, 0.26, 0.11), maxRetriesPerID = 10,
+                                   spawnNewActive = c(0.46, 0.2, 0.26, 0.11), maxRetriesPerID = 10L,
                                    sizeCutoffs = c(8e3, 2e4), spreadProbRel = spreadProbRel,
                                    spreadProb = 0.77) {
+
+  stopifnot(is.integer(maxRetriesPerID))
+
   # convert to pixels
   sizeCutoffs <- sizeCutoffs / (prod(res(landscape)) / 1e4)
   # add a little bit of stochasticity

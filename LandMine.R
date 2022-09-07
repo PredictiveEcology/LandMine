@@ -216,6 +216,9 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   #writeRNGInfo(fseed, append = TRUE)
   ## END DEBUGGING
 
+  if (is.null(P(sim)$maxReburns) || is.null(P(sim)$maxRetries)) {
+    stop("maxReburns and maxRetries must be integer values and cannot be NULL.")
+  }
   compareRaster(sim$rasterToMatch, sim$fireReturnInterval, sim$rstFlammable, sim$rstTimeSinceFire)
 
   ## from DEoptim fitting, run in the LandMine.Rmd file
@@ -386,6 +389,7 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
         a <- data.table::setDTthreads(1)
       }
       on.exit(data.table::setDTthreads(a), add = TRUE)
+
       fires <- burn1(sim$fireReturnInterval,
                      startCells = thisYrStartCells,
                      fireSizes = fireSizesInPixels,
