@@ -402,13 +402,13 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
                      spawnNewActive = mod$spawnNewActive,
                      spreadProb = spreadProbThisStep)
 
-      ## occasionally, `order` col drops from fires, but it's not supposed to
+      ## occasionally, `order` col drops from fires, but it's not supposed to (SpaDES.tools#74)
       if (!"order" %in% colnames(fires)) {
         fires[, order := 1:nrow(fires)]
       }
       fires[, order := order + maxOrder]
 
-      ## occasionally, `numNeighs` col appears in fires, but it's not supposed to
+      ## occasionally, `numNeighs` col appears in fires, but it's not supposed to (SpaDES.tools#74)
       if ("numNeighs" %in% colnames(fires)) {
         set(fires, NULL, "numNeighs", NULL)
       }
