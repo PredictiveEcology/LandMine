@@ -162,7 +162,8 @@ burn1 <- compiler::cmpfun(function(landscape, startCells, fireSizes = 5, nActive
                  #maxSize = fireSizes,
                  maxRetriesPerID = maxRetriesPerID,
                  directions = 8, #returnIndices = TRUE,
-                 #id = TRUE, plot.it = FALSE
+                 #id = TRUE,
+                 plot.it = FALSE
                  )
     #message("max size:", max(attr(a, "spreadState")$clusterDT$maxSize), ", current size:",max(attr(a, "spreadState")$clusterDT$size))
     set(a, NULL, "order", seq_len(NROW(a)))

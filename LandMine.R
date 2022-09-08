@@ -222,10 +222,9 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   compareRaster(sim$rasterToMatch, sim$fireReturnInterval, sim$rstFlammable, sim$rstTimeSinceFire)
 
   ## from DEoptim fitting, run in the LandMine.Rmd file
-  #optimPars <- c(-0.731520, -0.501823, -0.605968, -1.809726,  2.202732,  4.696060, 0.9) ## 2018 @ 100m
-  optimPars <- c(par1 = -0.306512583093718, par2 = -1.7897353579592, par3 = -1.4040293342853,
-                 par4 = -2.02250974658877, par5 = 2.52143385431958, par6 = 4.44209892185679,
-                 par7 = 0.836707289388869) ## 2022-08-06 @ 250m
+  optimPars <- c(-0.731520, -0.501823, -0.605968, -1.809726,  2.202732,  4.696060, 0.9) ## 2018 @ 100m
+  # optimPars <- c(-0.306512583093718, -1.7897353579592, -1.4040293342853, -2.02250974658877,
+  #                2.52143385431958, 4.44209892185679, 0.836707289388869) ## 2022-08-06 @ 250m
   mod$spawnNewActive <- sns <- 10^c(optimPars[1], optimPars[2], optimPars[3], optimPars[4])
   mod$sizeCutoffs <- 10^c(optimPars[5], optimPars[6])
 
@@ -382,6 +381,10 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
     fireSizesInPixels <- fireSizesInPixels[firesGT0]
 
     if (!all(is.na(thisYrStartCells)) & length(thisYrStartCells) > 0) {
+      if (iter > 1) {
+        message("Some fires did not reach their target size; reburning these fires (", iter, "/", P(sim)$maxReburns, ")")
+      }
+
       if (is.numeric(P(sim)$.useParallel)) {
         a <- data.table::setDTthreads(P(sim)$.useParallel)
         message(sprintf("Burn should be using >100%% CPU (useParallel = %s)", as.character(P(sim)$.useParallel)))
@@ -398,7 +401,13 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
                      maxRetriesPerID = P(sim)$maxRetriesPerID,
                      spawnNewActive = mod$spawnNewActive,
                      spreadProb = spreadProbThisStep)
+
+      ## occasionally, `order` col drops from fires, but it's not supposed to
+      if (!"order" %in% colnames(fires)) {
+        fires[, order := 1:nrow(fires)]
+      }
       fires[, order := order + maxOrder]
+
       ## occasionally, `numNeighs` col appears in fires, but it's not supposed to
       if ("numNeighs" %in% colnames(fires)) {
         set(fires, NULL, "numNeighs", NULL)
