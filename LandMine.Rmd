@@ -20,7 +20,7 @@ if (!"pak" %in% rownames(installed.packages())) {
 }
 
 if (!"SpaDES.core" %in% rownames(installed.packages())) {
-  pak::pkg_install("PredictiveEcology/SpaDES.core@development")
+  pak::pkg_install( "PredictiveEcology/SpaDES.core@development")
 }
 
 ## package SDM tools unavailable on CRAN since 2020-01-12; use latest archived version
@@ -36,7 +36,7 @@ knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
 
 ```{r pkgs, echo=FALSE, eval=TRUE, include=FALSE, message=FALSE}
 library("Require")
-Require(c("igraph", "magrittr", "raster", "SpaDES.core"))
+Require(c("igraph", "kableExtra", "magrittr", "raster", "rmarkdown", "SpaDES.core"))
 ```
 
 ```{r paths, echo=FALSE, eval=TRUE, include=FALSE, message=FALSE}
@@ -44,7 +44,7 @@ workingDir <- file.path("~/GitHub/LandWeb") ## NOTE: change this for your projec
 moduleDir <- file.path(workingDir, "m") %>% checkPath()
 inputDir <- file.path(workingDir, "inputs") %>% checkPath(create = TRUE)
 outputDir <- file.path(workingDir, "outputs") %>% checkPath(create = TRUE)
-cacheDir <- file.path(outputDir, "cache") %>% checkPath(create = TRUE)
+cacheDir <- file.path(outputDir, "cache_LandMineRmd") %>% checkPath(create = TRUE)
 ```
 
 # Overview
@@ -623,6 +623,7 @@ for (i in 1:5) {
 
 ```{r cleanup}
 parallel::stopCluster(cl)
+unlink(cacheDir, recursive = TRUE)
 ```
 
 # Code and data availability
