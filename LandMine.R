@@ -24,27 +24,34 @@ defineModule(sim, list(
                     "An upper limit, in hectares, of the truncated Pareto distribution of fire sizes"),
     defineParameter("burnInitialTime", "numeric", start(sim, "year") + 1, NA, NA,
                     "This describes the simulation time at which the first plot event should occur"),
-    defineParameter("fireTimestep", "numeric", 1, NA, NA, "This describes the simulation time at which the first plot event should occur"),
+    defineParameter("fireTimestep", "numeric", 1, NA, NA,
+                    "This describes the simulation time at which the first plot event should occur"),
     defineParameter("flushCachedRandomFRI", "logical", FALSE, NA, NA,
-                    "If no Fire Return Interval map is supplied, then a random one will be created and cached. Use this to make a new one."),
+                    paste("If no Fire Return Interval map is supplied, then a random one will be created and cached.",
+                          "Use this to make a new one.")),
     defineParameter("minPropBurn", "numeric", 0.90, 0.00, 1.00,
                     "Minimum proportion burned pixels to use when triggering warnings about simulated fires."),
     defineParameter("mixedType", "numeric", 2,
                     desc = paste("How to define mixed stands: 1 for any species admixture;",
                                  "2 for deciduous > conifer. See ?vegTypeMapGenerator.")),
-    defineParameter("maxRetriesPerID", "integer", 10L, 0L, 20L,
-                    "Number of attempts that will be made per event ID, before abandoning. See `?SpaDES.tools::spread2`."),
-    defineParameter("maxReburns", "integer", 5L, 0L, 20L,
-                    "Number of attempts to reburn fires that don't reach their target fire size."),
+    defineParameter("maxRetriesPerID", "integer", 4L, 0L, 20L,
+                    paste("Number of attempts ('jumps') that will be made per event ID, before abandoning.",
+                          "See `?SpaDES.tools::spread2`.",
+                          "NOTE: increasing this value results in drastically longer simulation times because firelets get 'stuck'.")),
+    defineParameter("maxReburns", "integer", 10L, 0L, 20L,
+                    paste("Number of attempts to reburn fires that don't reach their target fire size.",
+                          "Unlike `maxRetriesPerID`, which tries spreading an ongoing fire to nearby cells,",
+                          "this reignites the fire from a new pixel, so it's less likely to continue",
+                          "being stuck in a region with sinuous fires.")),
     defineParameter("ROSother", "integer", 30L, NA, NA,
                     paste0("default ROS value for non-forest vegetation classes.",
-                           "this is needed when passing a modified ROSTable, e.g. using log-transformed values.")),
+                           "this is needed when passing a modified `ROSTable`, e.g. using log-transformed values.")),
     defineParameter("sppEquivCol", "character", "LandR", NA, NA,
-                    "The column in sim$specieEquivalency data.table to use as a naming convention"),
+                    "The column in `sim$specieEquivalency` data.table to use as a naming convention."),
     defineParameter("useSeed", "integer", NULL, NA, NA,
                     paste("Only used for creating a starting cohortData dataset.",
-                          "If NULL, then it will be randomly generated;",
-                          "If non-NULL, will pass this value to set.seed and be deterministic and identical each time.",
+                          "If `NULL`, then it will be randomly generated;",
+                          "If non-`NULL`, will pass this value to set.seed and be deterministic and identical each time.",
                           "WARNING: setting the seed to a specific value will cause all simulations to be identical!")),
     defineParameter("vegLeadingProportion", "numeric", 0.8, 0, 1,
                     "a number that define whether a species is leading for a given pixel"),
@@ -52,6 +59,10 @@ defineModule(sim, list(
                     "This describes the simulation time at which the first plot event should occur"),
     defineParameter(".plotInterval", "numeric", 1, NA, NA,
                     "This describes the simulation time interval between plot events"),
+    defineParameter(".plots", "character", default = "object",
+                    paste("Passed to `types` in `Plots` (see `?Plots`). There are a few plots that are made within this module, if set.",
+                          "Note that plots (or their data) saving will ONLY occur at `end(sim)`.",
+                          "If `NA`, plotting is turned off completely (this includes plot saving).")),
     defineParameter(".saveInitialTime", "numeric", NA, NA, NA,
                     "This describes the simulation time at which the first save event should occur"),
     defineParameter(".saveInterval", "numeric", NA, NA, NA,
@@ -63,8 +74,8 @@ defineModule(sim, list(
     defineParameter(".unitTest", "logical", getOption("LandR.assertions", TRUE), NA, NA,
                     "Some functions can have internal testing. This will turn those on or off, if any exist"),
     defineParameter(".useParallel", "numeric", 2, NA, NA,
-                    paste("Used in burning. Will be passed to data.table::setDTthreads().",
-                          "NOTE: should be <= 2 as the additonal RAM overhead too high given marginal speedup."))
+                    paste("Used in burning. Will be passed to `data.table::setDTthreads()`.",
+                          "NOTE: use `.useParallel <= 2` as the additonal RAM overhead too high given marginal speedup."))
   ),
   inputObjects = bindrows(
     expectsInput("cohortData", "data.table",
@@ -168,14 +179,16 @@ doEvent.LandMine <- function(sim, eventTime, eventType, debug = FALSE) {
     sim <- scheduleEvent(sim, P(sim)$.plotInitialTime, "LandMine", "plot")
     sim <- scheduleEvent(sim, P(sim)$.saveInitialTime, "LandMine", "save")
   } else if (eventType == "plot") {
-    if (!is.na(P(sim)$.plotInitialTime) && (P(sim)$.plotInitialTime == time(sim)))
+    if (anyPlotting(P(sim)$.plots) && any(P(sim)$.plots == "screen")) {
       mod$LandMineDevice <- max(dev.list()) + 1
 
-    devCur <- dev.cur()
-    quickPlot::dev(mod$LandMineDevice, width = 18, height = 12)
-    sim <- plotFn(sim)
-    dev(devCur)
-    sim <- scheduleEvent(sim, P(sim)$.plotInterval, "LandMine", "plot")
+      devCur <- dev.cur()
+      quickPlot::dev(mod$LandMineDevice, width = 18, height = 12)
+      sim <- plotFn(sim)
+      dev(devCur)
+
+      sim <- scheduleEvent(sim, P(sim)$.plotInterval, "LandMine", "plot")
+    }
   } else if (eventType == "Burn") {
     sim <- Burn(sim)
     sim <- scheduleEvent(sim, time(sim) + P(sim)$fireTimestep, "LandMine", "Burn", 2.5)
@@ -216,9 +229,11 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   #writeRNGInfo(fseed, append = TRUE)
   ## END DEBUGGING
 
-  if (is.null(P(sim)$maxReburns) || is.null(P(sim)$maxRetries)) {
+  if (is.null(P(sim)$maxReburns) || is.null(P(sim)$maxRetriesPerID)) {
     stop("maxReburns and maxRetries must be integer values and cannot be NULL.")
   }
+  P(sim, "maxReburns", "LandMine") <- as.integer(P(sim, "maxReburns", "LandMine"))
+  P(sim, "maxRetriesPerID", "LandMine") <- as.integer(P(sim, "maxRetriesPerID", "LandMine"))
   compareRaster(sim$rasterToMatch, sim$fireReturnInterval, sim$rstFlammable, sim$rstTimeSinceFire)
 
   ## from DEoptim fitting, run in the LandMine.Rmd file
@@ -340,9 +355,12 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   ## August 2022: reburn fires that did not meet their target size
 
   ## Rate of Spread
-  vegTypeMap <- vegTypeMapGenerator(sim$cohortData, sim$pixelGroupMap,
-                                    P(sim)$vegLeadingProportion, mixedType = P(sim)$mixedType,
-                                    sppEquiv = sim$sppEquiv, sppEquivCol = P(sim)$sppEquivCol,
+  vegTypeMap <- vegTypeMapGenerator(sim$cohortData,
+                                    pixelGroupMap = sim$pixelGroupMap,
+                                    vegLeadingProportion = P(sim)$vegLeadingProportion,
+                                    mixedType = P(sim)$mixedType,
+                                    sppEquiv = sim$sppEquiv,
+                                    sppEquivCol = P(sim)$sppEquivCol,
                                     colors = sim$sppColorVect,
                                     doAssertion = P(sim)$.unitTest)
 
