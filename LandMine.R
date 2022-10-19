@@ -7,7 +7,7 @@ defineModule(sim, list(
     person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb"))
   ),
   childModules = character(0),
-  version = list(SpaDES.core = "0.2.3.9009", LandMine = numeric_version("0.0.1")),
+  version = list(LandMine = numeric_version("0.0.1")),
   spatialExtent = raster::extent(rep(NA_real_, 4)),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
@@ -15,7 +15,7 @@ defineModule(sim, list(
   documentation = list("README.txt", "LandMine.Rmd"),
   reqdPkgs = list("assertthat", "data.table", "ggplot2", "grDevices", "magrittr",
                   "raster", "RColorBrewer", "VGAM",
-                  "PredictiveEcology/LandR@development",
+                  "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
                   "PredictiveEcology/pemisc@development",
                   "PredictiveEcology/SpaDES.tools@development"),
   parameters = rbind(
