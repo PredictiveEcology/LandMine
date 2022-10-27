@@ -93,10 +93,6 @@ defineModule(sim, list(
                  #desc = "this raster contains two pieces of information: Full study area with fire return interval attribute",
                  desc = "DESCRIPTION NEEDED", # TODO: is this correct?
                  sourceURL = NA),
-    expectsInput("rasterToMatchReporting", "RasterLayer",
-                 desc = paste("Raster layer of study area used for plotting and reporting only.",
-                              "Defaults to the kNN biomass map masked with `studyArea`"),
-                 sourceURL = "http://tree.pfc.forestry.ca/kNN-StructureBiomass.tar"),
     expectsInput("ROSTable", "data.table",
                  desc = paste("A data.table with 3 columns, 'age', 'leading', and 'ros'.",
                               "The values under the 'age' column can be 'mature', 'immature',",
@@ -123,8 +119,13 @@ defineModule(sim, list(
                               "Default taken from LandR sppEquivalencies_CA which has names for",
                               "species of trees in Canada"),
                  sourceURL = NA),
+    expectsInput("studyArea", "SpatialPolygonsDataFrame",
+                 desc = paste("multipolygon, typically buffered around an area of interest",
+                              "(i.e., `studyAreaReporting`) to use for simulation.",
+                              "Defaults to an area in Southwestern Alberta, Canada."),
+                 sourceURL = NA),
     expectsInput("studyAreaReporting", "SpatialPolygonsDataFrame",
-                 desc = paste("multipolygon (typically smaller/unbuffered than studyArea)",
+                 desc = paste("multipolygon (typically smaller/unbuffered than `studyArea`)",
                               "to use for plotting/reporting.",
                               "Defaults to an area in Southwestern Alberta, Canada."),
                  sourceURL = NA)
@@ -240,7 +241,7 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   optimPars <- c(-0.731520, -0.501823, -0.605968, -1.809726,  2.202732,  4.696060, 0.9) ## 2018 @ 100m
   # optimPars <- c(-0.306512583093718, -1.7897353579592, -1.4040293342853, -2.02250974658877,
   #                2.52143385431958, 4.44209892185679, 0.836707289388869) ## 2022-08-06 @ 250m
-  mod$spawnNewActive <- sns <- 10^c(optimPars[1], optimPars[2], optimPars[3], optimPars[4])
+  mod$spawnNewActive <- 10^c(optimPars[1], optimPars[2], optimPars[3], optimPars[4])
   mod$sizeCutoffs <- 10^c(optimPars[5], optimPars[6])
 
   mod$spreadProb <- !is.na(sim$fireReturnInterval)
@@ -502,7 +503,7 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
     unname(table(currBurn[ids])[2])
   }, numeric(1)) %>% unname()
   npix[is.na(npix)] <- 0 # Show that zero pixels burned in a year with no pixels burned, rather than NA
-  polys <- sim$fireReturnInterval
+
   burnedDF <- data.frame(time = as.numeric(times(sim)$current),
                          nPixelsBurned = npix,
                          haBurned = npix * prod(res(sim$rstCurrentBurn)) / 100^2, ## area in ha
@@ -529,7 +530,7 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   #writeRNGInfo(fseed, append = TRUE)
   ## END DEBUGGING
 
-  cacheTags <- c(currentModule(sim), "function:.inputObjects")
+  #cacheTags <- c(currentModule(sim), "function:.inputObjects")
   dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
   if (getOption("LandR.verbose", TRUE) > 0)
     message(currentModule(sim), ": using dataPath '", dPath, "'.")
@@ -557,10 +558,6 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
     if (!suppliedElsewhere("rasterToMatch", sim)) {
       sim$rasterToMatch <- raster(sim$studyArea, res = 100)
     }
-  }
-
-  if (!suppliedElsewhere("rasterToMatchReporting")) {
-    sim$rasterToMatchReporting <- sim$rasterToMatch
   }
 
   if (!suppliedElsewhere("rstFlammable", sim)) {
@@ -626,9 +623,7 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   }
 
   if (!suppliedElsewhere("sppEquiv", sim)) {
-    data(sppEquivalencies_CA, envir = envir(sim))
-    sim$sppEquiv <- sim$sppEquivalencies_CA
-    rm("sppEquivalencies_CA", envir = envir(sim))
+    sim$sppEquiv <- LandR::sppEquivalencies_CA
   }
 
   return(invisible(sim))
