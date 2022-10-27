@@ -72,7 +72,7 @@ defineModule(sim, list(
                           "This is generally intended for data-type modules,",
                           "where stochasticity and time are not relevant")),
     defineParameter(".unitTest", "logical", getOption("LandR.assertions", TRUE), NA, NA,
-                    "Some functions can have internal testing. This will turn those on or off, if any exist"),
+                    "Some functions can have internal testing. This will turn those on or off, if any exist."),
     defineParameter(".useParallel", "numeric", 2, NA, NA,
                     paste("Used in burning. Will be passed to `data.table::setDTthreads()`.",
                           "NOTE: use `.useParallel <= 2` as the additonal RAM overhead too high given marginal speedup."))
@@ -660,6 +660,7 @@ fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
          paste(names(mod$knownSpecies), collapse = ", "),
          "\nMissing rate of spread for ", paste(sppEquivHere[!haveAllKnown], collapse = ", "))
   }
+
   sppEquiv <- unique(sppEquiv, by = c("LandMine", "leading", "pixelValue"))
   sppEquiv <- sppEquiv[sim$ROSTable, on = "leading", allow.cartesian = TRUE, nomatch = NULL]
   sppEquiv <- sppEquiv[, c("leading", "age", "ros", "pixelValue")]
