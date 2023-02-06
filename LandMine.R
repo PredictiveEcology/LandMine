@@ -46,6 +46,8 @@ defineModule(sim, list(
     defineParameter("ROSother", "integer", 30L, NA, NA,
                     paste0("default ROS value for non-forest vegetation classes.",
                            "this is needed when passing a modified `ROSTable`, e.g. using log-transformed values.")),
+    defineParameter("ROStype", "character", "default", NA, NA,
+                    "One of 'burny', 'equal', 'log', or 'default'."),
     defineParameter("sppEquivCol", "character", "LandR", NA, NA,
                     "The column in `sim$specieEquivalency` data.table to use as a naming convention."),
     defineParameter("useSeed", "integer", NULL, NA, NA,
@@ -731,10 +733,15 @@ fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
 
   ## Other vegetation that can burn -- e.g., grasslands, lichen, shrub
   ## The original default value is the same as that of mature spruce stands (30L)
-  matureSpruceROS <- sim$ROSTable[leading == "spruce" & age == "mature", ros]
+  ## 2023-02: discontinuous fuels (e.g., shield) requires increasing spread --
+  ##          use same value as young deciduous (6L), per Dave's text messages
+  ROSother <- switch(P(sim)$ROStype,
+                     burny = sim$ROSTable[leading == "decid" & age == "immature_young", ros],
+                     sim$ROSTable[leading == "spruce" & age == "mature", ros])
+
   assertthat::assert_that(
     isTRUE(inRange(P(sim)$ROSother, min(sim$ROSTable$ros), max(sim$ROSTable$ros))),
-    isTRUE(inRange(P(sim)$ROSother, 0.95*matureSpruceROS, 1.05*matureSpruceROS))
+    isTRUE(inRange(P(sim)$ROSother, 0.95*ROSother, 1.05*ROSother)) ## TODO: tweak this to allow greater range
   )
   ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- as.integer(P(sim)$ROSother)
   ROS[sim$rstFlammable[] == 0L | is.na(sim$rstFlammable[])] <- NA ## non-flammable pixels
