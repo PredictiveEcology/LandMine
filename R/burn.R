@@ -18,6 +18,7 @@
 #' @param sizeCutoffs    A numeric vector of length 2, in hectares.
 #'                       These are 2 size thresholds that affect which \code{spawnNewActive}
 #'                       probabilities are used. See details.
+#' @param spreadProb     A raster layer of spread probabilities, with non-flammable pixels `NA`.
 #'
 #' @details
 #' This algorithm is a modified contagious cellular automaton.
@@ -95,14 +96,19 @@
 #' @importFrom raster res
 #' @importFrom SpaDES.tools spread2
 burn1 <- compiler::cmpfun(function(landscape, startCells, fireSizes = 5, nActiveCells1 = c(10, 36),
-                                   spawnNewActive = c(0.46, 0.2, 0.26, 0.11), maxRetriesPerID = 10,
-                                   sizeCutoffs = c(8e3, 2e4), spreadProbRel = spreadProbRel, spreadProb = 0.77) {
+                                   spawnNewActive = c(0.46, 0.2, 0.26, 0.11), maxRetriesPerID = 10L,
+                                   sizeCutoffs = c(8e3, 2e4), spreadProbRel = spreadProbRel,
+                                   spreadProb = 0.77) {
+
+  stopifnot(is.integer(maxRetriesPerID))
+
   # convert to pixels
   sizeCutoffs <- sizeCutoffs / (prod(res(landscape)) / 1e4)
   # add a little bit of stochasticity
   #spawnNewActive <- 10^rnorm(length(spawnNewActive), log10(spawnNewActive), 0.1)
 
-  a <- spread2(landscape, start = startCells, spreadProb = 1,  # initial step can have spreadProb 1 so guarantees something
+  a <- spread2(landscape, start = startCells,
+               spreadProb = 1,  # initial step can have spreadProb 1 so guarantees something
                spreadProbRel = spreadProbRel, #persistence = 0,
                neighProbs = c(1 - spawnNewActive[1], spawnNewActive[1]), iterations = 1,
                #mask=NULL,
@@ -119,12 +125,12 @@ burn1 <- compiler::cmpfun(function(landscape, startCells, fireSizes = 5, nActive
     #
     #  }, b = {
     #   a <- data.table::copy(a2)
-       set(a, NULL, "numActive", 0L)
-       a[whActive, numActive := .N, by = initialPixels]
-       b <- attr(a, "spreadState")$cluster
-       b <- a[b, mult = "last"]
-       set(b, NULL, c("numRetries", "maxSize", "exactSize", "id", "state", "pixels"), NULL)
-       set(a, NULL, c("numActive"), NULL)
+      set(a, NULL, "numActive", 0L)
+      a[whActive, numActive := .N, by = initialPixels]
+      b <- attr(a, "spreadState")$clusterDT
+      b <- a[b, mult = "last"]
+      set(b, NULL, c("numRetries", "maxSize", "exactSize", "id", "state", "pixels"), NULL)
+      set(a, NULL, c("numActive"), NULL)
     #
     # }, d = {
     #   a <- data.table::copy(a2)
@@ -151,16 +157,18 @@ burn1 <- compiler::cmpfun(function(landscape, startCells, fireSizes = 5, nActive
                  start = a, #persistence = 0,
                  neighProbs = data.table::transpose(as.list(b[state == "activeSource", c("pNoNewSpawn", "pSpawnNewActive")])),
                  iterations = 1, skipChecks = TRUE, asRaster = FALSE,
-                 exactSize = attr(a, "spreadState")$cluster$maxSize,
+                 exactSize = attr(a, "spreadState")$clusterDT$maxSize,
                  #mask = NULL,
                  #maxSize = fireSizes,
                  maxRetriesPerID = maxRetriesPerID,
                  directions = 8, #returnIndices = TRUE,
-                 #id = TRUE, plot.it = FALSE
+                 #id = TRUE,
+                 plot.it = FALSE
                  )
     #message("max size:", max(attr(a, "spreadState")$clusterDT$maxSize), ", current size:",max(attr(a, "spreadState")$clusterDT$size))
     set(a, NULL, "order", seq_len(NROW(a)))
     whActive <- attr(a, "spreadState")$whActive#a$state=="activeSource"
   }
+
   return(a)
 })

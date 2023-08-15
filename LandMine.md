@@ -1,6 +1,6 @@
 ---
 title: "LandMine Manual"
-subtitle: "v.`r SpaDES.core::moduleMetadata(module = 'LandMine', path = '..')$version`"
+subtitle: "v.0.0.1"
 date: "18 May 2018; updated 6 Sep 2022"
 output:
   bookdown::html_document2:
@@ -18,64 +18,18 @@ link-citations: true
 always_allow_html: true
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
-```
 
-```{r pkgs, echo=FALSE, eval=TRUE, include=FALSE, message=FALSE}
-options(repos = c(CRAN = "https://cloud.r-project.org"))
 
-if (!"pak" %in% rownames(installed.packages())) {
-  install.packages("pak")
-}
 
-if (!"SpaDES.core" %in% rownames(installed.packages())) {
-  pak::pkg_install( "PredictiveEcology/SpaDES.core@development")
-}
 
-## package SDM tools unavailable on CRAN since 2020-01-12; use latest archived version
-if (!"SDMTools" %in% rownames(installed.packages())) {
-  install.packages("https://cran.r-project.org/src/contrib/Archive/SDMTools/SDMTools_1.1-221.2.tar.gz",
-                   repos = NULL)
-}
 
-library("Require")
-Require(c("igraph", "kableExtra", "magrittr", "raster", "rmarkdown", "SpaDES.core"))
-```
-
-```{r paths, echo=FALSE, eval=TRUE, include=FALSE, message=FALSE}
-workingDir <- file.path("~/GitHub/LandWeb") ## NOTE: change this for your project
-moduleDir <- file.path(workingDir, "m") %>% checkPath()
-inputDir <- file.path(workingDir, "inputs") %>% checkPath(create = TRUE)
-outputDir <- file.path(workingDir, "outputs") %>% checkPath(create = TRUE)
-cacheDir <- file.path(outputDir, "cache_LandMineRmd") %>% checkPath(create = TRUE)
-```
 
 # LandMine Module
 
 <!-- the following are text references used in captions for LaTeX compatibility -->
 (ref:LandMine) *LandMine*
 
-```{r setup-LandMine, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, eval = FALSE, results = "hold") ## change to eval = TRUE if all chunks are to be evaluated
 
-## get citation style
-if (!file.exists("citations/ecology-letters.csl")) {
-  dir.create("citations", showWarnings = FALSE)
-  download.file("https://www.zotero.org/styles/ecology-letters", destfile = "citations/ecology-letters.csl")
-}
-
-if (!require(dplyr)) {
-  install.packages("dplyr")
-  library(dplyr)
-}
-
-dir.create("figures", showWarnings = FALSE)
-
-download.file(url = "https://img.shields.io/badge/Made%20with-Markdown-1f425f.png",
-              destfile = "figures/markdownBadge.png",
-              mode = 'wb')
-```
 
 [![made-with-Markdown](figures/markdownBadge.png)](http://commonmark.org)
 
@@ -83,7 +37,7 @@ download.file(url = "https://img.shields.io/badge/Made%20with-Markdown-1f425f.pn
 
 #### Authors:
 
-`r paste(as.character(SpaDES.core::moduleMetadata(module = "LandMine", path = '..')$authors), sep = ', ')`
+Eliot J B McIntire <eliot.mcintire@nrcan-rncan.gc.ca> [aut, cre], Alex M. Chubaty <achubaty@for-cast.ca> [ctb]
 <!-- ideally separate authors with new lines, '\n' not working -->
 
 ## Module Overview
@@ -106,27 +60,68 @@ The current version has not yet been fully tested and compared with the original
 Landmine requires the following codes as inputs (the genus and species codes below), which converts and groups species as follows.
 Each of the species groups has its own Rate of Spread (ROS) for fire spreading:
 
-```{r species-table, echo=FALSE, eval=TRUE}
-spp_df <- data.frame(
-  Species = c("Jack pine", "Lodgepole pine", "Unspecified pine species",
-              "Paper birch", "Balsam poplar", "Trembling aspen", "Larch/Tamarack",
-              "Black spruce",
-              "White spruce",
-              "Fir species"),
-  Group = c("Pine (PINU)", "Pine (PINU)", "Pine (PINU)",
-            "Deciduous (DECI)", "Deciduous (DECI)", "Deciduous (DECI)", "Deciduous (DECI)",
-            "Black spruce (PICE_MAR)",
-            "White spruce (PICE_GLA)",
-            "Fir (ABIE)"),
-  Code = c("Pinu_ban", "Pinu_con", "Pinu_sp",
-           "Betu_pap", "Popu_bal", "Popu_tre", "Lari_lar",
-           "Pice_mar",
-           "Pice_gla",
-           "Abie_sp")
-)
-knitr::kable(spp_df,
-             caption = "LandMine species codes.")
-```
+<table>
+<caption>(\#tab:species-table)LandMine species codes.</caption>
+ <thead>
+  <tr>
+   <th style="text-align:left;"> Species </th>
+   <th style="text-align:left;"> Group </th>
+   <th style="text-align:left;"> Code </th>
+  </tr>
+ </thead>
+<tbody>
+  <tr>
+   <td style="text-align:left;"> Jack pine </td>
+   <td style="text-align:left;"> Pine (PINU) </td>
+   <td style="text-align:left;"> Pinu_ban </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Lodgepole pine </td>
+   <td style="text-align:left;"> Pine (PINU) </td>
+   <td style="text-align:left;"> Pinu_con </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Unspecified pine species </td>
+   <td style="text-align:left;"> Pine (PINU) </td>
+   <td style="text-align:left;"> Pinu_sp </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Paper birch </td>
+   <td style="text-align:left;"> Deciduous (DECI) </td>
+   <td style="text-align:left;"> Betu_pap </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Balsam poplar </td>
+   <td style="text-align:left;"> Deciduous (DECI) </td>
+   <td style="text-align:left;"> Popu_bal </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Trembling aspen </td>
+   <td style="text-align:left;"> Deciduous (DECI) </td>
+   <td style="text-align:left;"> Popu_tre </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Larch/Tamarack </td>
+   <td style="text-align:left;"> Deciduous (DECI) </td>
+   <td style="text-align:left;"> Lari_lar </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Black spruce </td>
+   <td style="text-align:left;"> Black spruce (PICE_MAR) </td>
+   <td style="text-align:left;"> Pice_mar </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> White spruce </td>
+   <td style="text-align:left;"> White spruce (PICE_GLA) </td>
+   <td style="text-align:left;"> Pice_gla </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Fir species </td>
+   <td style="text-align:left;"> Fir (ABIE) </td>
+   <td style="text-align:left;"> Abie_sp </td>
+  </tr>
+</tbody>
+</table>
 
 \newpage
 
@@ -134,30 +129,129 @@ knitr::kable(spp_df,
 
 Table \@ref(tab:moduleInputs-LandMine) shows the full list of module inputs.
 
-```{r moduleInputs-LandMine, echo = FALSE, eval = TRUE, message = FALSE, warning = FALSE}
-df_inputs <- SpaDES.core::moduleInputs("LandMine", "/tmp/RtmpXeMbR7")
-knitr::kable(df_inputs,
-             caption = "List of (ref:LandMine) input objects and their description.") %>%
-  kableExtra::kable_styling(latex_options = "scale_down", full_width = TRUE)
-```
+<table class="table" style="margin-left: auto; margin-right: auto;">
+<caption>(\#tab:moduleInputs-LandMine)List of (ref:LandMine) input objects and their description.</caption>
+ <thead>
+  <tr>
+   <th style="text-align:left;"> objectName </th>
+   <th style="text-align:left;"> objectClass </th>
+   <th style="text-align:left;"> desc </th>
+   <th style="text-align:left;"> sourceURL </th>
+  </tr>
+ </thead>
+<tbody>
+  <tr>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+  </tr>
+</tbody>
+</table>
 
 Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
 
-```{r moduleParams-LandMine, echo = FALSE, eval = TRUE, message = FALSE, warning = FALSE}
-df_params <- SpaDES.core::moduleParams("LandMine", "/tmp/RtmpXeMbR7")
-knitr::kable(df_params, caption = "List of (ref:LandMine) parameters and their description.") %>%
-  kableExtra::kable_styling(latex_options = "scale_down", full_width = TRUE)
-```
+<table class="table" style="margin-left: auto; margin-right: auto;">
+<caption>(\#tab:moduleParams-LandMine)List of (ref:LandMine) parameters and their description.</caption>
+ <thead>
+  <tr>
+   <th style="text-align:left;"> paramName </th>
+   <th style="text-align:left;"> paramClass </th>
+   <th style="text-align:left;"> default </th>
+   <th style="text-align:left;"> min </th>
+   <th style="text-align:left;"> max </th>
+   <th style="text-align:left;"> paramDesc </th>
+  </tr>
+ </thead>
+<tbody>
+  <tr>
+   <td style="text-align:left;"> .plots </td>
+   <td style="text-align:left;"> character </td>
+   <td style="text-align:left;"> screen </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> Used by Plots function, which can be optionally used here </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> .plotInitialTime </td>
+   <td style="text-align:left;"> numeric </td>
+   <td style="text-align:left;"> start(sim) </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> Describes the simulation time at which the first plot event should occur. </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> .plotInterval </td>
+   <td style="text-align:left;"> numeric </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> Describes the simulation time interval between plot events. </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> .saveInitialTime </td>
+   <td style="text-align:left;"> numeric </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> Describes the simulation time at which the first save event should occur. </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> .saveInterval </td>
+   <td style="text-align:left;"> numeric </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> This describes the simulation time interval between save events. </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> .studyAreaName </td>
+   <td style="text-align:left;"> character </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> Human-readable name for the study area used - e.g., a hash of the studyarea obtained using `reproducible::studyAreaName()` </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> .seed </td>
+   <td style="text-align:left;"> list </td>
+   <td style="text-align:left;">  </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> Named list of seeds to use for each event (names). </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> .useCache </td>
+   <td style="text-align:left;"> logical </td>
+   <td style="text-align:left;"> FALSE </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> Should caching of events or module be used? </td>
+  </tr>
+</tbody>
+</table>
 
 ### Module outputs
 
 Description of the module outputs (Table \@ref(tab:moduleOutputs-LandMine)).
 
-```{r moduleOutputs-LandMine, echo = FALSE, eval = TRUE, message = FALSE, warning = FALSE}
-df_outputs <- SpaDES.core::moduleOutputs("LandMine", "/tmp/RtmpXeMbR7")
-knitr::kable(df_outputs, caption = "List of (ref:LandMine) outputs and their description.") %>%
-  kableExtra::kable_styling(latex_options = "scale_down", full_width = TRUE)
-```
+<table class="table" style="margin-left: auto; margin-right: auto;">
+<caption>(\#tab:moduleOutputs-LandMine)List of (ref:LandMine) outputs and their description.</caption>
+ <thead>
+  <tr>
+   <th style="text-align:left;"> objectName </th>
+   <th style="text-align:left;"> objectClass </th>
+   <th style="text-align:left;"> desc </th>
+  </tr>
+ </thead>
+<tbody>
+  <tr>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+  </tr>
+</tbody>
+</table>
 
 \newpage
 
@@ -171,36 +265,78 @@ To run this Landmine module alone (*i.e.*, for fitting), the following should wo
 
 Package installation:
 
-```{r pkg_install}
-```
+
 
 Load necessary packages:
 
-```{r pkgs}
+
+```r
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+
+if (!"pak" %in% rownames(installed.packages())) {
+  install.packages("pak")
+}
+
+if (!"SpaDES.core" %in% rownames(installed.packages())) {
+  pak::pkg_install( "PredictiveEcology/SpaDES.core@development")
+}
+
+## package SDM tools unavailable on CRAN since 2020-01-12; use latest archived version
+if (!"SDMTools" %in% rownames(installed.packages())) {
+  install.packages("https://cran.r-project.org/src/contrib/Archive/SDMTools/SDMTools_1.1-221.2.tar.gz",
+                   repos = NULL)
+}
+
+library("Require")
+Require(c("igraph", "kableExtra", "magrittr", "raster", "rmarkdown", "SpaDES.core"))
 ```
 
 Configure your file paths for this project:
 
-```{r paths}
+
+```r
+workingDir <- file.path("~/GitHub/LandWeb") ## NOTE: change this for your project
+moduleDir <- file.path(workingDir, "m") %>% checkPath()
+inputDir <- file.path(workingDir, "inputs") %>% checkPath(create = TRUE)
+outputDir <- file.path(workingDir, "outputs") %>% checkPath(create = TRUE)
+cacheDir <- file.path(outputDir, "cache_LandMineRmd") %>% checkPath(create = TRUE)
 ```
 
 ### Package dependencies
 
 To determine which packages are used by `LandMine`, use:
 
-```{r module-package-deps, eval=TRUE}
+
+```r
 SpaDES.core::packages(modules = "LandMine", paths = moduleDir)[[1]]
+```
+
+```
+##  [1] "SpaDES.core"                                        
+##  [2] "assertthat"                                         
+##  [3] "data.table"                                         
+##  [4] "ggplot2"                                            
+##  [5] "grDevices"                                          
+##  [6] "magrittr"                                           
+##  [7] "PredictiveEcology/LandR@development (>= 1.1.0.9003)"
+##  [8] "PredictiveEcology/pemisc@development"               
+##  [9] "PredictiveEcology/SpaDES.tools@development"         
+## [10] "raster"                                             
+## [11] "RColorBrewer"                                       
+## [12] "VGAM"
 ```
 
 ### Module usage
 
-```{r study-area}
+
+```r
 studyArea <- SpaDES.tools::randomStudyArea(seed = 1234, size = 1e10)
 rasterToMatch <- raster(studyArea, res = 250)
 ```
 
 
-```{r sim-setup}
+
+```r
 times <- list(start = 0, end = 13)
 
 parameters <- list(
@@ -222,7 +358,8 @@ paths <- list(
 )
 ```
 
-```{r run-sim}
+
+```r
 mySim <- simInit(times = times, params = parameters, modules = modules,
                  objects = objects, paths = paths)
 
@@ -234,7 +371,8 @@ mySimOut <- spades(mySim, .plotInitialTime = times$start, debug = TRUE)
 
 ## Testing the burn algorithm
 
-```{r testing}
+
+```r
 Require(c("data.table", "DEoptim", "parallel", "SDMTools"))
 
 s <- simInit(times = times, params = parameters, modules = modules,
@@ -245,7 +383,8 @@ ros <- ros == 0
 fireSize <- 1e5
 ```
 
-```{r functions}
+
+```r
 source(file.path(moduleDir, "LandMine", "R", "burn.R"))
 
 burnFun <- function(ros, centreCell, fireSize, spawnNewActive, sizeCutoffs, burn1, spreadProb) {
@@ -341,7 +480,8 @@ fitSN2 <- function(par, ros, centreCell, fireSizes = 10^(2:5),
 
 The following code chunk tries to find values of `spawnNewActive` that creates "reasonable" fire shapes at all sizes.
 
-```{r fit-values}
+
+```r
 wantParallel <- TRUE
 maxRetriesPerID <- 4 ## 4 retries (5 attempts total)
 spreadProb <- 0.9
@@ -365,7 +505,8 @@ funs <- c("burnFun", "burn1")
 addlPkgs <- c("data.table", "raster", "SDMTools", "SpaDES.tools")
 ```
 
-```{r make-cluster}
+
+```r
 ########################################
 ### SET UP CLUSTER FOR PARALLEL
 numCores <- min(detectCores() / 2, 120L)
@@ -404,7 +545,8 @@ if (!inherits(cl[[1]], "forknode")) {
 }
 ```
 
-```{r optimization}
+
+```r
 opt_sn <- DEoptim(fitSN,
                   lower = c(-2, -3, -3, -3, 1, 3.5, 0.75), 
                   upper = c(-0.1, -0.5, -0.5, -1, 3.5, 5, 1),
@@ -426,7 +568,8 @@ assign(paste0("opt_sn_", timestamp), opt_sn)
 saveRDS(opt_sn, file.path(moduleDir, "LandMine", "data", paste0(timestamp, "_DEoptim_250m.rds")))
 ```
 
-```{r fitSn}
+
+```r
 fs_sn <- c(10, 100, 1000, 10000, 100000)
 fit_sn <- fitSN(sna = c(-1, -1, -1, -2, 2, 4, 0.9),
                 ros = ros,
@@ -443,7 +586,8 @@ plot(fs_sn, LM_sn[, "perim.area.ratio"]) ## NOTE: visual inspection - not too ro
 A second (alternative) version tries the optimization using fewer parameters, to test whether a simpler version gets better/different results.
 Although this version was not used for the final module, we preserve it here for posterity.
 
-```{r optimization2}
+
+```r
 fs_optim2 <- c(0.2, 1:8)*10000
 opt_sn2 <- DEoptim(fitSN2, lower = c(1, -1, 1, 3, 4), upper = c(3, -0.3, 3, 4, 5), 
                    control = DEoptim.control(VTR = 0.001, itermax = 40, 
@@ -452,7 +596,8 @@ opt_sn2 <- DEoptim(fitSN2, lower = c(1, -1, 1, 3, 4), upper = c(3, -0.3, 3, 4, 5
                    fireSizes = fs_optim2, desiredPerimeterArea = 0.003)
 ```
 
-```{r relationship-btwn-perimArea-and-fireSize}
+
+```r
 fs_sn2 <- round(runif(10, 10, 4000))
 fit_sn2 <- fitSN2(par = c(2, -0.63333, 1, 3.2, 4.4),
                   ros = ros,
@@ -474,7 +619,8 @@ plot(fs_sn2, LM_sn2[, "perim.area.ratio"]) ## NOTE: visual inspection - not too 
 The original version was run using 100m pixels, despite the simulations being run using 250m pixels.
 This was corrected and rerun below.
 
-```{r manual-run-2018}
+
+```r
 ## 10,000 hectares burns gave this
 spawnNewActive[2:3] <- c(0.0235999945606232, 0.0263073265505955)
 
@@ -567,7 +713,8 @@ for (i in 1:5) {
 }
 ```
 
-```{r another_option}
+
+```r
 reps <- paste0("rep", 1:1)
 perims <- list()
 perm <- list()
@@ -619,7 +766,8 @@ log10(predict(mod[["1000"]], data.frame(perim = log10(0.003))))
 The original version was run using 100m pixels, despite the simulations being run using 250m pixels.
 This version uses 250m pixels.
 
-```{r manual-run-2022}
+
+```r
 ## final optimization after 170 iterations (fitSN)
 sns <- unname(opt_sn$optim$bestmem)
 
@@ -657,7 +805,8 @@ for (i in 1:5) {
 
 ### Cleaning up
 
-```{r cleanup}
+
+```r
 parallel::stopCluster(cl)
 unlink(cacheDir, recursive = TRUE)
 ```
