@@ -18,45 +18,12 @@ link-citations: true
 always_allow_html: true
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
-```
-
-```{r pkgs, echo=FALSE, eval=TRUE, include=FALSE, message=FALSE}
-options(repos = c(CRAN = "https://cloud.r-project.org"))
-
-if (!"pak" %in% rownames(installed.packages())) {
-  install.packages("pak")
-}
-
-if (!"SpaDES.core" %in% rownames(installed.packages())) {
-  pak::pkg_install( "PredictiveEcology/SpaDES.core@development")
-}
-
-## package SDM tools unavailable on CRAN since 2020-01-12; use latest archived version
-if (!"SDMTools" %in% rownames(installed.packages())) {
-  install.packages("https://cran.r-project.org/src/contrib/Archive/SDMTools/SDMTools_1.1-221.2.tar.gz",
-                   repos = NULL)
-}
-
-library("Require")
-Require(c("igraph", "kableExtra", "magrittr", "raster", "rmarkdown", "SpaDES.core"))
-```
-
-```{r paths, echo=FALSE, eval=TRUE, include=FALSE, message=FALSE}
-workingDir <- file.path("~/GitHub/LandWeb") ## NOTE: change this for your project
-moduleDir <- file.path(workingDir, "m") %>% checkPath()
-inputDir <- file.path(workingDir, "inputs") %>% checkPath(create = TRUE)
-outputDir <- file.path(workingDir, "outputs") %>% checkPath(create = TRUE)
-cacheDir <- file.path(outputDir, "cache_LandMineRmd") %>% checkPath(create = TRUE)
-```
-
-# LandMine Module
+# *LandMine* Module
 
 <!-- the following are text references used in captions for LaTeX compatibility -->
 (ref:LandMine) *LandMine*
 
-```{r setup-LandMine, include=FALSE}
+```{r setup-LandMine, echo=FALSE, eval=TRUE, include=FALSE, message=FALSE}
 knitr::opts_chunk$set(echo = TRUE, eval = FALSE, results = "hold") ## change to eval = TRUE if all chunks are to be evaluated
 
 ## get citation style
@@ -65,16 +32,42 @@ if (!file.exists("citations/ecology-letters.csl")) {
   download.file("https://www.zotero.org/styles/ecology-letters", destfile = "citations/ecology-letters.csl")
 }
 
-if (!require(dplyr)) {
-  install.packages("dplyr")
-  library(dplyr)
-}
-
 dir.create("figures", showWarnings = FALSE)
 
 download.file(url = "https://img.shields.io/badge/Made%20with-Markdown-1f425f.png",
               destfile = "figures/markdownBadge.png",
               mode = 'wb')
+
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+
+## packages
+if (!"pak" %in% rownames(installed.packages())) {
+  install.packages("pak")
+}
+
+if (!require("dplyr", quietly = TRUE)) {
+  pak::pkg_install("dplyr")
+}
+
+if (!"SpaDES.core" %in% rownames(installed.packages())) {
+  pak::pkg_install( "PredictiveEcology/SpaDES.core@development")
+}
+
+## package SDM tools unavailable on CRAN since 2020-01-12; use latest archived version
+if (!"SDMTools" %in% rownames(installed.packages())) {
+  install.packages("https://cloud.r-project.org/src/contrib/Archive/SDMTools/SDMTools_1.1-221.2.tar.gz",
+                   repos = NULL)
+}
+
+library("Require")
+Require(c("dplyr", "igraph", "kableExtra", "raster", "rmarkdown", "SpaDES.core"),
+        install = FALSE, update = FALSE)
+
+workingDir <- file.path("~/GitHub/LandWeb") ## NOTE: change this for your project
+moduleDir <- file.path(workingDir, "m") |> checkPath()
+inputDir <- file.path(workingDir, "inputs") |> checkPath(create = TRUE)
+outputDir <- file.path(workingDir, "outputs") |> checkPath(create = TRUE)
+cacheDir <- file.path(outputDir, "cache_LandMineRmd") |> checkPath(create = TRUE)
 ```
 
 [![made-with-Markdown](figures/markdownBadge.png)](http://commonmark.org)
@@ -135,17 +128,17 @@ knitr::kable(spp_df,
 Table \@ref(tab:moduleInputs-LandMine) shows the full list of module inputs.
 
 ```{r moduleInputs-LandMine, echo = FALSE, eval = TRUE, message = FALSE, warning = FALSE}
-df_inputs <- SpaDES.core::moduleInputs("LandMine", "/tmp/RtmpXeMbR7")
+df_inputs <- SpaDES.core::moduleInputs("LandMine", "..")
 knitr::kable(df_inputs,
-             caption = "List of (ref:LandMine) input objects and their description.") %>%
+             caption = "List of (ref:LandMine) input objects and their description.") |>
   kableExtra::kable_styling(latex_options = "scale_down", full_width = TRUE)
 ```
 
 Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
 
 ```{r moduleParams-LandMine, echo = FALSE, eval = TRUE, message = FALSE, warning = FALSE}
-df_params <- SpaDES.core::moduleParams("LandMine", "/tmp/RtmpXeMbR7")
-knitr::kable(df_params, caption = "List of (ref:LandMine) parameters and their description.") %>%
+df_params <- SpaDES.core::moduleParams("LandMine", "..")
+knitr::kable(df_params, caption = "List of (ref:LandMine) parameters and their description.") |>
   kableExtra::kable_styling(latex_options = "scale_down", full_width = TRUE)
 ```
 
@@ -154,8 +147,8 @@ knitr::kable(df_params, caption = "List of (ref:LandMine) parameters and their d
 Description of the module outputs (Table \@ref(tab:moduleOutputs-LandMine)).
 
 ```{r moduleOutputs-LandMine, echo = FALSE, eval = TRUE, message = FALSE, warning = FALSE}
-df_outputs <- SpaDES.core::moduleOutputs("LandMine", "/tmp/RtmpXeMbR7")
-knitr::kable(df_outputs, caption = "List of (ref:LandMine) outputs and their description.") %>%
+df_outputs <- SpaDES.core::moduleOutputs("LandMine", "..")
+knitr::kable(df_outputs, caption = "List of (ref:LandMine) outputs and their description.") |>
   kableExtra::kable_styling(latex_options = "scale_down", full_width = TRUE)
 ```
 
@@ -166,23 +159,6 @@ knitr::kable(df_outputs, caption = "List of (ref:LandMine) outputs and their des
 To run this Landmine module alone (*i.e.*, for fitting), the following should work (*iff* raster inputs for `rstStudyRegion` and `rstFlammable` are available), assuming all R packages are available.
 
 **NB:** Paths will have be changed for a different user.
-
-### Setup
-
-Package installation:
-
-```{r pkg_install}
-```
-
-Load necessary packages:
-
-```{r pkgs}
-```
-
-Configure your file paths for this project:
-
-```{r paths}
-```
 
 ### Package dependencies
 
@@ -198,7 +174,6 @@ SpaDES.core::packages(modules = "LandMine", paths = moduleDir)[[1]]
 studyArea <- SpaDES.tools::randomStudyArea(seed = 1234, size = 1e10)
 rasterToMatch <- raster(studyArea, res = 250)
 ```
-
 
 ```{r sim-setup}
 times <- list(start = 0, end = 13)
@@ -251,7 +226,7 @@ source(file.path(moduleDir, "LandMine", "R", "burn.R"))
 burnFun <- function(ros, centreCell, fireSize, spawnNewActive, sizeCutoffs, burn1, spreadProb) {
     burned <- burn1(
       landscape = ros,
-      startCells = centreCell,# c(quarterCell, centreCell),
+      startCells = centreCell,
       fireSizes = fireSize,
       spreadProb = spreadProb,
       spreadProbRel = ros,
@@ -366,7 +341,6 @@ addlPkgs <- c("data.table", "raster", "SDMTools", "SpaDES.tools")
 ```
 
 ```{r make-cluster}
-########################################
 ### SET UP CLUSTER FOR PARALLEL
 numCores <- min(detectCores() / 2, 120L)
 if (Sys.info()["sysname"] == "Windows") {
@@ -376,14 +350,19 @@ if (Sys.info()["sysname"] == "Windows") {
   
   ## TODO: customize this to make a cluster on several machines via ssh
   clNames <- c(
-    #rep("localhost", 0),
+    rep("localhost", 0),
     rep("picea.for-cast.ca", 25),
     rep("pseudotsuga.for-cast.ca", 80)
   )
+  
+  ## check the cluster:
+  ## 1. at least 10 populations per parameter; 7 params;
+  ## 2. ensure it's a multiple of the number of params (7);
+  ## 3. R can't create more than ~125 socket connections.
   stopifnot(
-    length(clNames) >= 70,     ## at least 10 populations per parameter; 7 params.
-    length(clNames) %% 7 == 0,  ## ensure it's a multiple of the number of params (7)
-    length(clNames) <= 120     ## R can't create more than ~125 socket connections
+    length(clNames) >= 70,
+    length(clNames) %% 7 == 0,
+    length(clNames) <= 120
   )
   cl <- makeClusterPSOCK(clNames, homogeneous = FALSE, verbose = TRUE)
   
@@ -409,7 +388,7 @@ opt_sn <- DEoptim(fitSN,
                   lower = c(-2, -3, -3, -3, 1, 3.5, 0.75), 
                   upper = c(-0.1, -0.5, -0.5, -1, 3.5, 5, 1),
                   control = DEoptim.control(VTR = 0.001, NP = as.integer(length(clNames)),
-                                            itermax = 200, cluster = cl, strategy = 6), ## itermax = 170
+                                            itermax = 200, cluster = cl, strategy = 6),
                   ros = ros,
                   centreCell = centreCell,
                   fireSizes = c(10, 100, 1000, 10000, 100000),
