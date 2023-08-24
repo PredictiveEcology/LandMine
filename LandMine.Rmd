@@ -32,12 +32,6 @@ if (!file.exists("citations/ecology-letters.csl")) {
   download.file("https://www.zotero.org/styles/ecology-letters", destfile = "citations/ecology-letters.csl")
 }
 
-dir.create("figures", showWarnings = FALSE)
-
-download.file(url = "https://img.shields.io/badge/Made%20with-Markdown-1f425f.png",
-              destfile = "figures/markdownBadge.png",
-              mode = 'wb')
-
 options(repos = c(CRAN = "https://cloud.r-project.org"))
 
 ## packages
@@ -70,9 +64,10 @@ outputDir <- file.path(workingDir, "outputs") |> checkPath(create = TRUE)
 cacheDir <- file.path(outputDir, "cache_LandMineRmd") |> checkPath(create = TRUE)
 ```
 
-[![made-with-Markdown](figures/markdownBadge.png)](http://commonmark.org)
-
-<!-- if knitting to pdf remember to add the pandoc_args: ["--extract-media", "."] option to yml in order to get the badge images -->
+:::{.rmdwarning}
+This documentation is work in progress.
+Please report any discrepancies or omissions at <https://github.com/PredictiveEcology/LandMine/issues>.
+:::
 
 #### Authors:
 
