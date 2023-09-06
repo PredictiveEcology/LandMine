@@ -47,6 +47,10 @@ if (!"SpaDES.core" %in% rownames(installed.packages())) {
   pak::pkg_install( "PredictiveEcology/SpaDES.core@development")
 }
 
+if (!"SpaDES.project" %in% rownames(installed.packages())) {
+  pak::pkg_install( "PredictiveEcology/SpaDES.project@transition")
+}
+
 ## package SDM tools unavailable on CRAN since 2020-01-12; use latest archived version
 if (!"SDMTools" %in% rownames(installed.packages())) {
   install.packages("https://cloud.r-project.org/src/contrib/Archive/SDMTools/SDMTools_1.1-221.2.tar.gz",
@@ -57,7 +61,7 @@ library("Require")
 Require(c("dplyr", "igraph", "kableExtra", "raster", "rmarkdown", "SpaDES.core"),
         install = FALSE, update = FALSE)
 
-workingDir <- file.path("~/GitHub/LandWeb") ## NOTE: change this for your project
+workingDir <- SpaDES.project::findProjectPath()
 moduleDir <- file.path(workingDir, "m") |> checkPath()
 inputDir <- file.path(workingDir, "inputs") |> checkPath(create = TRUE)
 outputDir <- file.path(workingDir, "outputs") |> checkPath(create = TRUE)
