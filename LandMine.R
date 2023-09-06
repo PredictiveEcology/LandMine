@@ -13,8 +13,8 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = list("README.md", "LandMine.Rmd"),
-  reqdPkgs = list("assertthat", "data.table", "ggplot2", "grDevices", "gridExtra", "magrittr",
-                  "raster", "RColorBrewer", "VGAM",
+  reqdPkgs = list("assertthat", "data.table", "fpCompare", "ggplot2", "grDevices", "gridExtra",
+                  "magrittr", "raster", "RColorBrewer", "VGAM",
                   "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
                   "PredictiveEcology/pemisc@development",
                   "PredictiveEcology/SpaDES.tools@development"),
@@ -188,11 +188,10 @@ doEvent.LandMine <- function(sim, eventTime, eventType, debug = FALSE) {
     sim <- Init(sim)
 
     # schedule future event(s)
-    sim <- scheduleEvent(sim, P(sim)$burnInitialTime, "LandMine", "Burn", 2.5)
-    sim <- scheduleEvent(sim, P(sim)$.plotInitialTime, "LandMine", "plot")
-    sim <- scheduleEvent(sim, P(sim)$.saveInitialTime, "LandMine", "save")
-
     if (P(sim)$mode == "single") {
+      sim <- scheduleEvent(sim, P(sim)$burnInitialTime, "LandMine", "Burn", 2.5)
+      sim <- scheduleEvent(sim, P(sim)$.plotInitialTime, "LandMine", "plot")
+      sim <- scheduleEvent(sim, P(sim)$.saveInitialTime, "LandMine", "save")
       sim <- scheduleEvent(sim, end(sim), "LandMine", "summarySingle")
     } else if (P(sim)$mode == "multi") {
       sim <- scheduleEvent(sim, start(sim), "LandMine", "summaryMulti")
