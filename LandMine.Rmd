@@ -61,8 +61,13 @@ library("Require")
 Require(c("dplyr", "igraph", "kableExtra", "raster", "rmarkdown", "SpaDES.core"),
         install = FALSE, update = FALSE)
 
-workingDir <- SpaDES.project::findProjectPath()
-moduleDir <- file.path(workingDir, "m") |> checkPath()
+if (interactive()) {
+  workingDir <- SpaDES.project::findProjectPath() ## e.g., ~/GitHub/LandWeb
+} else {
+  ## e.g., when rendering module Rmd
+  workingDir <- file.path("..") |> Require::checkPath() |> dirname()
+}
+moduleDir <- file.path("..") |> Require::checkPath()
 inputDir <- file.path(workingDir, "inputs") |> checkPath(create = TRUE)
 outputDir <- file.path(workingDir, "outputs") |> checkPath(create = TRUE)
 cacheDir <- file.path(outputDir, "cache_LandMineRmd") |> checkPath(create = TRUE)
@@ -164,7 +169,7 @@ To run this Landmine module alone (*i.e.*, for fitting), the following should wo
 To determine which packages are used by `LandMine`, use:
 
 ```{r module-package-deps, eval=TRUE}
-SpaDES.core::packages(modules = "LandMine", paths = moduleDir)[[1]]
+SpaDES.core::packages(modules = "LandMine", paths = "..")[[1]]
 ```
 
 ### Module usage
