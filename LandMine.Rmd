@@ -135,7 +135,7 @@ Table \@ref(tab:moduleInputs-LandMine) shows the full list of module inputs.
 df_inputs <- SpaDES.core::moduleInputs("LandMine", "..")
 knitr::kable(df_inputs,
              caption = "List of (ref:LandMine) input objects and their description.") |>
-  kableExtra::kable_styling(latex_options = "scale_down", full_width = TRUE)
+  kableExtra::kable_styling(latex_options = "scale_down", full_width = FALSE)
 ```
 
 Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
@@ -143,7 +143,7 @@ Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
 ```{r moduleParams-LandMine, echo = FALSE, eval = TRUE, message = FALSE, warning = FALSE}
 df_params <- SpaDES.core::moduleParams("LandMine", "..")
 knitr::kable(df_params, caption = "List of (ref:LandMine) parameters and their description.") |>
-  kableExtra::kable_styling(latex_options = "scale_down", full_width = TRUE)
+  kableExtra::kable_styling(latex_options = "scale_down", full_width = FALSE)
 ```
 
 ### Module outputs
@@ -153,7 +153,7 @@ Description of the module outputs (Table \@ref(tab:moduleOutputs-LandMine)).
 ```{r moduleOutputs-LandMine, echo = FALSE, eval = TRUE, message = FALSE, warning = FALSE}
 df_outputs <- SpaDES.core::moduleOutputs("LandMine", "..")
 knitr::kable(df_outputs, caption = "List of (ref:LandMine) outputs and their description.") |>
-  kableExtra::kable_styling(latex_options = "scale_down", full_width = TRUE)
+  kableExtra::kable_styling(latex_options = "scale_down", full_width = FALSE)
 ```
 
 \newpage
