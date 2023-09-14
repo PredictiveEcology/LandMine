@@ -2,5 +2,6 @@
 *
 
 ## don't ignore
-!CHECKSUMS.txt
 !.gitignore
+!CHECKSUMS.txt
+!LandMine_DEoptim_params.csv
