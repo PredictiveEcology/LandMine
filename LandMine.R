@@ -20,15 +20,14 @@ defineModule(sim, list(
                   "PredictiveEcology/pemisc@development",
                   "PredictiveEcology/SpaDES.tools@development"),
   parameters = rbind(
-    #defineParameter("paramName", "paramClass", value, min, max, "parameter description")),
     defineParameter("biggestPossibleFireSizeHa", "numeric", 1e6, 1e4, 2e6,
                     "An upper limit, in hectares, of the truncated Pareto distribution of fire sizes"),
     defineParameter("burnInitialTime", "numeric", start(sim, "year") + 1, NA, NA,
                     "This describes the simulation time at which the first burn event should occur"),
     defineParameter("fireTimestep", "numeric", 1, NA, NA,
                     "This describes the simulation time interval between burn events"),
-    defineParameter("maxReburns", "integer", c(5L, 20L), 0L, 20L,
-                    paste("Number of attempts to reburn fires that don't reach their target fire size.",
+    defineParameter("maxReburns", "integer", c(1L, 20L), 1L, 20L,
+                    paste("Number of attempts to burn fires that don't reach their target fire size.",
                           "Reburning occurs in two phases, hence accepting a parameter value of length 2.",
                           "In the first phase, fires that did not reach their target size are reignited",
                           "from new pixels within the FRI zone, so they are less likely to continue",
@@ -261,7 +260,7 @@ EstimateTruncPareto <- function(sim, verbose = getOption("LandR.verbose", TRUE))
     f = findK_upper,
     upper1 = P(sim)$biggestPossibleFireSizeHa,
     cacheRepo = cachePath(sim),
-    useCache = FALSE ## TODO: do small diffs in param ests each run help with fires??
+    useCache = FALSE
   )$minimum
 
   return(invisible(sim))
