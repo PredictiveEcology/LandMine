@@ -20,24 +20,23 @@ defineModule(sim, list(
                   "PredictiveEcology/pemisc@development",
                   "PredictiveEcology/SpaDES.tools@development"),
   parameters = rbind(
-    #defineParameter("paramName", "paramClass", value, min, max, "parameter description")),
     defineParameter("biggestPossibleFireSizeHa", "numeric", 1e6, 1e4, 2e6,
                     "An upper limit, in hectares, of the truncated Pareto distribution of fire sizes"),
     defineParameter("burnInitialTime", "numeric", start(sim, "year") + 1, NA, NA,
                     "This describes the simulation time at which the first burn event should occur"),
     defineParameter("fireTimestep", "numeric", 1, NA, NA,
                     "This describes the simulation time interval between burn events"),
-    defineParameter("maxReburns", "integer", 5L, 0L, 20L,
-                    paste("Number of attempts to reburn fires that don't reach their target fire size.",
-                          "Reburning occurs in two phases, each repeating up to `maxReburns` times.",
+    defineParameter("maxReburns", "integer", c(1L, 20L), 1L, 20L,
+                    paste("Number of attempts to burn fires that don't reach their target fire size.",
+                          "Reburning occurs in two phases, hence accepting a parameter value of length 2.",
                           "In the first phase, fires that did not reach their target size are reignited",
                           "from new pixels within the FRI zone, so they are less likely to continue",
                           "being stuck in a region with sinuous fires or discontinuous fuels.",
-                          "If, after `maxReburns` attempts, there are still fires that haven't reached",
+                          "If, after `maxReburns[1]` attempts, there are still fires that haven't reached",
                           "their target size, the second reburn phase is attempted.",
                           "After recording the the pixels that *did* burn in phase one,",
                           "*new* fires are ignited, whose target sizes are set equal the difference",
-                          "between the previous target and the previously burned area.",
+                          "between the previous target and the previously burned area. Repeats up to `maxReburns[2]` times.",
                           "This results in additional (smaller) fires, but since the purpose of LandMine",
                           "is to replicate area burned per year to achieve LTHFC, this is an acceptable compromise.")),
     defineParameter("maxRetriesPerID", "integer", 4L, 0L, 299L,
@@ -261,7 +260,7 @@ EstimateTruncPareto <- function(sim, verbose = getOption("LandR.verbose", TRUE))
     f = findK_upper,
     upper1 = P(sim)$biggestPossibleFireSizeHa,
     cacheRepo = cachePath(sim),
-    useCache = FALSE ## TODO: do small diffs in param ests each run help with fires??
+    useCache = FALSE
   )$minimum
 
   return(invisible(sim))
@@ -277,6 +276,11 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   if (is.null(P(sim)$maxReburns) || is.null(P(sim)$maxRetriesPerID)) {
     stop("maxReburns and maxRetries must be integer values and cannot be NULL.")
   }
+
+  if (length(P(sim)$maxReburns) == 1) {
+    P(sim, "maxReburns", "LandMine") <- rep(P(sim)$maxReburns, 2)
+  }
+
   P(sim, "maxReburns", "LandMine") <- as.integer(P(sim, "maxReburns", "LandMine"))
   P(sim, "maxRetriesPerID", "LandMine") <- as.integer(P(sim, "maxRetriesPerID", "LandMine"))
 
@@ -445,7 +449,7 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   ## 2023-09: after maxReburns, if not reaching fire size, take the last burn,
   ## and start new fire(s) to burn the remaining area until the target is achieved.
   ## Should be OK b/c LandMine replicates FRIs (i.e., area burned each year), not number of fires
-  while (sum(numFiresThisPeriod) > 0 && (iter <= 2 * P(sim)$maxReburns)) {
+  while (sum(numFiresThisPeriod) > 0 && (iter <= sum(P(sim)$maxReburns))) {
     thisYrStartCells <- thisYrStartCellsDT[polygonNumeric %in% c(0, NA_ids), polygonNumeric := NA] %>%
       na.omit() %>%
       .[, SpaDES.tools:::resample(pixel, numFiresThisPeriod[.GRP]), by = polygonNumeric] %>%
@@ -456,11 +460,11 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
     fireSizesInPixels <- fireSizesInPixels[firesGT0]
 
     if (!all(is.na(thisYrStartCells)) && length(thisYrStartCells) > 0) {
-      if (iter > 1 && iter <= P(sim)$maxReburns) {
-        message("Some fires did not reach their target size; reburning these fires (", iter, "/", P(sim)$maxReburns, ")")
-      } else if (iter > P(sim)$maxReburns && iter <= 2 * P(sim)$maxReburns) {
+      if (iter > 1 && iter <= P(sim)$maxReburns[1]) {
+        message("Some fires did not reach their target size; reburning these fires (", iter, "/", P(sim)$maxReburns[1], ")")
+      } else if (iter > P(sim)$maxReburns[1] && iter <= sum(P(sim)$maxReburns)) {
         message("Some fires did not reach their target size; starting additional fires (",
-                iter - P(sim)$maxReburns, "/", P(sim)$maxReburns, ")")
+                iter - P(sim)$maxReburns[1], "/", P(sim)$maxReburns[2], ")")
       }
 
       if (is.numeric(P(sim)$.useParallel)) {
@@ -509,7 +513,7 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
         tooSmallByPoly <- thisYrStartCellsDT[tooSmallDT, on = c(pixel = "initialPixels")]
         friByPolyDT <- data.table(polygonNumeric = sim$fireReturnIntervalsByPolygonNumeric)
 
-        if (iter <= P(sim)$maxReburns) {
+        if (iter <= P(sim)$maxReburns[1]) {
           firesOK <- fires[!initialPixels %in% tooSmallDT$initialPixels, ]
           firesList <- append(firesList, list(firesOK))
           fireSizes <- append(fireSizes, list(fa[!tooSmall, c("size", "maxSize")]))
