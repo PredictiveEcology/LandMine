@@ -661,7 +661,7 @@ SummarizeFRIsingle <- function(sim) {
   }
 
   ## expected vs simulated fire return intervals
-  ggFriExpVsSim <- landmine_plot_compare_FRI(sim$friSummary)
+  ggFriExpVsSim <- landmine_plot_FRI(sim$friSummary)
 
   if ("png" %in% P(sim)$.plots) {
     fggFriExpVsSim <- file.path(figurePath(sim), "LandMine_FRI_exp_vs_sim.png")
