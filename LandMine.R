@@ -86,7 +86,7 @@ defineModule(sim, list(
                     "This describes the simulation time at which the first save event should occur"),
     defineParameter(".saveInterval", "numeric", NA, NA, NA,
                     "This describes the simulation time interval between save events"),
-    defineParameter(".studyAreaName", "character", NA, NA, NA,
+    defineParameter(".studyAreaName", "character", "test", NA, NA,
                     "Human-readable name for the study area used - e.g., a hash of the study",
                     "area obtained using `reproducible::studyAreaName()`"),
     defineParameter(".useCache", "logical", FALSE, NA, NA,
@@ -620,6 +620,8 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
 
 ### summary events
 SummarizeFRIsingle <- function(sim) {
+  # if (is.na(Par$.studyAreaName))
+  #   P(sim)$.studyAreaName <- "test"
   studyArea <- P(sim)$.studyAreaName
 
   flammableMap <- sim[["rstFlammable"]]   ## RasterLayer
@@ -685,6 +687,8 @@ SummarizeFRIsingle <- function(sim) {
 }
 
 SummarizeFRImulti <- function(sim) {
+  # if (is.na(Par$.studyAreaName))
+  #   P(sim)$.studyAreaName <- "test"
   studyArea <- P(sim)$.studyAreaName
 
   allReps <- P(sim)$reps
