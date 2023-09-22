@@ -388,7 +388,8 @@ plotFn <- compiler::cmpfun(function(sim) {
 
     title2 <- if (firstPlot) "Cumulative Fire Map" else ""
     rcbc <- sim$rstCurrentBurnCumulative
-    rcbc[!is.na(sim$rstCurrentBurn)] <- 0L
+    rcbc[!is.na(sim$rstCurrentBurn) & sim$rstCurrentBurn == 0 &
+           sim$rstCurrentBurnCumulative == 0] <- 0L
     Plot(rcbc, new = TRUE, title = title2, cols = c("pink", "red"), zero.color = "transparent")
     sar <- sim$studyAreaReporting
     Plot(sar, addTo = "rcbc", title = "", cols = "transparent")
@@ -587,8 +588,9 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   sim$rstCurrentBurn[fires$pixels] <- 1L #as.numeric(factor(fires$initialPixels))
 
   if (is.null(sim$rstCurrentBurnCumulative)) {
-    sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn
-    sim$rstCurrentBurnCumulative[!is.na(sim$rstCurrentBurnCumulative[])] <- 0
+    sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn # keeps 1s
+    sim$rstCurrentBurnCumulative[!is.na(sim$rstCurrentBurnCumulative[])
+                                 & sim$rstCurrentBurnCumulative[] == 0] <- 0
   } else {
     sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn + sim$rstCurrentBurnCumulative
   }
