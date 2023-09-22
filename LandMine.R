@@ -15,6 +15,7 @@ defineModule(sim, list(
   documentation = list("README.md", "LandMine.Rmd"),
   reqdPkgs = list("assertthat", "data.table", "fpCompare", "ggplot2", "grDevices", "gridExtra",
                   "magrittr", "raster", "RColorBrewer", "stats", "VGAM",
+                  "quickPlot",
                   "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
                   "PredictiveEcology/LandWebUtils@development (>= 0.1.7)",
                   "PredictiveEcology/pemisc@development",
