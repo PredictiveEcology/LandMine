@@ -211,12 +211,17 @@ doEvent.LandMine <- function(sim, eventTime, eventType, debug = FALSE) {
   } else if (eventType == "plot") {
     ## TODO: allow plot to file
     if (anyPlotting(P(sim)$.plots) && any(P(sim)$.plots == "screen")) {
-      mod$LandMineDevice <- max(dev.list()) + 1
 
-      devCur <- dev.cur()
-      quickPlot::dev(mod$LandMineDevice, width = 18, height = 12)
+      if (is.null(mod$LandMineDevice)) {
+        quickPlot::dev.useRSGD(FALSE)
+        # if the device was already "this" size, meaning probably made here
+        # -- apparently it doesn't set 18 x 12 on Windows
+        if (!all(abs(dev.size() - c(14.2604166666667, 9.47916666666667)) < 0.5))
+          quickPlot::dev(width = 18, height = 12)
+        mod$LandMineDevice <- dev.cur()
+      }
+      quickPlot::dev(mod$LandMineDevice)
       sim <- plotFn(sim)
-      dev(devCur)
 
       sim <- scheduleEvent(sim, P(sim)$.plotInterval, "LandMine", "plot")
     }
