@@ -882,7 +882,10 @@ SummarizeFRImulti <- function(sim) {
 
   if (!suppliedElsewhere("sppEquiv", sim)) {
     sim$sppEquiv <- LandR::sppEquivalencies_CA
+    sppNames <- LandR::equivalentName(sim$species$species, sim$sppEquiv, column = Par$sppEquivCol)
+    sim$sppEquiv <- sim$sppEquiv[get(Par$sppEquivCol) %in% sppNames]
   }
+
 
   return(invisible(sim))
 }
