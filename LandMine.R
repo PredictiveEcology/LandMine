@@ -374,12 +374,12 @@ plotFn <- compiler::cmpfun(function(sim) {
     friRast[] <- as.factor(sim$fireReturnInterval[])
     Plot(friRast, title = "Fire Return Interval", cols = c("pink", "darkred"), new = TRUE)
     sar <- sim$studyAreaReporting
-    Plot(sar, addTo = "friRast", title = "", gp = gpar(col = "black", fill = 0))
+    Plot(sar, addTo = "friRast", title = "", cols = "transparent")
 
     rstFlammable <- raster(sim$rstFlammable)
     rstFlammable[] <- getValues(sim$rstFlammable)
     Plot(rstFlammable, title = "Land Type (rstFlammable)", cols = c("mediumblue", "firebrick"), new = TRUE)
-    Plot(sar, addTo = "rstFlammable", title = "", gp = gpar(col = "black", fill = 0))
+    Plot(sar, addTo = "rstFlammable", title = "", cols = "transparent")
   } else {
     firstPlot <- isTRUE(time(sim) == P(sim)$.plotInitialTime + P(sim)$.plotInterval)
     title1 <- if (firstPlot) "Current area burned (ha)" else ""
@@ -391,7 +391,7 @@ plotFn <- compiler::cmpfun(function(sim) {
     rcbc[!is.na(sim$rstCurrentBurn)] <- 0L
     Plot(rcbc, new = TRUE, title = title2, cols = c("pink", "red"), zero.color = "transparent")
     sar <- sim$studyAreaReporting
-    Plot(sar, addTo = "rcbc", title = "", gp = gpar(col = "black", fill = 0))
+    Plot(sar, addTo = "rcbc", title = "", cols = "transparent")
   }
 
   # ! ----- STOP EDITING ----- ! #
