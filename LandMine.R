@@ -213,11 +213,21 @@ doEvent.LandMine <- function(sim, eventTime, eventType, debug = FALSE) {
     if (anyPlotting(P(sim)$.plots) && any(P(sim)$.plots == "screen")) {
 
       if (is.null(mod$LandMineDevice)) {
+        dl <- dev.list()
         quickPlot::dev.useRSGD(FALSE)
         # if the device was already "this" size, meaning probably made here
-        # -- apparently it doesn't set 18 x 12 on Windows
-        if (!all(abs(dev.size() - c(14.2604166666667, 9.47916666666667)) < 0.5))
-          quickPlot::dev(width = 18, height = 12)
+        needDev <- FALSE
+        desiredDims <- c(width = 14.3, height = 9.5)
+        if (is.null(dl)) {
+          needDev <- TRUE
+        } else {
+          if (!all(abs(dev.size() - desiredDims) < 0.5))
+            needDev <- TRUE
+        }
+        if (needDev) {
+          newDev <- max(dl) + 1
+          do.call(quickPlot::dev, append(list(newDev), as.list(desiredDims)))
+        }
         mod$LandMineDevice <- dev.cur()
       }
       quickPlot::dev(mod$LandMineDevice)
@@ -679,8 +689,9 @@ SummarizeFRIsingle <- function(sim) {
   }
 
   if ("screen" %in% P(sim)$.plots) {
-    clearPlot()
-    gridExtra::grid.arrange(ggFriPolys, fggFriExpVsSim, nrow = 1, ncol = 2)
+    mod$summaryDevice <- max(dev.list()) + 1
+    quickPlot::dev(mod$summaryDevice, width = 12)
+    gridExtra::grid.arrange(ggFriPolys, ggFriExpVsSim, nrow = 1, ncol = 2)
   }
 
   return(invisible(sim))
