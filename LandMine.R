@@ -797,8 +797,11 @@ SummarizeFRImulti <- function(sim) {
     if (getOption("LandR.verbose", TRUE) > 0)
       message("'studyArea' was not provided by user. Using a polygon in southwestern Alberta, Canada,")
 
-    sim$studyArea <- as(randomStudyArea(seed = 1234, size = 1e9), "Spatial")
+    sim$studyArea <- randomStudyArea(seed = 1234, size = 1e9)
   }
+
+  if (!is(sim$studyArea, "Spatial"))
+    sim$studyArea <- as(sim$studyArea, "Spatial")
 
   if (!suppliedElsewhere("studyAreaReporting", sim)) {
     if (getOption("LandR.verbose", TRUE) > 0)
