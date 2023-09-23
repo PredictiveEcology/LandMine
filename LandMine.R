@@ -15,7 +15,7 @@ defineModule(sim, list(
   documentation = list("README.md", "LandMine.Rmd"),
   reqdPkgs = list("assertthat", "data.table", "fpCompare", "ggplot2", "grDevices", "gridExtra",
                   "magrittr", "raster", "RColorBrewer", "stats", "VGAM",
-                  "quickPlot",
+                  "quickPlot", "fasterize",
                   "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
                   "PredictiveEcology/LandWebUtils@development (>= 0.1.7)",
                   "PredictiveEcology/pemisc@development",
@@ -809,6 +809,7 @@ SummarizeFRImulti <- function(sim) {
   if (is.null(sim$rasterToMatch)) {
     if (!suppliedElsewhere("rasterToMatch", sim)) {
       sim$rasterToMatch <- raster(sim$studyArea, res = 100)
+      sim$rasterToMatch <- fasterize::fasterize(sf::st_as_sf(sim$studyArea), sim$rasterToMatch)
     }
   }
 
