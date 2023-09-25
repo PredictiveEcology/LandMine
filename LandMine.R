@@ -630,8 +630,6 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
 
 ### summary events
 SummarizeFRIsingle <- function(sim) {
-  # if (is.na(Par$.studyAreaName))
-  #   P(sim)$.studyAreaName <- "test"
   studyArea <- P(sim)$.studyAreaName
 
   flammableMap <- sim[["rstFlammable"]]   ## RasterLayer
@@ -698,8 +696,6 @@ SummarizeFRIsingle <- function(sim) {
 }
 
 SummarizeFRImulti <- function(sim) {
-  # if (is.na(Par$.studyAreaName))
-  #   P(sim)$.studyAreaName <- "test"
   studyArea <- P(sim)$.studyAreaName
 
   allReps <- P(sim)$reps
