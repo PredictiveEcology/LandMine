@@ -632,7 +632,7 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
 
 ### summary events
 SummarizeFRIsingle <- function(sim) {
-  studyArea <- P(sim)$.studyAreaName
+  studyAreaName <- P(sim)$.studyAreaName
 
   flammableMap <- sim[["rstFlammable"]]   ## RasterLayer
   lthfc <- sim[["fireReturnInterval"]]    ## RasterLayer
@@ -671,7 +671,7 @@ SummarizeFRIsingle <- function(sim) {
   fwrite(sim$friSummary, f) ## TODO: add this file to list of outputs
 
   ## LTHFC/FRI polygons
-  ggFriPolys <- landmine_plot_LTHFC(lthfc, studyArea)
+  ggFriPolys <- landmine_plot_LTHFC(lthfc, studyAreaName)
 
   if ("png" %in% P(sim)$.plots) {
     fggFriPolys <- file.path(figurePath(sim), "LandMine_LTHFC_map.png")
@@ -698,7 +698,7 @@ SummarizeFRIsingle <- function(sim) {
 }
 
 SummarizeFRImulti <- function(sim) {
-  studyArea <- P(sim)$.studyAreaName
+  studyAreaName <- P(sim)$.studyAreaName
 
   allReps <- P(sim)$reps
   flammableMap <- NULL
@@ -758,7 +758,7 @@ SummarizeFRImulti <- function(sim) {
   fwrite(sim$friSummary, f) ## TODO: add this file to list of outputs
 
   ## LTHFC/FRI polygons
-  ggFriPolys <- landmine_plot_LTHFC(lthfc)
+  ggFriPolys <- landmine_plot_LTHFC(lthfc, studyAreaName)
 
   if ("png" %in% P(sim)$.plots) {
     fggFriPolys <- file.path(figurePath(sim), "LandMine_LTHFC_map.png")
