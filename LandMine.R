@@ -708,7 +708,7 @@ SummarizeFRImulti <- function(sim) {
   burnMaps <- lapply(allReps, function(rep) {
     fsim <- findSimFile(outputPath(sim), rep)
 
-    tmpSim <- loadSimList(fsim)
+    tmpSim <- suppressMessages(loadSimList(fsim))
 
     if (rep == 1L) {
       ## all reps have same flammable + LTHFC maps
