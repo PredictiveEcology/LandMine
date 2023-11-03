@@ -661,7 +661,7 @@ SummarizeFRIsingle <- function(sim) {
   }, numeric(1))
 
   sim$friSummary <- data.table(
-    studyArea = studyArea,
+    studyArea = studyAreaName,
     LTHFC = expFRIs,
     FRI = simFRIs,
     stringsAsFactors = FALSE
@@ -748,7 +748,7 @@ SummarizeFRImulti <- function(sim) {
   }, numeric(1))
 
   sim$friSummary <- data.table(
-    studyArea = studyArea,
+    studyArea = studyAreaName,
     LTHFC = expFRIs,
     FRI = simFRIs,
     stringsAsFactors = FALSE
@@ -768,7 +768,7 @@ SummarizeFRImulti <- function(sim) {
   }
 
   ## expected vs simulated fire return intervals
-  ggFriExpVsSim <- landmine_plot_compare_FRI(sim$friSummary) +
+  ggFriExpVsSim <- landmine_plot_FRI(sim$friSummary) +
     geom_smooth(method = "lm")
 
   if ("png" %in% P(sim)$.plots) {
