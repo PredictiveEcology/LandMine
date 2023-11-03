@@ -492,14 +492,16 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
       }
       on.exit(data.table::setDTthreads(a), add = TRUE)
 
-      fires <- landmine_burn1(sim$fireReturnInterval,
-                              startCells = thisYrStartCells,
-                              fireSizes = fireSizesInPixels,
-                              spreadProbRel = ROSmap,
-                              sizeCutoffs = mod$sizeCutoffs,
-                              maxRetriesPerID = P(sim)$maxRetriesPerID,
-                              spawnNewActive = mod$spawnNewActive,
-                              spreadProb = spreadProbThisStep)
+      fires <- landmine_burn1(
+        sim$fireReturnInterval,
+        startCells = thisYrStartCells,
+        fireSizes = fireSizesInPixels,
+        spreadProbRel = ROSmap,
+        sizeCutoffs = mod$sizeCutoffs,
+        maxRetriesPerID = P(sim)$maxRetriesPerID,
+        spawnNewActive = mod$spawnNewActive,
+        spreadProb = spreadProbThisStep
+      )
 
       ## occasionally, `order` col drops from fires, but it's not supposed to (SpaDES.tools#74)
       if (!"order" %in% colnames(fires)) {
@@ -756,7 +758,7 @@ SummarizeFRImulti <- function(sim) {
   fwrite(sim$friSummary, f) ## TODO: add this file to list of outputs
 
   ## LTHFC/FRI polygons
-  ggFriPolys <- landmine_plot_LTHFC_raster(lthfc)
+  ggFriPolys <- landmine_plot_LTHFC(lthfc)
 
   if ("png" %in% P(sim)$.plots) {
     fggFriPolys <- file.path(figurePath(sim), "LandMine_LTHFC_map.png")
