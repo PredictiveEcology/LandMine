@@ -312,7 +312,7 @@ opt_sn$optim$bestmem ## best param values
 
 ## assign with suffix to facilitate multiple DEoptim runs
 optimParams <- data.frame(
-  date = format(Sys.time(), "%Y-%M-%d"),
+  date = format(Sys.time(), "%Y-%m-%d"),
   pixelSize = pixelSize
 ) |>
   cbind(rbind(opt_sn$optim$bestmem))
