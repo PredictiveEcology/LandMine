@@ -15,6 +15,7 @@ defineModule(sim, list(
   documentation = list("README.md", "LandMine.Rmd"),
   reqdPkgs = list("assertthat", "data.table", "fpCompare", "ggplot2", "grDevices", "gridExtra",
                   "magrittr", "raster", "RColorBrewer", "stats", "VGAM",
+                  "quickPlot", "fasterize",
                   "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
                   "PredictiveEcology/LandWebUtils@development (>= 0.1.7)",
                   "PredictiveEcology/pemisc@development",
@@ -85,7 +86,7 @@ defineModule(sim, list(
                     "This describes the simulation time at which the first save event should occur"),
     defineParameter(".saveInterval", "numeric", NA, NA, NA,
                     "This describes the simulation time interval between save events"),
-    defineParameter(".studyAreaName", "character", NA, NA, NA,
+    defineParameter(".studyAreaName", "character", "test", NA, NA,
                     "Human-readable name for the study area used - e.g., a hash of the study",
                     "area obtained using `reproducible::studyAreaName()`"),
     defineParameter(".useCache", "logical", FALSE, NA, NA,
@@ -210,12 +211,27 @@ doEvent.LandMine <- function(sim, eventTime, eventType, debug = FALSE) {
   } else if (eventType == "plot") {
     ## TODO: allow plot to file
     if (anyPlotting(P(sim)$.plots) && any(P(sim)$.plots == "screen")) {
-      mod$LandMineDevice <- max(dev.list()) + 1
 
-      devCur <- dev.cur()
-      quickPlot::dev(mod$LandMineDevice, width = 18, height = 12)
+      if (is.null(mod$LandMineDevice)) {
+        dl <- dev.list()
+        quickPlot::dev.useRSGD(FALSE)
+        # if the device was already "this" size, meaning probably made here
+        needDev <- FALSE
+        desiredDims <- c(width = 14.3, height = 9.5)
+        if (is.null(dl)) {
+          needDev <- TRUE
+        } else {
+          if (!all(abs(dev.size() - desiredDims) < 0.5))
+            needDev <- TRUE
+        }
+        if (needDev) {
+          newDev <- max(dl) + 1
+          do.call(quickPlot::dev, append(list(newDev), as.list(desiredDims)))
+        }
+        mod$LandMineDevice <- dev.cur()
+      }
+      quickPlot::dev(mod$LandMineDevice)
       sim <- plotFn(sim)
-      dev(devCur)
 
       sim <- scheduleEvent(sim, P(sim)$.plotInterval, "LandMine", "plot")
     }
@@ -368,12 +384,12 @@ plotFn <- compiler::cmpfun(function(sim) {
     friRast[] <- as.factor(sim$fireReturnInterval[])
     Plot(friRast, title = "Fire Return Interval", cols = c("pink", "darkred"), new = TRUE)
     sar <- sim$studyAreaReporting
-    Plot(sar, addTo = "friRast", title = "", gp = gpar(col = "black", fill = 0))
+    Plot(sar, addTo = "friRast", title = "", cols = "transparent")
 
     rstFlammable <- raster(sim$rstFlammable)
     rstFlammable[] <- getValues(sim$rstFlammable)
     Plot(rstFlammable, title = "Land Type (rstFlammable)", cols = c("mediumblue", "firebrick"), new = TRUE)
-    Plot(sar, addTo = "rstFlammable", title = "", gp = gpar(col = "black", fill = 0))
+    Plot(sar, addTo = "rstFlammable", title = "", cols = "transparent")
   } else {
     firstPlot <- isTRUE(time(sim) == P(sim)$.plotInitialTime + P(sim)$.plotInterval)
     title1 <- if (firstPlot) "Current area burned (ha)" else ""
@@ -382,10 +398,11 @@ plotFn <- compiler::cmpfun(function(sim) {
 
     title2 <- if (firstPlot) "Cumulative Fire Map" else ""
     rcbc <- sim$rstCurrentBurnCumulative
-    rcbc[!is.na(sim$rstCurrentBurn)] <- 0L
+    rcbc[!is.na(sim$rstCurrentBurn) & sim$rstCurrentBurn == 0 &
+           sim$rstCurrentBurnCumulative == 0] <- 0L
     Plot(rcbc, new = TRUE, title = title2, cols = c("pink", "red"), zero.color = "transparent")
     sar <- sim$studyAreaReporting
-    Plot(sar, addTo = "rcbc", title = "", gp = gpar(col = "black", fill = 0))
+    Plot(sar, addTo = "rcbc", title = "", cols = "transparent")
   }
 
   # ! ----- STOP EDITING ----- ! #
@@ -475,14 +492,16 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
       }
       on.exit(data.table::setDTthreads(a), add = TRUE)
 
-      fires <- landmine_burn1(sim$fireReturnInterval,
-                              startCells = thisYrStartCells,
-                              fireSizes = fireSizesInPixels,
-                              spreadProbRel = ROSmap,
-                              sizeCutoffs = mod$sizeCutoffs,
-                              maxRetriesPerID = P(sim)$maxRetriesPerID,
-                              spawnNewActive = mod$spawnNewActive,
-                              spreadProb = spreadProbThisStep)
+      fires <- landmine_burn1(
+        sim$fireReturnInterval,
+        startCells = thisYrStartCells,
+        fireSizes = fireSizesInPixels,
+        spreadProbRel = ROSmap,
+        sizeCutoffs = mod$sizeCutoffs,
+        maxRetriesPerID = P(sim)$maxRetriesPerID,
+        spawnNewActive = mod$spawnNewActive,
+        spreadProb = spreadProbThisStep
+      )
 
       ## occasionally, `order` col drops from fires, but it's not supposed to (SpaDES.tools#74)
       if (!"order" %in% colnames(fires)) {
@@ -581,8 +600,9 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   sim$rstCurrentBurn[fires$pixels] <- 1L #as.numeric(factor(fires$initialPixels))
 
   if (is.null(sim$rstCurrentBurnCumulative)) {
-    sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn
-    sim$rstCurrentBurnCumulative[!is.na(sim$rstCurrentBurnCumulative[])] <- 0
+    sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn # keeps 1s
+    sim$rstCurrentBurnCumulative[!is.na(sim$rstCurrentBurnCumulative[])
+                                 & sim$rstCurrentBurnCumulative[] == 0] <- 0
   } else {
     sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn + sim$rstCurrentBurnCumulative
   }
@@ -612,7 +632,7 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
 
 ### summary events
 SummarizeFRIsingle <- function(sim) {
-  studyArea <- P(sim)$.studyAreaName
+  studyAreaName <- P(sim)$.studyAreaName
 
   flammableMap <- sim[["rstFlammable"]]   ## RasterLayer
   lthfc <- sim[["fireReturnInterval"]]    ## RasterLayer
@@ -641,7 +661,7 @@ SummarizeFRIsingle <- function(sim) {
   }, numeric(1))
 
   sim$friSummary <- data.table(
-    studyArea = studyArea,
+    studyArea = studyAreaName,
     LTHFC = expFRIs,
     FRI = simFRIs,
     stringsAsFactors = FALSE
@@ -651,7 +671,7 @@ SummarizeFRIsingle <- function(sim) {
   fwrite(sim$friSummary, f) ## TODO: add this file to list of outputs
 
   ## LTHFC/FRI polygons
-  ggFriPolys <- landmine_plot_LTHFC(lthfc, studyArea)
+  ggFriPolys <- landmine_plot_LTHFC(lthfc, studyAreaName)
 
   if ("png" %in% P(sim)$.plots) {
     fggFriPolys <- file.path(figurePath(sim), "LandMine_LTHFC_map.png")
@@ -661,7 +681,7 @@ SummarizeFRIsingle <- function(sim) {
   }
 
   ## expected vs simulated fire return intervals
-  ggFriExpVsSim <- landmine_plot_compare_FRI(sim$friSummary)
+  ggFriExpVsSim <- landmine_plot_FRI(sim$friSummary)
 
   if ("png" %in% P(sim)$.plots) {
     fggFriExpVsSim <- file.path(figurePath(sim), "LandMine_FRI_exp_vs_sim.png")
@@ -669,15 +689,16 @@ SummarizeFRIsingle <- function(sim) {
   }
 
   if ("screen" %in% P(sim)$.plots) {
-    clearPlot()
-    gridExtra::grid.arrange(ggFriPolys, fggFriExpVsSim, nrow = 1, ncol = 2)
+    mod$summaryDevice <- max(dev.list()) + 1
+    quickPlot::dev(mod$summaryDevice, width = 12)
+    gridExtra::grid.arrange(ggFriPolys, ggFriExpVsSim, nrow = 1, ncol = 2)
   }
 
   return(invisible(sim))
 }
 
 SummarizeFRImulti <- function(sim) {
-  studyArea <- P(sim)$.studyAreaName
+  studyAreaName <- P(sim)$.studyAreaName
 
   allReps <- P(sim)$reps
   flammableMap <- NULL
@@ -687,7 +708,7 @@ SummarizeFRImulti <- function(sim) {
   burnMaps <- lapply(allReps, function(rep) {
     fsim <- findSimFile(outputPath(sim), rep)
 
-    tmpSim <- loadSimList(fsim)
+    tmpSim <- suppressMessages(loadSimList(fsim))
 
     if (rep == 1L) {
       ## all reps have same flammable + LTHFC maps
@@ -727,7 +748,7 @@ SummarizeFRImulti <- function(sim) {
   }, numeric(1))
 
   sim$friSummary <- data.table(
-    studyArea = studyArea,
+    studyArea = studyAreaName,
     LTHFC = expFRIs,
     FRI = simFRIs,
     stringsAsFactors = FALSE
@@ -737,7 +758,7 @@ SummarizeFRImulti <- function(sim) {
   fwrite(sim$friSummary, f) ## TODO: add this file to list of outputs
 
   ## LTHFC/FRI polygons
-  ggFriPolys <- landmine_plot_LTHFC_raster(lthfc)
+  ggFriPolys <- landmine_plot_LTHFC(lthfc, studyAreaName)
 
   if ("png" %in% P(sim)$.plots) {
     fggFriPolys <- file.path(figurePath(sim), "LandMine_LTHFC_map.png")
@@ -747,7 +768,7 @@ SummarizeFRImulti <- function(sim) {
   }
 
   ## expected vs simulated fire return intervals
-  ggFriExpVsSim <- landmine_plot_compare_FRI(sim$friSummary) +
+  ggFriExpVsSim <- landmine_plot_FRI(sim$friSummary) +
     geom_smooth(method = "lm")
 
   if ("png" %in% P(sim)$.plots) {
@@ -788,6 +809,9 @@ SummarizeFRImulti <- function(sim) {
     sim$studyArea <- randomStudyArea(seed = 1234, size = 1e9)
   }
 
+  if (!is(sim$studyArea, "Spatial"))
+    sim$studyArea <- as(sim$studyArea, "Spatial")
+
   if (!suppliedElsewhere("studyAreaReporting", sim)) {
     if (getOption("LandR.verbose", TRUE) > 0)
       message("'studyAreaReporting' was not provided by user. Using the same as 'studyArea'.")
@@ -797,6 +821,7 @@ SummarizeFRImulti <- function(sim) {
   if (is.null(sim$rasterToMatch)) {
     if (!suppliedElsewhere("rasterToMatch", sim)) {
       sim$rasterToMatch <- raster(sim$studyArea, res = 100)
+      sim$rasterToMatch <- fasterize::fasterize(sf::st_as_sf(sim$studyArea), sim$rasterToMatch)
     }
   }
 
@@ -870,7 +895,10 @@ SummarizeFRImulti <- function(sim) {
 
   if (!suppliedElsewhere("sppEquiv", sim)) {
     sim$sppEquiv <- LandR::sppEquivalencies_CA
+    sppNames <- LandR::equivalentName(sim$species$species, sim$sppEquiv, column = Par$sppEquivCol)
+    sim$sppEquiv <- sim$sppEquiv[get(Par$sppEquivCol) %in% sppNames]
   }
+
 
   return(invisible(sim))
 }
