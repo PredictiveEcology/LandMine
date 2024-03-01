@@ -592,11 +592,27 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
 
     iter <- iter + 1L
   }
-message(crayon::yellow("fires data.table"))
-  fires <- rbindlist(firesList)
-  sim$fireSizes[[round(time(sim) - P(sim)$burnInitialTime + 1, 0)]] <- rbindlist(fireSizes)
+
+  firesDT <- rbindlist(firesList)
+  fireSizesDT <- rbindlist(fireSizes)
+
+  ## TODO: how to best deal with no fires and their impacts on FRI & area burned calculations?
+  if (nrow(firesDT) == 0) {
+    message(crayon::yellow("no fires this period!"))
+    firesDT <- data.table(initialPixels = integer(0), pixels = integer(0),
+                          state = character(0), order = integer(0))
+  }
+
+  if (nrow(fireSizesDT) == 0) {
+    fireSizesDT <- data.table(size = 0L, maxSize = 0L)
+  }
+
+  sim$fireSizes[[round(time(sim) - P(sim)$burnInitialTime + 1, 0)]] <- fireSizesDT
+
   sim$rstCurrentBurn[] <- 0L
-  sim$rstCurrentBurn[fires$pixels] <- 1L # as.numeric(factor(fires$initialPixels))
+  if (nrow(firesDT) > 0) {
+    sim$rstCurrentBurn[firesDT$pixels] <- 1L # as.numeric(factor(firesDT$initialPixels))
+  }
 
   if (is.null(sim$rstCurrentBurnCumulative)) {
     sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn # keeps 1s
