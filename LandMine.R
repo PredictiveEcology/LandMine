@@ -211,7 +211,6 @@ doEvent.LandMine <- function(sim, eventTime, eventType, debug = FALSE) {
   } else if (eventType == "plot") {
     ## TODO: allow plot to file
     if (anyPlotting(P(sim)$.plots) && any(P(sim)$.plots == "screen")) {
-
       if (is.null(mod$LandMineDevice)) {
         dl <- dev.list()
         quickPlot::dev.useRSGD(FALSE)
@@ -593,11 +592,11 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
 
     iter <- iter + 1L
   }
-
+message(crayon::yellow("fires data.table"))
   fires <- rbindlist(firesList)
   sim$fireSizes[[round(time(sim) - P(sim)$burnInitialTime + 1, 0)]] <- rbindlist(fireSizes)
   sim$rstCurrentBurn[] <- 0L
-  sim$rstCurrentBurn[fires$pixels] <- 1L #as.numeric(factor(fires$initialPixels))
+  sim$rstCurrentBurn[fires$pixels] <- 1L # as.numeric(factor(fires$initialPixels))
 
   if (is.null(sim$rstCurrentBurnCumulative)) {
     sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn # keeps 1s
