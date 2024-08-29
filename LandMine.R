@@ -721,6 +721,7 @@ SummarizeFRImulti <- function(sim) {
   pixelRes <- NULL
 
   burnMaps <- lapply(allReps, function(rep) {
+    message(paste("loading simulation data for rep", rep, "..."))
     fsim <- findSimFile(outputPath(sim), rep)
 
     tmpSim <- suppressMessages(loadSimList(fsim))
@@ -740,7 +741,8 @@ SummarizeFRImulti <- function(sim) {
 
     ## mean annual cumulative burn map
     tmpSim[["rstCurrentBurnCumulative"]] / (end(tmpSim) - start(tmpSim))
-  }) |> raster::stack() |>
+  }) |>
+    raster::stack() |>
     raster::calc(sum, na.rm = TRUE)
 
   meanAnnualCumulBurnMap <- burnMaps / length(allReps)
