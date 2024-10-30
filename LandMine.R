@@ -3,21 +3,22 @@ defineModule(sim, list(
   description = "Reimplementation of Andison (1999) LandMine fire model",
   keywords = c("Fire", "Landscape", "Percolation", "Pixel-based"),
   authors = c(
-    person(c("Eliot", "J", "B"), "McIntire", email = "eliot.mcintire@nrcan-rncan.gc.ca", role = c("aut", "cre")),
-    person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb"))
+    person(c("Eliot", "J", "B"), "McIntire", email = "eliot.mcintire@nrcan-rncan.gc.ca", role = c("aut")),
+    person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb", "cre"))
   ),
   childModules = character(0),
-  version = list(LandMine = numeric_version("0.0.3")),
+  version = list(LandMine = numeric_version("0.0.5")),
   spatialExtent = raster::extent(rep(NA_real_, 4)),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = list("README.md", "LandMine.Rmd"),
-  reqdPkgs = list("assertthat", "data.table", "fpCompare", "ggplot2", "grDevices", "gridExtra",
+  reqdPkgs = list("assertthat", "data.table", "fpCompare",
+                  "ggplot2", "ggspatial", "grDevices", "gridExtra",
                   "magrittr", "raster", "RColorBrewer", "stats", "VGAM",
                   "quickPlot", "fasterize",
                   "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
-                  "PredictiveEcology/LandWebUtils@development (>= 0.1.7)",
+                  "PredictiveEcology/LandWebUtils@development (>= 1.0.1)",
                   "PredictiveEcology/pemisc@development",
                   "PredictiveEcology/SpaDES.tools@development"),
   parameters = rbind(
@@ -309,17 +310,26 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   mod$spawnNewActive <- 10^c(optimPars[1], optimPars[2], optimPars[3], optimPars[4])
   mod$sizeCutoffs <- 10^c(optimPars[5], optimPars[6])
 
-  mod$spreadProb <- !is.na(sim$fireReturnInterval)
-  mod$spreadProb[mod$spreadProb[] == 0] <- NA_real_
-  mod$spreadProb[mod$spreadProb[] == 1] <- optimPars[7]
+  ## 2024-10: use `sim$rstFlammable` instead of `sim$fireReturnInterval` raster
+  ##          to ensure coverage across entire studyArea (e.g., boundaries along grasslands)
+  mod$spreadProb <- raster(sim$rstFlammable)
+  mod$spreadProb[sim$rstFlammable[] == 1] <- optimPars[7] ## assign spreadProb to flammable pixels
+  mod$spreadProb[is.na(sim$rstFlammable[]) | sim$rstFlammable[] == 0] <- switch(
+    P(sim)$ROStype,
+    burny = optimPars[7], ## non-flammable pixels *can* spread fire (but won't count as burned pixels for fire stats)
+    NA_real_ ## non-flammable pixels don't have a spreadProb value (i.e., can't spread)
+  )
+  mod$spreadProb <- mask(mod$spreadProb, sim$studyArea)
 
   sim$fireSizes <- list()
 
-  if (!is.integer(sim$fireReturnInterval[]))
+  if (!is.integer(sim$fireReturnInterval[])) {
     sim$fireReturnInterval[] <- as.integer(sim$fireReturnInterval[])
+  }
 
-  if (verbose > 0)
+  if (verbose > 0) {
     message("Initializing fire maps")
+  }
   sim$fireTimestep <- P(sim)$fireTimestep
   sim$fireInitialTime <- P(sim)$burnInitialTime
 
@@ -367,11 +377,16 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
                                        haBurned = numeric(0),
                                        FRI = numeric(0))
 
-  mod$knownSpecies <- c(Pice_mar = "spruce", Pice_gla = "spruce",
-                        Pinu_con = "pine", Pinu_ban = "pine",
-                        Popu_tre = "decid", Betu_pap = "decid",
-                        Abie_bal = "softwood", Abie_las = "softwood", Abie_sp = "softwood")
-  sim$sppEquiv[, LandMine := mod$knownSpecies[LandR]]
+  ## 2024-10: knownSpecies needs to use 'LandWeb' column, not 'LandR'!
+  mod$knownSpecies <- c(
+    Pice_gla = "spruce",
+    Pice_mar = "spruce",
+    Pinu_con = "pine", Pinu_ban = "pine", Pinu_sp = "pine",
+    Popu_tre = "decid", Betu_pap = "decid", Popu_sp = "decid",
+    Abie_bal = "softwood", Abie_las = "softwood", Abie_sp = "softwood",
+    Pseu_men = "softwood"
+  )
+  sim$sppEquiv[, LandMine := mod$knownSpecies[LandWeb]]
 
   return(invisible(sim))
 }
@@ -436,9 +451,9 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
                                     sppEquivCol = P(sim)$sppEquivCol,
                                     colors = sim$sppColorVect,
                                     doAssertion = P(sim)$.unitTest)
-
   ROSmap <- raster(sim$pixelGroupMap)
   ROSmap[] <- fireROS(sim, vegTypeMap = vegTypeMap)
+  ROSmap <- mask(ROSmap, sim$studyArea)
 
   spreadProbThisStep <- mod$spreadProb
 
@@ -491,6 +506,16 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
       }
       on.exit(data.table::setDTthreads(a), add = TRUE)
 
+      ## TODO: LandWebUtils@burny has partial implementation, but it's not yet working correctly
+      ## 2024-10: normally, non-flammable pixels are NA in ROSmap and spreadProbThisStep;
+      ##          except in 'burny' scenarios, where fires *can* spread through those pixels,
+      ##          but aren't counted towards burn stats/summaries.
+      # omitPixels <- switch(
+      #   P(sim)$ROStype,
+      #   burny = which(is.na(sim$rstFlammable[]) | (sim$rstFlammable[] == 0)),
+      #   NULL
+      # )
+
       fires <- landmine_burn1(
         sim$fireReturnInterval,
         startCells = thisYrStartCells,
@@ -499,7 +524,8 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
         sizeCutoffs = mod$sizeCutoffs,
         maxRetriesPerID = P(sim)$maxRetriesPerID,
         spawnNewActive = mod$spawnNewActive,
-        spreadProb = spreadProbThisStep
+        spreadProb = spreadProbThisStep#,
+        # omitPixels = omitPixels ## TODO: with prev
       )
 
       ## occasionally, `order` col drops from fires, but it's not supposed to (SpaDES.tools#74)
@@ -916,7 +942,6 @@ SummarizeFRImulti <- function(sim) {
     sim$sppEquiv <- sim$sppEquiv[get(Par$sppEquivCol) %in% sppNames]
   }
 
-
   return(invisible(sim))
 }
 
@@ -924,7 +949,7 @@ fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
   ROS <- rep(NA_integer_, ncell(vegTypeMap))
 
   vegType <- getValues(vegTypeMap)
-  vegTypes <- data.table(raster::levels(vegTypeMap)[[1]]) # 2nd column in levels
+  vegTypes <- data.table(raster::levels(vegTypeMap)[[1]]) ## 2nd column in levels
 
   sppNames <- equivalentName(as.character(vegTypes[[2]]), sim$sppEquiv, P(sim)$sppEquivCol)
   suppressWarnings({
@@ -937,14 +962,17 @@ fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
     ))
   })
   # remove duplicates of softwood, which is NA
-  onRaster <- na.omit(unique(onRaster, by = "V2"))
-  setnames(onRaster, old = 1:2, new = c("leading", "pixelValue"))
+  onRaster <- na.omit(unique(onRaster, by = "V2")) %>%
+    setnames(old = 1:2, new = c("leading", "pixelValue")) %>%
+    setkeyv("pixelValue")
+  onRaster[, species := sppNames]
 
-  sppEquiv <- sim$sppEquiv[, c("LandMine", "LandR")][, leading := mod$knownSpecies[LandR]]
-  sppEquiv <- na.omit(sppEquiv, on = "LandMine")
-  sppEquiv <- unique(sppEquiv[onRaster, on = c("LandMine" = "leading")])
+  sppEquiv <- sim$sppEquiv[, c("LandMine", "LandWeb")][, leading := mod$knownSpecies[LandWeb]] %>%
+    na.omit(on = "LandMine")
+  sppEquiv <- sppEquiv[onRaster, on = c("LandMine" = "leading", "LandWeb" = "species")] %>%
+    unique()
 
-  sppEquivHere <- unique(na.omit(sppEquiv$LandR))
+  sppEquivHere <- unique(na.omit(sppEquiv$LandWeb))
   haveAllKnown <- sppEquivHere %in% names(mod$knownSpecies)
   if (!all(haveAllKnown)) {
     stop("LandMine only has rate of spread burn rates for\n",
@@ -979,26 +1007,34 @@ fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
 
   cuts[[3]] <- sim$rstTimeSinceFire[] <= 40
 
-  # Now go through from mature through immature through young
-  if (!all(sppEquiv["mature"]$pixelValue %in% vegTypes[[1]]))
-    cuts[["mature"]] <- cuts[["mature"]] & vegType %in% sppEquiv["mature"]$pixelValue
+  ## Now go through from mature through immature through young
+  if (!all(sppEquiv["mature"]$pixelValue %in% vegTypes[[1]])) {
+    cuts[[1]] <- cuts[[1]] & vegType %in% sppEquiv["mature"]$pixelValue
+  }
 
-  if (!all(sppEquiv["immature"]$pixelValue %in% vegTypes[[1]]))
+  if (!all(sppEquiv["immature"]$pixelValue %in% vegTypes[[1]])) {
     cuts[[2]] <- cuts[[2]] & vegType %in% sppEquiv["immature"]$pixelValue
+  }
 
-  if (all(sppEquiv["young"]$pixelValue %in% vegTypes[[1]]))
+  if (all(sppEquiv["young"]$pixelValue %in% vegTypes[[1]])) {
     cuts[[3]] <- cuts[[3]] & vegType %in% sppEquiv["young"]$pixelValue
+  }
 
   mature <- which(cuts[[1]])
   immature <- which(cuts[[2]])
   young <- which(cuts[[3]])
 
-  if (length(mature))
+  if (length(mature)) {
     ROS[mature] <- sppEquiv["mature"]$ros[match(vegType[mature], sppEquiv["mature"]$pixelValue)]
-  if (length(immature))
+  }
+
+  if (length(immature)) {
     ROS[immature] <- sppEquiv["immature"]$ros[match(vegType[immature], sppEquiv["immature"]$pixelValue)]
-  if (length(young))
+  }
+
+  if (length(young)) {
     ROS[young] <- sppEquiv["young"]$ros[match(vegType[young], sppEquiv["young"]$pixelValue)]
+  }
 
   if (getOption("LandR.assertions", TRUE)) {
     names(cuts) <- c("mature", "immature", "young")
@@ -1012,25 +1048,31 @@ fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
     dt <- na.omit(dt, cols = c("ROS", "age"))
     dtSumm <- dt[, list(derivedROS = unique(ROS)), by = c("pixelValue", "age")]
     dtSumm <- dtSumm[sppEquiv, on = c("pixelValue", "age" = "used"), nomatch = NULL]
+
     if (!(identical(dtSumm$derivedROS, dtSumm$ros))) {
       stop("fireROS failed its test")
     }
   }
 
-  ## Other vegetation that can burn -- e.g., grasslands, lichen, shrub
+  ## Other vegetation (flammable, non-forest; e.g., grasslands, lichen, shrub)
   ## The original default value is the same as that of mature spruce stands (30L)
-  ## 2023-02: discontinuous fuels (e.g., shield) requires increasing spread --
-  ##          use same value as young deciduous (6L), per Dave's text messages
-  ROSother <- switch(P(sim)$ROStype,
-                     burny = sim$ROSTable[leading == "decid" & age == "immature_young", ros],
-                     sim$ROSTable[leading == "spruce" & age == "mature", ros])
+  # ROSother <- sim$ROSTable[leading == "spruce" & age == "mature", ros]
+  ROSother <- P(sim)$ROSother
+
+  ## Non-flammable cover types
+  ## 2023-02: discontinuous fuels (e.g., shield) may require spread through non-flammable pixels;
+  ##          use same value as young deciduous (6L), per Dave's text messages.
+  ROSnonflam <- switch(P(sim)$ROStype,
+                       burny = sim$ROSTable[leading == "decid" & age == "immature_young", ros],
+                       NA_integer_)
 
   assertthat::assert_that(
     isTRUE(inRange(P(sim)$ROSother, min(sim$ROSTable$ros), max(sim$ROSTable$ros))),
     isTRUE(inRange(P(sim)$ROSother, 0.95*ROSother, 1.05*ROSother)) ## TODO: tweak this to allow greater range
   )
-  ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- as.integer(P(sim)$ROSother)
-  ROS[sim$rstFlammable[] == 0L | is.na(sim$rstFlammable[])] <- NA ## non-flammable pixels
+
+  ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- as.integer(ROSother) ## flammable
+  ROS[sim$rstFlammable[] == 0L | is.na(sim$rstFlammable[])] <- as.integer(ROSnonflam) ## nonflammable
 
   return(ROS)
 })
