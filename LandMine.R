@@ -7,7 +7,7 @@ defineModule(sim, list(
     person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb", "cre"))
   ),
   childModules = character(0),
-  version = list(LandMine = numeric_version("0.0.5")),
+  version = list(LandMine = numeric_version("0.0.6")),
   spatialExtent = raster::extent(rep(NA_real_, 4)),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
@@ -18,7 +18,7 @@ defineModule(sim, list(
                   "magrittr", "raster", "RColorBrewer", "stats", "VGAM",
                   "quickPlot", "fasterize",
                   "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
-                  "PredictiveEcology/LandWebUtils@development (>= 1.0.1)",
+                  "PredictiveEcology/LandWebUtils@development (>= 1.0.2)",
                   "PredictiveEcology/pemisc@development",
                   "PredictiveEcology/SpaDES.tools@development"),
   parameters = rbind(
@@ -506,15 +506,14 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
       }
       on.exit(data.table::setDTthreads(a), add = TRUE)
 
-      ## TODO: LandWebUtils@burny has partial implementation, but it's not yet working correctly
       ## 2024-10: normally, non-flammable pixels are NA in ROSmap and spreadProbThisStep;
       ##          except in 'burny' scenarios, where fires *can* spread through those pixels,
       ##          but aren't counted towards burn stats/summaries.
-      # omitPixels <- switch(
-      #   P(sim)$ROStype,
-      #   burny = which(is.na(sim$rstFlammable[]) | (sim$rstFlammable[] == 0)),
-      #   NULL
-      # )
+      omitPixels <- switch(
+        P(sim)$ROStype,
+        burny = which(is.na(sim$rstFlammable[]) | (sim$rstFlammable[] == 0)),
+        NULL
+      )
 
       fires <- landmine_burn1(
         sim$fireReturnInterval,
@@ -524,8 +523,8 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
         sizeCutoffs = mod$sizeCutoffs,
         maxRetriesPerID = P(sim)$maxRetriesPerID,
         spawnNewActive = mod$spawnNewActive,
-        spreadProb = spreadProbThisStep#,
-        # omitPixels = omitPixels ## TODO: with prev
+        spreadProb = spreadProbThisStep,
+        omitPixels = omitPixels
       )
 
       ## occasionally, `order` col drops from fires, but it's not supposed to (SpaDES.tools#74)
