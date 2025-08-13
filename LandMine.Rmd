@@ -23,8 +23,8 @@ always_allow_html: true
 <!-- the following are text references used in captions for LaTeX compatibility -->
 (ref:LandMine) *LandMine*
 
-```{r setup-LandMine, echo=FALSE, eval=TRUE, include=FALSE, message=FALSE}
-knitr::opts_chunk$set(echo = TRUE, eval = FALSE, results = "hold") ## change to eval = TRUE if all chunks are to be evaluated
+```{r setup-LandMine, echo = FALSE, eval = TRUE, include = FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE, results = "hold")
 
 ## get citation style
 if (!file.exists("citations/ecology-letters.csl")) {
@@ -109,7 +109,7 @@ The current version has not yet been fully tested and compared with the original
 Landmine requires the following codes as inputs (the genus and species codes below), which converts and groups species as follows.
 Each of the species groups has its own Rate of Spread (ROS) for fire spreading:
 
-```{r species-table, echo=FALSE, eval=TRUE}
+```{r species-table, echo = FALSE, eval = TRUE}
 spp_df <- data.frame(
   Species = c("Jack pine", "Lodgepole pine", "Unspecified pine species",
               "Paper birch", "Balsam poplar", "Trembling aspen", "Larch/Tamarack",
@@ -174,7 +174,7 @@ To run this Landmine module alone (*i.e.*, for fitting), the following should wo
 
 To determine which packages are used by `LandMine`, use:
 
-```{r module-package-deps, eval=TRUE}
+```{r module-package-deps, eval = TRUE}
 SpaDES.core::packages(modules = "LandMine", paths = "..")[[1]]
 ```
 
@@ -182,7 +182,7 @@ SpaDES.core::packages(modules = "LandMine", paths = "..")[[1]]
 
 First, define a study area and create a template raster.
 
-```{r study-area, eval = FALSE}
+```{r study-area}
 studyArea <- SpaDES.tools::randomStudyArea(seed = 1234, size = 1e10)
 rasterToMatch <- raster(studyArea, res = 250)
 ```
