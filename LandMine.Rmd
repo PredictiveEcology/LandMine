@@ -271,7 +271,6 @@ machineName <- strsplit(Sys.info()["nodename"], "[.]")[[1]][1]
 
 clNames <- switch(machineName,
                   pinus = c(
-                    ## TODO: ssh cluster not yet working
                     rep("localhost", 0),
                     rep("picea.for-cast.ca", 20),
                     rep("pseudotsuga.for-cast.ca", 82)
