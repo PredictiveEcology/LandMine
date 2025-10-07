@@ -1,6 +1,6 @@
 ---
 title: "LandMine Manual"
-subtitle: "v.`r SpaDES.core::moduleMetadata(module = 'LandMine', path = '..')$version`"
+subtitle: "v.`r SpaDES.core::moduleVersion(module = 'LandMine', path = '..')`"
 date: "18 May 2018; updated 6 Sep 2022"
 output:
   bookdown::html_document2:
@@ -48,13 +48,7 @@ if (!"SpaDES.core" %in% rownames(installed.packages())) {
 }
 
 if (!"SpaDES.project" %in% rownames(installed.packages())) {
-  pak::pkg_install( "PredictiveEcology/SpaDES.project@transition")
-}
-
-## package SDM tools unavailable on CRAN since 2020-01-12; use latest archived version
-if (!"SDMTools" %in% rownames(installed.packages())) {
-  install.packages("https://cloud.r-project.org/src/contrib/Archive/SDMTools/SDMTools_1.1-221.2.tar.gz",
-                   repos = NULL)
+  pak::pkg_install( "PredictiveEcology/SpaDES.project@development")
 }
 
 if (!"LandWebUtils" %in% rownames(installed.packages())) {
@@ -68,7 +62,7 @@ Require(c("dplyr", "DEoptim", "igraph", "kableExtra", "LandWebUtils",
 
 if (interactive()) {
   workingDir <- SpaDES.project::findProjectPath() ## e.g., ~/GitHub/LandWeb
-  moduleDir <- file.path(workingDir, "m") |> Require::checkPath()
+  moduleDir <- file.path(workingDir, "modules") |> Require::checkPath()
 } else {
   ## e.g., when rendering module Rmd
   workingDir <- file.path("..") |> Require::checkPath() |> dirname()
@@ -110,25 +104,30 @@ Landmine requires the following codes as inputs (the genus and species codes bel
 Each of the species groups has its own Rate of Spread (ROS) for fire spreading:
 
 ```{r species-table, echo = FALSE, eval = TRUE}
-spp_df <- data.frame(
-  Species = c("Jack pine", "Lodgepole pine", "Unspecified pine species",
-              "Paper birch", "Balsam poplar", "Trembling aspen", "Larch/Tamarack",
-              "Black spruce",
-              "White spruce",
-              "Fir species"),
-  Group = c("Pine (PINU)", "Pine (PINU)", "Pine (PINU)",
-            "Deciduous (DECI)", "Deciduous (DECI)", "Deciduous (DECI)", "Deciduous (DECI)",
-            "Black spruce (PICE_MAR)",
-            "White spruce (PICE_GLA)",
-            "Fir (ABIE)"),
-  Code = c("Pinu_ban", "Pinu_con", "Pinu_sp",
-           "Betu_pap", "Popu_bal", "Popu_tre", "Lari_lar",
-           "Pice_mar",
-           "Pice_gla",
-           "Abie_sp")
-)
-knitr::kable(spp_df,
-             caption = "LandMine species codes.")
+data.frame(
+  Species = c(
+    "Jack pine", "Lodgepole pine", "Unspecified pine species",
+    "Paper birch", "Balsam poplar", "Trembling aspen", "Larch/Tamarack",
+    "Black spruce",
+    "White spruce",
+    "Fir and other softwoods"
+  ),
+  Code = c(
+    "Pinu_ban", "Pinu_con", "Pinu_spp",
+    "Betu_pap", "Popu_bal", "Popu_tre", "Lari_lar",
+    "Pice_mar",
+    "Pice_gla",
+    "Abie_spp"
+  ),
+  Group = c(
+    "Pine (PINU)", "Pine (PINU)", "Pine (PINU)",
+    "Deciduous (DECI)", "Deciduous (DECI)", "Deciduous (DECI)", "Deciduous (DECI)",
+    "Black spruce (PICE_MAR)",
+    "White spruce (PICE_GLA)",
+    "Fir (ABIE)"
+  )
+) |>
+  knitr::kable(caption = "LandMine species codes.")
 ```
 
 \newpage
@@ -184,7 +183,7 @@ First, define a study area and create a template raster.
 
 ```{r study-area}
 studyArea <- SpaDES.tools::randomStudyArea(seed = 1234, size = 1e10)
-rasterToMatch <- raster(studyArea, res = 250)
+rasterToMatch <- terra::rast(studyArea, resolution = 240)
 ```
 
 Next, set up the simulation to run for 13 timesteps using default module parameters.
@@ -192,9 +191,7 @@ Next, set up the simulation to run for 13 timesteps using default module paramet
 ```{r sim-setup}
 times <- list(start = 0, end = 13)
 
-parameters <- list(
-  # LandMine = list(flushCachedRandomFRI = TRUE) 
-)
+parameters <- list()
 
 modules <- list("LandMine")
 
@@ -212,8 +209,13 @@ paths <- list(
 ```
 
 ```{r run-sim}
-mySim <- simInit(times = times, params = parameters, modules = modules,
-                 objects = objects, paths = paths)
+mySim <- simInit(
+  times = times,
+  params = parameters,
+  modules = modules,
+  objects = objects,
+  paths = paths
+)
 
 dev()
 mySimOut <- spades(mySim, .plotInitialTime = times$start, debug = TRUE)
@@ -224,10 +226,15 @@ mySimOut <- spades(mySim, .plotInitialTime = times$start, debug = TRUE)
 ## Testing the burn algorithm
 
 ```{r testing}
-Require(c("data.table", "DEoptim", "parallel", "SDMTools"))
+Require(c("data.table", "DEoptim", "parallel"))
 
-s <- simInit(times = times, params = parameters, modules = modules,
-             objects = objects, paths = paths)
+s <- simInit(
+  times = times, 
+  params = parameters, 
+  modules = modules,
+  objects = objects, 
+  paths = paths
+)
 ```
 
 \newpage
@@ -237,8 +244,12 @@ s <- simInit(times = times, params = parameters, modules = modules,
 The following code chunk tries to find values of `spawnNewActive` that creates "reasonable" fire shapes at all sizes.
 
 ```{r fit-values}
-pixelSize <- 250
-ros <- raster(extent(0, pixelSize * 1e3, 0, pixelSize * 1e3), res = pixelSize, vals = 0)
+pixelSize <- 240
+ros <- terra::rast(
+  terra::ext(0, pixelSize * 1e3, 0, pixelSize * 1e3),
+  resolution = pixelSize,
+  vals = 0
+)
 ros <- ros == 0
 fireSize <- 1e5
 
@@ -247,17 +258,21 @@ spreadProb <- 0.9
 spawnNewActive <- c(0.46, 0.2, 0.26, 0.11)
 sizeCutoffs <- c(8e3, 2e4)
 
-NineCorners <- cellFromRowCol(ros,
-                              row = nrow(ros) / 4 * rep(1:3, 3),
-                              col = ncol(ros) / 4 * rep(1:3, each = 3))
+NineCorners <- terra::cellFromRowCol(
+  ros,
+  row = nrow(ros) / 4 * rep(1:3, 3),
+  col = ncol(ros) / 4 * rep(1:3, each = 3)
+)
 
-centreCell <- cellFromRowCol(ros,
-                             row = nrow(ros) / 2,
-                             col = ncol(ros) / 2)
+centreCell <- terra::cellFromRowCol(
+  ros,
+  row = nrow(ros) / 2,
+  col = ncol(ros) / 2
+)
 
 ## Set variables
 objs <- c("ros", "centreCell", "fireSize", "spawnNewActive", "sizeCutoffs", "spreadProb")
-pkgs <- c("data.table", "LandWebUtils", "raster", "SDMTools", "SpaDES.tools")
+pkgs <- c("data.table", "LandWebUtils", "raster", "SpaDES.tools")
 ```
 
 ```{r make-cluster}
@@ -292,20 +307,22 @@ if (!inherits(cl[[1]], "forknode")) {
 ### Visual examination
 
 ```{r optimization}
-opt_sn <- DEoptim(landmine_optim_fitSN,
-                  lower = c(-2, -3, -3, -3, 1, 3.5, 0.75), 
-                  upper = c(-0.1, -0.5, -0.5, -1, 3.5, 5, 1),
-                  control = DEoptim.control(
-                    VTR = 0.001,
-                    NP = as.integer(length(clNames)),
-                    itermax = 200,
-                    cluster = cl,
-                    strategy = 6
-                  ),
-                  ros = ros,
-                  centreCell = centreCell,
-                  fireSizes = c(10, 100, 1000, 10000, 100000),
-                  desiredPerimeterArea = 0.003)
+opt_sn <- DEoptim(
+  landmine_optim_fitSN,
+  lower = c(-2, -3, -3, -3, 1, 3.5, 0.75), 
+  upper = c(-0.1, -0.5, -0.5, -1, 3.5, 5, 1),
+  control = DEoptim.control(
+    VTR = 0.001,
+    NP = as.integer(length(clNames)),
+    itermax = 200,
+    cluster = cl,
+    strategy = 6
+  ),
+  ros = ros,
+  centreCell = centreCell,
+  fireSizes = c(10, 100, 1000, 10000, 100000),
+  desiredPerimeterArea = 0.003
+)
 
 opt_sn$optim$bestmem ## best param values
 
@@ -344,14 +361,22 @@ A second (alternative) version tries the optimization using fewer parameters, to
 Although this version was not used for the final module, we preserve it here for posterity.
 
 ```{r optimization2}
-fs_optim2 <- c(0.2, 1:8)*10000
-opt_sn2 <- DEoptim(landmine_optim_fitSN2,
-                   lower = c(1, -1, 1, 3, 4),
-                   upper = c(3, -0.3, 3, 4, 5), 
-                   control = DEoptim.control(VTR = 0.001, itermax = 40, 
-                                             cluster = cl, strategy = 6), 
-                   ros = ros, centreCell = centreCell, 
-                   fireSizes = fs_optim2, desiredPerimeterArea = 0.003)
+fs_optim2 <- c(0.2, 1:8) * 10000
+opt_sn2 <- DEoptim(
+  landmine_optim_fitSN2,
+  lower = c(1, -1, 1, 3, 4),
+  upper = c(3, -0.3, 3, 4, 5), 
+  control = DEoptim.control(
+    VTR = 0.001, 
+    itermax = 40, 
+    cluster = cl,
+    strategy = 6
+  ), 
+  ros = ros, 
+  centreCell = centreCell, 
+  fireSizes = fs_optim2, 
+  desiredPerimeterArea = 0.003
+)
 ```
 
 ### Visual examination
@@ -368,7 +393,9 @@ fit_sn2 <- landmine_optim_fitSN2(
 )
 bfs1_sn2 <- purrr::transpose(attr(fit_sn2, "bfs1"))
 LM_sn2 <- do.call(rbind, bfs1_sn2$LM)
-plot(log10(fs_sn2), LM_sn2[, "perim.area.ratio"]) ## NOTE: visual inspection - not too round; not too sinuous
+
+## NOTE: visual inspection - not too round; not too sinuous
+plot(log10(fs_sn2), LM_sn2[, "perim.area.ratio"]) 
 ```
 
 \newpage
@@ -457,8 +484,7 @@ sna <- 10^c(sna*par[3], sna*2*par[3], sna*3*par[3], sna*4*par[3])
 spawnNewActive <- sna
 
 ###########################
-clearPlot()
-dev()
+dev.new()
 
 for (i in 1:5) {
   fireSize <- 10^i
@@ -474,8 +500,13 @@ for (i in 1:5) {
   cl <- burnedMapList$cl
   do.call(rbind, burnedMapList$LM)
   
-  Plot(burnedMapList$burnedMap, cols = c("red"), new = FALSE, na.color = "white",
-       legend = FALSE, visualSqueeze = 0.7, title = paste0("Fire size: ", fireSize))
+  terra::plot(
+    burnedMapList$burnedMap,
+    col = "red",
+    colNA = "white",
+    legend = FALSE,
+    main = paste0("Fire size: ", fireSize)
+  )
 }
 ```
 
@@ -484,14 +515,15 @@ reps <- paste0("rep", 1:1)
 perims <- list()
 perm <- list()
 mod <- list()
-dev()
-clearPlot()
+
+dev.new()
+
 fireSizes <-  10^(4)
 
 for (fs in fireSizes) {
   for (i in 1:1) {
-    ros <- raster(extent(0, 2e5, 0, 2e5), res = 250, vals = 1)
-    NineCorners <- cellFromRowCol(
+    ros <- terra::rast(terra::ext(0, 2e5, 0, 2e5), resolution = 240, vals = 1)
+    NineCorners <- terra::cellFromRowCol(
       ros,
       rownr = nrow(ros) / 4 * rep(1:3, 3),
       colnr = ncol(ros) / 4 * rep(1:3, each = 3)
@@ -499,7 +531,7 @@ for (fs in fireSizes) {
     centreCell <- NineCorners
     ran <- runif(4, -3, -1)
     spawnNewActive <- 10^ran
-    #spawnNewActive <- 10^c(-0.1, -0.75, -1.2, ran*2.5)
+    # spawnNewActive <- 10^c(-0.1, -0.75, -1.2, ran*2.5)
     fireSize = rep(fs, length(centreCell))
     sizeCutoffs <- 10^c(1,3)
     burnedMapList <- landmine_optim_clusterWrap(cl = cl, nodes = clNames, reps = reps, objs = objs, pkgs = pkgs)
@@ -507,17 +539,18 @@ for (fs in fireSizes) {
     burnedMapList <- purrr::transpose(burnedMapList$out)
     cl <- burnedMapList$cl
     do.call(rbind, burnedMapList$LM)
-    Plot(burnedMapList$burnedMap, new = TRUE, zero.color = "white")
-    perims[[i]] <- data.frame(perim = burnedMapList$LM$rep1$perim.area.ratio,
-                              spawnNewActive = mean(spawnNewActive),
-                              others = t(spawnNewActive))
+    terra::plot(burnedMapList$burnedMap)
+    perims[[i]] <- data.frame(
+      perim = burnedMapList$LM$rep1$perim.area.ratio,
+      spawnNewActive = mean(spawnNewActive),
+      others = t(spawnNewActive)
+    )
   }
   fsChar <- as.character(fs)
   perm[[fsChar]] <- rbindlist(perims)
   perm[[fsChar]]$perim <- log10(perm[[fsChar]]$perim)
   perm[[fsChar]]$spawnNewActive <- perm[[fsChar]]$spawnNewActive
-  Plot(perm[[fsChar]]$perim, perm[[fsChar]]$spawnNewActive, new = TRUE,
-       addTo = paste0("fs",fsChar))
+  plot(perm[[fsChar]]$perim, perm[[fsChar]]$spawnNewActive, add = TRUE)
   mod[[fsChar]] <- lm(spawnNewActive ~ perim, data = perm[[fsChar]])
 }
 
@@ -526,12 +559,15 @@ for (fs in fireSizes) {
 log10(predict(mod[["1000"]], data.frame(perim = log10(0.003))))
 ```
 
-### Current (2022) version
+### Current (2025) version
 
 The original version was run using 100m pixels, despite the simulations being run using 250m pixels.
-This version uses 250m pixels.
 
-```{r manual-run-2023}
+This version uses 240m pixels to work with LandWeb v3.
+
+```{r manual-run-2025}
+pixelSize <- 240
+
 ## final optimization after 200 iterations (landmine_optim_fitSN)
 optimParams <- read.csv(fDEoptim)
 sns <- optimParams[, grepl("^par", colnames(optimParams))] |> tail(1) ## take last row
@@ -547,24 +583,35 @@ sna <- min(-0.15, par[1] + par[2]*log10(fireSize))
 sna <- 10^c(sna*par[3], sna*2*par[3], sna*3*par[3], sna*4*par[3])
 spawnNewActive <- sna
 
-clearPlot()
-
 for (i in 1:5) {
   fireSize <- 10^i
-  dim <- round(sqrt(fireSize)*5 * 250)
-  ros <- raster(extent(0, dim, 0, dim), res = 250, vals = 1)
-  centreCell <- cellFromRowCol(ros,
-                               row = nrow(ros) / 2,
-                               col = ncol(ros) / 2)
+  dim <- round(sqrt(fireSize)*5 * pixelSize)
+  ros <- terra::rast(terra::ext(0, dim, 0, dim), resolution = pixelSize, vals = 1)
+  centreCell <- terra::cellFromRowCol(
+    ros,
+    row = nrow(ros) / 2,
+    col = ncol(ros) / 2
+  )
   reps <- paste0("rep", 1:4 + (log10(fireSize) - 1)*4)
-  burnedMapList <- landmine_optim_clusterWrap(cl = cl, nodes = clNames, reps = reps, objs = objs, pkgs = pkgs)
+  burnedMapList <- landmine_optim_clusterWrap(
+    cl = cl, 
+    nodes = clNames, 
+    reps = reps, 
+    objs = objs, 
+    pkgs = pkgs
+  )
   names(burnedMapList$out) <- reps
   burnedMapList <- purrr::transpose(burnedMapList$out)
   cl <- burnedMapList$cl
   do.call(rbind, burnedMapList$LM)
   
-  Plot(burnedMapList$burnedMap, cols = c("red"), new = FALSE, na.color = "white",
-       legend = FALSE, visualSqueeze = 0.7, title = paste0("Fire size: ", fireSize))
+  terra::plot(
+    burnedMapList$burnedMap,
+    col = "red",
+    colNA = "white",
+    legend = FALSE,
+    main = paste0("Fire size: ", fireSize)
+  )
 }
 ```
 

@@ -7,26 +7,26 @@ defineModule(sim, list(
     person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb", "cre"))
   ),
   childModules = character(0),
-  version = list(LandMine = numeric_version("0.0.6")),
-  spatialExtent = raster::extent(rep(NA_real_, 4)),
+  version = list(LandMine = numeric_version("1.0.0")),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = list("README.md", "LandMine.Rmd"),
-  reqdPkgs = list("assertthat", "data.table", "fpCompare",
-                  "ggplot2", "ggspatial", "grDevices", "gridExtra",
-                  "magrittr", "raster", "RColorBrewer", "stats", "VGAM",
-                  "quickPlot", "fasterize",
-                  "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
-                  "PredictiveEcology/LandWebUtils@development (>= 1.0.2)",
-                  "PredictiveEcology/pemisc@development",
-                  "PredictiveEcology/SpaDES.tools@development"),
+  reqdPkgs = list(
+    "assertthat", "cli", "data.table", "fpCompare", "ggplot2",
+    "magrittr", ## NOTE: using `.` placeholder, so cannot use `|>`
+    "RColorBrewer", "stats", "terra", "tidyterra", "VGAM",
+    "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
+    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9002)", ## TODO: update version once SDMTools removed
+    "PredictiveEcology/pemisc@development",
+    "PredictiveEcology/SpaDES.tools@development"
+  ),
   parameters = rbind(
     defineParameter("biggestPossibleFireSizeHa", "numeric", 1e6, 1e4, 2e6,
                     "An upper limit, in hectares, of the truncated Pareto distribution of fire sizes"),
     defineParameter("burnInitialTime", "numeric", start(sim, "year") + 1, NA, NA,
                     "This describes the simulation time at which the first burn event should occur"),
-    defineParameter("fireTimestep", "numeric", 1, NA, NA,
+    defineParameter("fireTimestep", "integer", 1L, NA, NA,
                     "This describes the simulation time interval between burn events"),
     defineParameter("maxReburns", "integer", c(1L, 20L), 1L, 20L,
                     paste("Number of attempts to burn fires that don't reach their target fire size.",
@@ -105,14 +105,14 @@ defineModule(sim, list(
                  desc = paste("Columns: B, pixelGroup, speciesCode (as a factor of the names), age.",
                               "indicating several features about the current vegetation of stand."),
                  sourceURL = NA),
-    expectsInput("fireReturnInterval", "Raster",
+    expectsInput("fireReturnInterval", "SpatRaster",
                  desc = paste("A raster layer that is a factor raster, with at least 1 column called",
                               "`fireReturnInterval`, representing the fire return interval in years."),
                  sourceURL = NA),
-    expectsInput("pixelGroupMap", "RasterLayer",
+    expectsInput("pixelGroupMap", "SpatRaster",
                  desc = "Pixels with identical values share identical stand features",
                  sourceURL = NA),
-    expectsInput("rasterToMatch", "RasterLayer",
+    expectsInput("rasterToMatch", "SpatRaster",
                  desc = paste("a raster of the `studyArea` to use as a template raster",
                               "(resolution, projection, etc.) for all other rasters in the simulation."),
                  sourceURL = NA),
@@ -124,11 +124,11 @@ defineModule(sim, list(
                               "'leading' should be vegetation type.",
                               "'ros' gives the rate of spread values for each age and type."),
                  sourceURL = NA),
-    expectsInput("rstFlammable", "Raster",
+    expectsInput("rstFlammable", "SpatRaster",
                  desc = paste("A raster layer, with 0, 1 and NA, where 1 indicates areas",
                               "that are flammable, 0 not flammable (e.g., lakes)",
                               "and NA not applicable (e.g., masked)")),
-    expectsInput("rstTimeSinceFire", "Raster",
+    expectsInput("rstTimeSinceFire", "SpatRaster",
                  desc = "a time since fire raster layer",
                  sourceURL = NA),
     expectsInput("species", "data.table",
@@ -142,12 +142,12 @@ defineModule(sim, list(
                               "Default taken from `LandR::sppEquivalencies_CA` which has names for",
                               "species of trees in Canada"),
                  sourceURL = NA),
-    expectsInput("studyArea", "SpatialPolygonsDataFrame",
+    expectsInput("studyArea", "SpatVector",
                  desc = paste("multipolygon, typically buffered around an area of interest",
                               "(i.e., `studyAreaReporting`) to use for simulation.",
                               "Defaults to an area in Southwestern Alberta, Canada."),
                  sourceURL = NA),
-    expectsInput("studyAreaReporting", "SpatialPolygonsDataFrame",
+    expectsInput("studyAreaReporting", "sf",
                  desc = paste("multipolygon (typically smaller/unbuffered than `studyArea`)",
                               "to use for plotting/reporting.",
                               "Defaults to an area in Southwestern Alberta, Canada."),
@@ -163,7 +163,7 @@ defineModule(sim, list(
       "These indicate the actual sizes and expected sizes burned, respectively.",
       "These can be put into a single data.table with `rbindlist(sim$fireSizes, idcol = 'year')`")
     ),
-    createsOutput("fireReturnInterval", "RasterLayer", paste(
+    createsOutput("fireReturnInterval", "SpatRaster", paste(
       "A `Raster` map showing the fire return interval. This is created from the `rstCurrentBurn`.")
     ),
     createsOutput("fireReturnIntervalsByPolygonNumeric", "numeric", paste(
@@ -180,11 +180,11 @@ defineModule(sim, list(
     createsOutput("numFiresPerYear", "numeric", paste(
       "The average number of fires per year, by fire return interval level on `rstCurrentBurn`.")
     ),
-    createsOutput("rstCurrentBurn", "RasterLayer", paste(
+    createsOutput("rstCurrentBurn", "SpatRaster", paste(
       "A raster layer, produced at each timestep, where each",
       "pixel is either 1 or 0 indicating burned or not burned.")
     ),
-    createsOutput("rstCurrentBurnCumulative", "RasterLayer", "Cumulative number of times a pixel has burned"),
+    createsOutput("rstCurrentBurnCumulative", "SpatRaster", "Cumulative number of times a pixel has burned"),
     createsOutput("sppEquiv", "data.table", paste("Same as input, but with new column, `LandMine`."))
   )
 ))
@@ -204,37 +204,14 @@ doEvent.LandMine <- function(sim, eventTime, eventType, debug = FALSE) {
     if (P(sim)$mode == "single") {
       sim <- scheduleEvent(sim, P(sim)$burnInitialTime, "LandMine", "Burn", 2.5)
       sim <- scheduleEvent(sim, P(sim)$.plotInitialTime, "LandMine", "plot")
-      sim <- scheduleEvent(sim, P(sim)$.saveInitialTime, "LandMine", "save")
+      sim <- scheduleEvent(sim, end(sim), "LandMine", "plot")
       sim <- scheduleEvent(sim, end(sim), "LandMine", "summarySingle")
     } else if (P(sim)$mode == "multi") {
       sim <- scheduleEvent(sim, start(sim), "LandMine", "summaryMulti")
     }
   } else if (eventType == "plot") {
-    ## TODO: allow plot to file
-    if (anyPlotting(P(sim)$.plots) && any(P(sim)$.plots == "screen")) {
-      if (is.null(mod$LandMineDevice)) {
-        dl <- dev.list()
-        quickPlot::dev.useRSGD(FALSE)
-        # if the device was already "this" size, meaning probably made here
-        needDev <- FALSE
-        desiredDims <- c(width = 14.3, height = 9.5)
-        if (is.null(dl)) {
-          needDev <- TRUE
-        } else {
-          if (!all(abs(dev.size() - desiredDims) < 0.5))
-            needDev <- TRUE
-        }
-        if (needDev) {
-          newDev <- max(dl) + 1
-          do.call(quickPlot::dev, append(list(newDev), as.list(desiredDims)))
-        }
-        mod$LandMineDevice <- dev.cur()
-      }
-      quickPlot::dev(mod$LandMineDevice)
-      sim <- plotFn(sim)
-
-      sim <- scheduleEvent(sim, P(sim)$.plotInterval, "LandMine", "plot")
-    }
+    sim <- plotFn(sim)
+    sim <- scheduleEvent(sim, P(sim)$.plotInterval, "LandMine", "plot")
   } else if (eventType == "Burn") {
     sim <- Burn(sim)
     sim <- scheduleEvent(sim, time(sim) + P(sim)$fireTimestep, "LandMine", "Burn", 2.5)
@@ -300,7 +277,7 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   P(sim, "maxReburns", "LandMine") <- as.integer(P(sim, "maxReburns", "LandMine"))
   P(sim, "maxRetriesPerID", "LandMine") <- as.integer(P(sim, "maxRetriesPerID", "LandMine"))
 
-  compareRaster(sim$rasterToMatch, sim$fireReturnInterval, sim$rstFlammable, sim$rstTimeSinceFire)
+  terra::compareGeom(sim$rasterToMatch, sim$fireReturnInterval, sim$rstFlammable, sim$rstTimeSinceFire)
 
   ## from DEoptim fitting, run in the LandMine.Rmd file
   optimPars <- read.csv(file.path(dataPath(sim), "LandMine_DEoptim_params.csv"))
@@ -312,14 +289,14 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
   ## 2024-10: use `sim$rstFlammable` instead of `sim$fireReturnInterval` raster
   ##          to ensure coverage across entire studyArea (e.g., boundaries along grasslands)
-  mod$spreadProb <- raster(sim$rstFlammable)
+  mod$spreadProb <- terra::rast(sim$rstFlammable)
   mod$spreadProb[sim$rstFlammable[] == 1] <- optimPars[7] ## assign spreadProb to flammable pixels
   mod$spreadProb[is.na(sim$rstFlammable[]) | sim$rstFlammable[] == 0] <- switch(
     P(sim)$ROStype,
     burny = optimPars[7], ## non-flammable pixels *can* spread fire (but won't count as burned pixels for fire stats)
     NA_real_ ## non-flammable pixels don't have a spreadProb value (i.e., can't spread)
   )
-  mod$spreadProb <- mask(mod$spreadProb, sim$studyArea)
+  mod$spreadProb <- terra::mask(mod$spreadProb, sim$studyArea) ## mask only; don't crop
 
   sim$fireSizes <- list()
 
@@ -345,10 +322,12 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
     sim$fireReturnInterval[nonFlammable] <- NA
   }
 
-  numPixelsPerPolygonNumeric <- Cache(freq, sim$fireReturnInterval, useNA = "no", cacheRepo = cachePath(sim)) |>
-    na.omit()
-  colnames(numPixelsPerPolygonNumeric) <- c("fri", "count")
+  ## NOTE: need to keep the frequencies of the NAs for use in burn function
+  numPixelsPerPolygonNumeric <- terra::freq(sim$fireReturnInterval, bylayer = FALSE) |>
+    rbind(terra::freq(sim$fireReturnInterval, value = NA, bylayer = FALSE)) |>
+    setNames(c("fri", "count"))
   numPixelsPerPolygonNumeric <- cbind(value = seq_len(NROW(numPixelsPerPolygonNumeric)), numPixelsPerPolygonNumeric)
+
   ordPolygons <- order(numPixelsPerPolygonNumeric[, "value"])
   numPixelsPerPolygonNumeric <- numPixelsPerPolygonNumeric[ordPolygons, , drop = FALSE]
   sim$fireReturnIntervalsByPolygonNumeric <- numPixelsPerPolygonNumeric[, "fri"]
@@ -361,30 +340,39 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   if (verbose > 0) {
     message("Determine mean fire size...")
   }
-  meanFireSizeHa <- meanTruncPareto(k = sim$kBest, lower = 1,
-                                    upper = P(sim)$biggestPossibleFireSizeHa,
-                                    alpha = 1)
+  meanFireSizeHa <- LandWebUtils::meanTruncPareto(
+    k = sim$kBest,
+    lower = 1,
+    upper = P(sim)$biggestPossibleFireSizeHa,
+    alpha = 1
+  )
   numFiresByPolygonNumeric <- numHaPerPolygonNumeric / meanFireSizeHa
   sim$numFiresPerYear <- numFiresByPolygonNumeric / returnInterval
 
-  sim$rstCurrentBurn <- raster(sim$fireReturnInterval) ## creates no-value raster
+  sim$rstCurrentBurn <- terra::rast(sim$fireReturnInterval) ## creates no-value raster
   sim$rstCurrentBurn[] <- 0L
-  if (verbose > 0)
+  if (verbose > 0) {
     message("6: ", Sys.time())
+  }
 
-  mod$areaBurnedOverTime <- data.frame(time = numeric(0),
-                                       nPixelsBurned = numeric(0),
-                                       haBurned = numeric(0),
-                                       FRI = numeric(0))
+  mod$areaBurnedOverTime <- data.frame(
+    time = numeric(0),
+    nPixelsBurned = numeric(0),
+    haBurned = numeric(0),
+    FRI = numeric(0)
+  )
 
-  ## 2024-10: knownSpecies needs to use 'LandWeb' column, not 'LandR'!
+  ## knownSpecies needs to use 'LandWeb' column, not 'LandR'!
   mod$knownSpecies <- c(
+    Abie_spp = "softwood",
+    Lari_spp = "decid",
     Pice_gla = "spruce",
     Pice_mar = "spruce",
-    Pinu_con = "pine", Pinu_ban = "pine", Pinu_sp = "pine",
-    Popu_tre = "decid", Betu_pap = "decid", Popu_sp = "decid",
-    Abie_bal = "softwood", Abie_las = "softwood", Abie_sp = "softwood",
-    Pseu_men = "softwood"
+    Pinu_spp = "pine",
+    Popu_spp = "decid",
+    Pseu_men = "softwood",
+    Thuj_pli = "softwood",
+    Tsug_het = "softwood"
   )
   sim$sppEquiv[, LandMine := mod$knownSpecies[LandWeb]]
 
@@ -394,29 +382,57 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 ### plot events
 plotFn <- compiler::cmpfun(function(sim) {
   if (time(sim) == P(sim)$.plotInitialTime) {
-    friRast <- sim$fireReturnInterval
-    friRast[] <- as.factor(sim$fireReturnInterval[])
-    Plot(friRast, title = "Fire Return Interval", cols = c("pink", "darkred"), new = TRUE)
-    sar <- sim$studyAreaReporting
-    Plot(sar, addTo = "friRast", title = "", cols = "transparent")
+    gg_fri <- ggplot() +
+      tidyterra::geom_spatraster(data = terra::as.factor(sim$fireReturnInterval)) +
+      tidyterra::scale_fill_terrain_d() +
+      tidyterra::geom_spatvector(data = sim$studyAreaReporting, fill = NA, linewidth = 1.5) +
+      ggtitle("Fire Return Interval (i.e., LTHFC)") +
+      theme_minimal()
 
-    rstFlammable <- raster(sim$rstFlammable)
-    rstFlammable[] <- getValues(sim$rstFlammable)
-    Plot(rstFlammable, title = "Land Type (rstFlammable)", cols = c("mediumblue", "firebrick"), new = TRUE)
-    Plot(sar, addTo = "rstFlammable", title = "", cols = "transparent")
+    gg_flm <- ggplot() +
+      tidyterra::geom_spatraster(data = terra::as.factor(sim$rstFlammable)) +
+      tidyterra::scale_fill_whitebox_d(palette = "bl_yl_rd") +
+      tidyterra::geom_spatvector(data = sim$studyAreaReporting, fill = NA, linewidth = 1.5) +
+      ggtitle("Landscape flammability") +
+      theme_minimal()
+
+    if ("png" %in% P(sim)$.plots) {
+      f_gg_fri <- file.path(figurePath(sim), "LandMine_fireReturnInterval.png")
+      ggsave(f_gg_fri, gg_fri)
+      registerOutputs(f_gg_fri, sim)
+
+      f_gg_flm <- file.path(figurePath(sim), "LandMine_rstFlammable.png")
+      ggsave(f_gg_flm, gg_flm)
+      registerOutputs(f_gg_flm, sim)
+    }
+
+    if ("screen" %in% P(sim)$.plots) {
+      print(cowplot::plot_grid(gg_fri, gg_flm))
+    }
   } else {
-    firstPlot <- isTRUE(time(sim) == P(sim)$.plotInitialTime + P(sim)$.plotInterval)
-    title1 <- if (firstPlot) "Current area burned (ha)" else ""
-    abot <- mod$gg_areaBurnedOverTime
-    Plot(abot, title = title1, new = TRUE, addTo = "areaBurnedOverTime")
+    gg_abot <- mod$gg_areaBurnedOverTime +
+      ggtitle("Current area burned (ha)")
 
-    title2 <- if (firstPlot) "Cumulative Fire Map" else ""
     rcbc <- sim$rstCurrentBurnCumulative
     rcbc[!is.na(sim$rstCurrentBurn) & sim$rstCurrentBurn == 0 &
            sim$rstCurrentBurnCumulative == 0] <- 0L
-    Plot(rcbc, new = TRUE, title = title2, cols = c("pink", "red"), zero.color = "transparent")
-    sar <- sim$studyAreaReporting
-    Plot(sar, addTo = "rcbc", title = "", cols = "transparent")
+
+    gg_cbc <- ggplot() +
+      tidyterra::geom_spatraster(data = rcbc) +
+      tidyterra::scale_fill_princess_c(palette = "maori") +
+      tidyterra::geom_spatvector(data = sim$studyAreaReporting, fill = NA, linewidth = 1.5) +
+      ggtitle(sprintf("Cumulative Fire Map (t = %d)", time(sim))) +
+      theme_minimal()
+
+    if ("png" %in% P(sim)$.plots) {
+      f_gg_cbc <- file.path(figurePath(sim), sprintf("LandMine_cumulative_burn_map_%04d.png", time(sim)))
+      ggsave(f_gg_cbc, gg_cbc)
+      registerOutputs(f_gg_cbc, sim)
+    }
+
+    if ("screen" %in% P(sim)$.plots) {
+      print(cowplot::plot_grid(gg_abot, gg_cbc))
+    }
   }
 
   # ! ----- STOP EDITING ----- ! #
@@ -433,36 +449,45 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
 
   sim$numFiresPerYear <- na.omit(sim$numFiresPerYear)
   NA_ids <- as.integer(attr(sim$numFiresPerYear, "na.action"))
-  numFiresThisPeriod <- rnbinom(length(sim$numFiresPerYear),
-                                mu = sim$numFiresPerYear * P(sim)$fireTimestep,
-                                size = 1.3765) # Eliot lowered this from 1.8765 on Oct 23, 2018 because too constant
-  thisYrStartCellsDT <- data.table(pixel = seq(ncell(sim$fireReturnInterval)),
-                                   polygonNumeric = sim$fireReturnInterval[],
-                                   key = "polygonNumeric")
+  numFiresThisPeriod <- rnbinom(
+    length(sim$numFiresPerYear),
+    mu = sim$numFiresPerYear * P(sim)$fireTimestep,
+    size = 1.3765 ## Eliot lowered this from 1.8765 on Oct 23, 2018 because too constant
+  )
+  thisYrStartCellsDT <- data.table(
+    pixel = seq(ncell(sim$fireReturnInterval)),
+    polygonNumeric = terra::values(sim$fireReturnInterval, mat = FALSE),
+    key = "polygonNumeric"
+  )
 
   ## August 2022: reburn fires that did not meet their target size
 
   ## Rate of Spread
-  vegTypeMap <- vegTypeMapGenerator(sim$cohortData,
-                                    pixelGroupMap = sim$pixelGroupMap,
-                                    vegLeadingProportion = P(sim)$vegLeadingProportion,
-                                    mixedType = P(sim)$mixedType,
-                                    sppEquiv = sim$sppEquiv,
-                                    sppEquivCol = P(sim)$sppEquivCol,
-                                    colors = sim$sppColorVect,
-                                    doAssertion = P(sim)$.unitTest)
-  ROSmap <- raster(sim$pixelGroupMap)
+  vegTypeMap <- LandR::vegTypeMapGenerator(
+    sim$cohortData,
+    pixelGroupMap = sim$pixelGroupMap,
+    vegLeadingProportion = P(sim)$vegLeadingProportion,
+    mixedType = P(sim)$mixedType,
+    sppEquiv = sim$sppEquiv,
+    sppEquivCol = P(sim)$sppEquivCol,
+    colors = sim$sppColorVect,
+    doAssertion = P(sim)$.unitTest
+  )
+  ROSmap <- terra::rast(sim$pixelGroupMap) ## empty raster as template
   ROSmap[] <- fireROS(sim, vegTypeMap = vegTypeMap)
-  ROSmap <- mask(ROSmap, sim$studyArea)
+  ROSmap <- terra::mask(ROSmap, sim$studyArea)
 
   spreadProbThisStep <- mod$spreadProb
 
   ## If fire sizes are in hectares, must adjust based on resolution of maps
-  ##  NOTE: round causes fires < 0.5 pixels to NOT EXIST ... i.e., 3.25 ha fires are
-  ##  "not detectable" if resolution is 6.25 ha
-  fireSizesThisPeriod <- VGAM::rtruncpareto(sum(numFiresThisPeriod), lower = 1,
-                                            upper = P(sim)$biggestPossibleFireSizeHa,
-                                            shape = sim$kBest)
+  ##  NOTE: round causes fires < 0.5 pixels to NOT EXIST ...
+  ##        e.g., 3.25 ha fires are "not detectable" if resolution is 6.25 ha
+  fireSizesThisPeriod <- VGAM::rtruncpareto(
+    n = sum(numFiresThisPeriod),
+    lower = 1,
+    upper = P(sim)$biggestPossibleFireSizeHa,
+    shape = sim$kBest
+  )
 
   ## Because annual number of fires includes fires <6.25 ha, sometimes this will round down to 0 pixels.
   ##   This calculation makes that probabilistic.
@@ -481,6 +506,7 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   ## and start new fire(s) to burn the remaining area until the target is achieved.
   ## Should be OK b/c LandMine replicates FRIs (i.e., area burned each year), not number of fires
   while (sum(numFiresThisPeriod) > 0 && (iter <= sum(P(sim)$maxReburns))) {
+    ## NOTE: cannot use R native pipe (|>) here b/c currently relies on magrittr `.` placeholder
     thisYrStartCells <- thisYrStartCellsDT[polygonNumeric %in% c(0, NA_ids), polygonNumeric := NA] %>%
       na.omit() %>%
       .[, SpaDES.tools:::resample(pixel, numFiresThisPeriod[.GRP]), by = polygonNumeric] %>%
@@ -608,7 +634,7 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
           if (any(tail(fa1$proportionBurned, 10)  < P(sim)$minPropBurn)) {
             mess <- "In 'LandMine' module 'Burn()': proportion area burned is less than 'minPropBurn'!"
             if (verbose > 0)
-              message(crayon::red(mess))
+              message(cli::col_red(mess))
             warning(mess, call. = FALSE)
           }
         }
@@ -623,9 +649,13 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
 
   ## TODO: how to best deal with no fires and their impacts on FRI & area burned calculations?
   if (nrow(firesDT) == 0) {
-    message(crayon::yellow("no fires this period!"))
-    firesDT <- data.table(initialPixels = integer(0), pixels = integer(0),
-                          state = character(0), order = integer(0))
+    message(cli::col_yellow("no fires this period!"))
+    firesDT <- data.table(
+      initialPixels = integer(0),
+      pixels = integer(0),
+      state = character(0),
+      order = integer(0)
+    )
   }
 
   if (nrow(fireSizesDT) == 0) {
@@ -640,31 +670,34 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   }
 
   if (is.null(sim$rstCurrentBurnCumulative)) {
-    sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn # keeps 1s
+    sim$rstCurrentBurnCumulative <- terra::deepcopy(sim$rstCurrentBurn) ## keeps 1s
     sim$rstCurrentBurnCumulative[!is.na(sim$rstCurrentBurnCumulative[])
                                  & sim$rstCurrentBurnCumulative[] == 0] <- 0
   } else {
     sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn + sim$rstCurrentBurnCumulative
   }
 
-  currBurn <- raster::mask(sim$rstCurrentBurn, sim$studyAreaReporting) %>% raster::stack()
+  currBurn <- terra::mask(sim$rstCurrentBurn, sim$studyAreaReporting)
   fris <- unique(na.omit(sim$fireReturnInterval[]))
   npix <- vapply(fris, function(x) {
     ids <- which(sim$fireReturnInterval[] == x)
     unname(table(currBurn[ids])[2])
-  }, numeric(1)) %>% unname()
+  }, numeric(1)) |> unname()
   npix[is.na(npix)] <- 0 # Show that zero pixels burned in a year with no pixels burned, rather than NA
 
-  burnedDF <- data.frame(time = as.numeric(times(sim)$current),
-                         nPixelsBurned = npix,
-                         haBurned = npix * prod(res(sim$rstCurrentBurn)) / 100^2, ## area in ha
-                         FRI = as.factor(fris))
+  burnedDF <- data.frame(
+    time = as.numeric(times(sim)$current),
+    nPixelsBurned = npix,
+    haBurned = npix * prod(res(sim$rstCurrentBurn)) / 100^2, ## area in ha
+    FRI = as.factor(fris)
+  )
   mod$areaBurnedOverTime <- rbind(mod$areaBurnedOverTime, burnedDF)
   mod$gg_areaBurnedOverTime <- landmine_plot_areaBurnedOverTime(mod$areaBurnedOverTime)
 
   if (time(sim) == end(sim)) {
     fgg_areaBurnedOverTime <- file.path(figurePath(sim), "LandMine_areaBurnedOverTime.png")
     ggsave(fgg_areaBurnedOverTime, mod$gg_areaBurnedOverTime)
+    registerOutputs(fgg_areaBurnedOverTime, sim)
   }
 
   return(invisible(sim))
@@ -672,16 +705,17 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
 
 ### summary events
 SummarizeFRIsingle <- function(sim) {
+  browser() ## TODO: use terra instead of raster
   studyAreaName <- P(sim)$.studyAreaName
 
-  flammableMap <- sim[["rstFlammable"]]   ## RasterLayer
-  lthfc <- sim[["fireReturnInterval"]]    ## RasterLayer
-  pixelRes <- res(sim[["rasterToMatch"]]) ## c(250, 250)
+  flammableMap <- sim[["rstFlammable"]]   ## SpatRaster
+  lthfc <- sim[["fireReturnInterval"]]    ## SpatRaster
+  pixelRes <- res(sim[["rasterToMatch"]]) ## c(240, 240)
 
   meanAnnualCumulBurnMap <- sim[["rstCurrentBurnCumulative"]] / (end(sim) - start(sim))
 
   ## sanity check
-  compareRaster(flammableMap, lthfc, meanAnnualCumulBurnMap, res = TRUE, orig = TRUE)
+  compareGeom(flammableMap, lthfc, meanAnnualCumulBurnMap, res = TRUE)
 
   nonFlammable <- which(is.na(flammableMap[]) | flammableMap[] == 0)
   if (length(nonFlammable) > 0) {
@@ -690,13 +724,13 @@ SummarizeFRIsingle <- function(sim) {
     meanAnnualCumulBurnMap[nonFlammable] <- NA
   }
 
-  expFRIs <- raster::getValues(lthfc) |>
+  expFRIs <- terra::values(lthfc, mat = FALSE) |>
     unique() |>
     na.omit() |>
     sort()
 
   simFRIs <- vapply(expFRIs, function(fri) {
-    pixIds <- which(raster::getValues(lthfc) == fri)
+    pixIds <- which(terra::values(lthfc, mat = FALSE) == fri)
     1 / (sum(meanAnnualCumulBurnMap[pixIds]) / (length(pixIds)))
   }, numeric(1))
 
@@ -708,16 +742,21 @@ SummarizeFRIsingle <- function(sim) {
   )
 
   f <- file.path(outputPath(sim), paste0("LandMine_FRI_summary.csv"))
-  fwrite(sim$friSummary, f) ## TODO: add this file to list of outputs
+  fwrite(sim$friSummary, f)
+  registerOutputs(f, sim)
 
   ## LTHFC/FRI polygons
-  ggFriPolys <- landmine_plot_LTHFC(lthfc, studyAreaName)
+  ggFriPolys <- landmine_plot_LTHFC(lthfc, studyAreaName) ## rasterVis::levelplot
 
   if ("png" %in% P(sim)$.plots) {
     fggFriPolys <- file.path(figurePath(sim), "LandMine_LTHFC_map.png")
+
+    ## NOTE: this is a rasterVis::levelplot (not ggplot)
     png(fggFriPolys, height = 1000, width = 1000)
     print(ggFriPolys)
     dev.off()
+
+    registerOutputs(fggFriPolys, sim)
   }
 
   ## expected vs simulated fire return intervals
@@ -726,12 +765,7 @@ SummarizeFRIsingle <- function(sim) {
   if ("png" %in% P(sim)$.plots) {
     fggFriExpVsSim <- file.path(figurePath(sim), "LandMine_FRI_exp_vs_sim.png")
     ggsave(fggFriExpVsSim, ggFriExpVsSim, height = 10, width = 10) ## NOTE: keep square aspect ratio
-  }
-
-  if ("screen" %in% P(sim)$.plots) {
-    mod$summaryDevice <- max(dev.list()) + 1
-    quickPlot::dev(mod$summaryDevice, width = 12)
-    gridExtra::grid.arrange(ggFriPolys, ggFriExpVsSim, nrow = 1, ncol = 2)
+    registerOutputs(fggFriExpVsSim, sim)
   }
 
   return(invisible(sim))
@@ -753,22 +787,22 @@ SummarizeFRImulti <- function(sim) {
 
     if (rep == 1L) {
       ## all reps have same flammable + LTHFC maps
-      flammableMap <<- tmpSim[["rstFlammable"]]   ## RasterLayer
-      lthfc <<- tmpSim[["fireReturnInterval"]]    ## RasterLayer
-      pixelRes <<- res(tmpSim[["rasterToMatch"]]) ## c(250, 250)
+      flammableMap <<- tmpSim[["rstFlammable"]]   ## SpatRaster
+      lthfc <<- tmpSim[["fireReturnInterval"]]    ## SpatRaster
+      pixelRes <<- res(tmpSim[["rasterToMatch"]]) ## c(240, 240)
 
       ## sanity check
-      compareRaster(tmpSim[["fireReturnInterval"]],
-                    tmpSim[["rstFlammable"]],
-                    tmpSim[["rstCurrentBurnCumulative"]],
-                    res = TRUE, orig = TRUE)
+      compareGeom(tmpSim[["fireReturnInterval"]],
+                  tmpSim[["rstFlammable"]],
+                  tmpSim[["rstCurrentBurnCumulative"]],
+                  res = TRUE)
     }
 
     ## mean annual cumulative burn map
     tmpSim[["rstCurrentBurnCumulative"]] / (end(tmpSim) - start(tmpSim))
   }) |>
-    raster::stack() |>
-    raster::calc(sum, na.rm = TRUE)
+    terra::c() |>
+    terra::app(sum, na.rm = TRUE) ## TODO: confirm c() and app() replaces stack() and calc()
 
   meanAnnualCumulBurnMap <- burnMaps / length(allReps)
 
@@ -779,13 +813,13 @@ SummarizeFRImulti <- function(sim) {
     meanAnnualCumulBurnMap[nonFlammable] <- NA
   }
 
-  expFRIs <- raster::getValues(lthfc) |>
+  expFRIs <- terra::values(lthfc, mat = FALSE) |>
     unique() |>
     na.omit() |>
     sort()
 
   simFRIs <- vapply(expFRIs, function(fri) {
-    pixIds <- which(raster::getValues(lthfc) == fri)
+    pixIds <- which(terra::values(lthfc, mat = FALSE) == fri)
     1 / (sum(meanAnnualCumulBurnMap[pixIds]) / (length(pixIds)))
   }, numeric(1))
 
@@ -797,7 +831,8 @@ SummarizeFRImulti <- function(sim) {
   )
 
   f <- file.path(outputPath(sim), paste0("LandMine_FRI_summary_multi.csv"))
-  fwrite(sim$friSummary, f) ## TODO: add this file to list of outputs
+  fwrite(sim$friSummary, f)
+  registerOutputs(f, sim)
 
   ## LTHFC/FRI polygons
   ggFriPolys <- landmine_plot_LTHFC(lthfc, studyAreaName)
@@ -807,6 +842,7 @@ SummarizeFRImulti <- function(sim) {
     png(fggFriPolys, height = 1000, width = 1000)
     print(ggFriPolys)
     dev.off()
+    registerOutputs(fggFriPolys, sim)
   }
 
   ## expected vs simulated fire return intervals
@@ -816,11 +852,7 @@ SummarizeFRImulti <- function(sim) {
   if ("png" %in% P(sim)$.plots) {
     fggFriExpVsSim <- file.path(figurePath(sim), "LandMine_FRI_exp_vs_sim.png")
     ggsave(fggFriExpVsSim, ggFriExpVsSim, height = 10, width = 10) ## NOTE: keep square aspect ratio
-  }
-
-  if ("screen" %in% P(sim)$.plots) {
-    clearPlot()
-    gridExtra::grid.arrange(ggFriPolys, fggFriExpVsSim, nrow = 1, ncol = 2)
+    registerOutputs(fggFriExpVsSim, sim)
   }
 
   return(invisible(sim))
@@ -829,15 +861,12 @@ SummarizeFRImulti <- function(sim) {
 ## .inputObjects
 .inputObjects <- function(sim) {
   ## DEBUGGING: random seed issues
-  #fseed <- file.path(outputPath(sim), "seed.txt")
-  #writeEventInfo(sim, fseed, append = TRUE)
-  #writeRNGInfo(fseed, append = TRUE)
+  # fseed <- file.path(outputPath(sim), "seed.txt")
+  # writeEventInfo(sim, fseed, append = TRUE)
+  # writeRNGInfo(fseed, append = TRUE)
   ## END DEBUGGING
 
-  #cacheTags <- c(currentModule(sim), "function:.inputObjects")
-  dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
-  if (getOption("LandR.verbose", TRUE) > 0)
-    message(currentModule(sim), ": using dataPath '", dPath, "'.")
+  dPath <- asPath(inputPath(sim), 1)
 
   # Make random forest cover map
   mod$numDefaultPixelGroups <- 20L
@@ -889,36 +918,40 @@ SummarizeFRImulti <- function(sim) {
   }
 
   if (!suppliedElsewhere(sim$ROSTable)) {
-    sim$ROSTable <- rbindlist(list(
-      list("immature_young", "decid", 6L),
-      list("mature", "decid", 9L),
+    ## ROS classes and values from Table 3.2 of Andison 1996
+    ## - omitting 'water', 'non-productive brush', and 'non-productive black spruce' classes;
+    ## - typo in Andison 1996: 'young mixed wood = 6' is really 'young hardwood = 6'.
+    sim$ROSTable <- data.table::rbindlist(list(
+      list("immature_young", "decid", 6L), ## aka hardwood
+      list("mature", "decid", 9L), ## aka hardwood
       list("immature_young", "mixed", 12L),
-      list("mature", "mixed", 17L),
       list("immature", "pine", 14L),
+      list("mature", "mixed", 17L),
+      list("immature_young", "softwood", 18L),
+      list("immature_young", "spruce", 20L),
       list("mature", "pine", 21L),
       list("young", "pine", 22L),
-      list("immature_young", "softwood", 18L),
       list("mature", "softwood", 27L),
-      list("immature_young", "spruce", 20L),
       list("mature", "spruce", 30L)
-    ))
-    setnames(sim$ROSTable, old = 1:3, new = c("age", "leading", "ros"))
+    )) |>
+      data.table::setnames(old = 1:3, new = c("age", "leading", "ros"))
   }
 
-  # Upgrades to use suppliedElsewhere -- Eliot Oct 21 2018
   if (!suppliedElsewhere("pixelGroupMap", sim)) {
     sim$pixelGroupMap <- Cache(randomPolygons, sim$rasterToMatch,
                                numTypes = mod$numDefaultPixelGroups)
   }
 
   if (!suppliedElsewhere("rstTimeSinceFire", sim)) {
-    sim$rstTimeSinceFire <- raster(sim$pixelGroupMap)
+    sim$rstTimeSinceFire <- terra::rast(sim$pixelGroupMap)
     sim$rstTimeSinceFire[] <- 200L
   }
 
   if (!suppliedElsewhere("species", sim)) {
-    sim$species <- data.table(species = c("Pinu_sp", "Pice_gla"),
-                              speciesCode = 1:numDefaultSpeciesCodes)
+    sim$species <- data.table(
+      species = c("Pinu_sp", "Pice_gla"),
+      speciesCode = 1:numDefaultSpeciesCodes
+    )
   }
 
   if (!suppliedElsewhere("cohortData", sim)) {
@@ -937,18 +970,18 @@ SummarizeFRImulti <- function(sim) {
 
   if (!suppliedElsewhere("sppEquiv", sim)) {
     sim$sppEquiv <- LandR::sppEquivalencies_CA
-    sppNames <- LandR::equivalentName(sim$species$species, sim$sppEquiv, column = Par$sppEquivCol)
-    sim$sppEquiv <- sim$sppEquiv[get(Par$sppEquivCol) %in% sppNames]
+    sppNames <- LandR::equivalentName(sim$species$species, sim$sppEquiv, column = P(sim)$sppEquivCol)
+    sim$sppEquiv <- sim$sppEquiv[get(P(sim)$sppEquivCol) %in% sppNames]
   }
 
   return(invisible(sim))
 }
 
 fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
-  ROS <- rep(NA_integer_, ncell(vegTypeMap))
+  ROS <- rep(NA_integer_, terra::ncell(vegTypeMap))
 
-  vegType <- getValues(vegTypeMap)
-  vegTypes <- data.table(raster::levels(vegTypeMap)[[1]]) ## 2nd column in levels
+  vegType <- terra::values(vegTypeMap, wat = FALSE)
+  vegTypes <- data.table(terra::levels(vegTypeMap)[[1]]) ## 2nd column in levels
 
   sppNames <- equivalentName(as.character(vegTypes[[2]]), sim$sppEquiv, P(sim)$sppEquivCol)
   suppressWarnings({
@@ -960,15 +993,15 @@ fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
       list("softwood", grep(sppNames, pattern = "Pice|Pinu|Popu", invert = TRUE))
     ))
   })
-  # remove duplicates of softwood, which is NA
-  onRaster <- na.omit(unique(onRaster, by = "V2")) %>%
-    setnames(old = 1:2, new = c("leading", "pixelValue")) %>%
+  ## remove duplicates of softwood, which is NA
+  onRaster <- na.omit(unique(onRaster, by = "V2")) |>
+    setnames(old = 1:2, new = c("leading", "pixelValue")) |>
     setkeyv("pixelValue")
   onRaster[, species := sppNames]
 
-  sppEquiv <- sim$sppEquiv[, c("LandMine", "LandWeb")][, leading := mod$knownSpecies[LandWeb]] %>%
+  sppEquiv <- sim$sppEquiv[, c("LandMine", "LandWeb")][, leading := mod$knownSpecies[LandWeb]] |>
     na.omit(on = "LandMine")
-  sppEquiv <- sppEquiv[onRaster, on = c("LandMine" = "leading", "LandWeb" = "species")] %>%
+  sppEquiv <- sppEquiv[onRaster, on = c("LandMine" = "leading", "LandWeb" = "species")] |>
     unique()
 
   sppEquivHere <- unique(na.omit(sppEquiv$LandWeb))
