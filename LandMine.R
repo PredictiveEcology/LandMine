@@ -399,11 +399,11 @@ plotFn <- compiler::cmpfun(function(sim) {
     if ("png" %in% P(sim)$.plots) {
       f_gg_fri <- file.path(figurePath(sim), "LandMine_fireReturnInterval.png")
       ggsave(f_gg_fri, gg_fri)
-      registerOutputs(f_gg_fri, sim)
+      # sim <- registerOutputs(f_gg_fri)
 
       f_gg_flm <- file.path(figurePath(sim), "LandMine_rstFlammable.png")
       ggsave(f_gg_flm, gg_flm)
-      registerOutputs(f_gg_flm, sim)
+      # sim <- registerOutputs(f_gg_flm)
     }
 
     if ("screen" %in% P(sim)$.plots) {
@@ -427,7 +427,7 @@ plotFn <- compiler::cmpfun(function(sim) {
     if ("png" %in% P(sim)$.plots) {
       f_gg_cbc <- file.path(figurePath(sim), sprintf("LandMine_cumulative_burn_map_%04d.png", time(sim)))
       ggsave(f_gg_cbc, gg_cbc)
-      registerOutputs(f_gg_cbc, sim)
+      # sim <- registerOutputs(f_gg_cbc)
     }
 
     if ("screen" %in% P(sim)$.plots) {
@@ -697,7 +697,7 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   if (time(sim) == end(sim)) {
     fgg_areaBurnedOverTime <- file.path(figurePath(sim), "LandMine_areaBurnedOverTime.png")
     ggsave(fgg_areaBurnedOverTime, mod$gg_areaBurnedOverTime)
-    registerOutputs(fgg_areaBurnedOverTime, sim)
+    # sim <- registerOutputs(fgg_areaBurnedOverTime)
   }
 
   return(invisible(sim))
@@ -743,7 +743,7 @@ SummarizeFRIsingle <- function(sim) {
 
   f <- file.path(outputPath(sim), paste0("LandMine_FRI_summary.csv"))
   fwrite(sim$friSummary, f)
-  registerOutputs(f, sim)
+  # sim <- registerOutputs(f)
 
   ## LTHFC/FRI polygons
   ggFriPolys <- landmine_plot_LTHFC(lthfc, studyAreaName) ## rasterVis::levelplot
@@ -756,7 +756,7 @@ SummarizeFRIsingle <- function(sim) {
     print(ggFriPolys)
     dev.off()
 
-    registerOutputs(fggFriPolys, sim)
+    # sim <- registerOutputs(fggFriPolys)
   }
 
   ## expected vs simulated fire return intervals
@@ -765,7 +765,7 @@ SummarizeFRIsingle <- function(sim) {
   if ("png" %in% P(sim)$.plots) {
     fggFriExpVsSim <- file.path(figurePath(sim), "LandMine_FRI_exp_vs_sim.png")
     ggsave(fggFriExpVsSim, ggFriExpVsSim, height = 10, width = 10) ## NOTE: keep square aspect ratio
-    registerOutputs(fggFriExpVsSim, sim)
+    # sim <- registerOutputs(fggFriExpVsSim)
   }
 
   return(invisible(sim))
@@ -832,7 +832,7 @@ SummarizeFRImulti <- function(sim) {
 
   f <- file.path(outputPath(sim), paste0("LandMine_FRI_summary_multi.csv"))
   fwrite(sim$friSummary, f)
-  registerOutputs(f, sim)
+  # sim <- registerOutputs(f)
 
   ## LTHFC/FRI polygons
   ggFriPolys <- landmine_plot_LTHFC(lthfc, studyAreaName)
@@ -842,7 +842,7 @@ SummarizeFRImulti <- function(sim) {
     png(fggFriPolys, height = 1000, width = 1000)
     print(ggFriPolys)
     dev.off()
-    registerOutputs(fggFriPolys, sim)
+    # sim <- registerOutputs(fggFriPolys)
   }
 
   ## expected vs simulated fire return intervals
@@ -852,7 +852,7 @@ SummarizeFRImulti <- function(sim) {
   if ("png" %in% P(sim)$.plots) {
     fggFriExpVsSim <- file.path(figurePath(sim), "LandMine_FRI_exp_vs_sim.png")
     ggsave(fggFriExpVsSim, ggFriExpVsSim, height = 10, width = 10) ## NOTE: keep square aspect ratio
-    registerOutputs(fggFriExpVsSim, sim)
+    # sim <- registerOutputs(fggFriExpVsSim)
   }
 
   return(invisible(sim))
@@ -874,18 +874,17 @@ SummarizeFRImulti <- function(sim) {
   numDefaultSpeciesCodes <- 2L
 
   if (!suppliedElsewhere("studyArea", sim)) {
-    if (getOption("LandR.verbose", TRUE) > 0)
-      message("'studyArea' was not provided by user. Using a polygon in southwestern Alberta, Canada,")
+    if (getOption("LandR.verbose", TRUE) > 0) {
+      message("'studyArea' was not provided by user. Using a polygon in southwestern Alberta, Canada.")
+    }
 
     sim$studyArea <- randomStudyArea(seed = 1234, size = 1e9)
   }
 
-  if (!is(sim$studyArea, "Spatial"))
-    sim$studyArea <- as(sim$studyArea, "Spatial")
-
   if (!suppliedElsewhere("studyAreaReporting", sim)) {
-    if (getOption("LandR.verbose", TRUE) > 0)
+    if (getOption("LandR.verbose", TRUE) > 0) {
       message("'studyAreaReporting' was not provided by user. Using the same as 'studyArea'.")
+    }
     sim$studyAreaReporting <- sim$studyArea
   }
 
@@ -895,7 +894,7 @@ SummarizeFRImulti <- function(sim) {
       sim$rasterToMatch <- fasterize::fasterize(sf::st_as_sf(sim$studyArea), sim$rasterToMatch)
     }
   }
-
+  ## TODO: use LandR::defineFlammable() below
   if (!suppliedElsewhere("rstFlammable", sim)) {
     sim$rstFlammable <- sim$rasterToMatch
     sim$rstFlammable[] <- 1L  # 1 means flammable  ## TODO: use LandR::defineFlammable()
