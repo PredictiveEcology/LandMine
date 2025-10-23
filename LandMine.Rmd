@@ -1,7 +1,7 @@
 ---
 title: "LandMine Manual"
 subtitle: "v.`r SpaDES.core::moduleVersion(module = 'LandMine', path = '..')`"
-date: "18 May 2018; updated 6 Sep 2022"
+date: "18 May 2018; updated 22 Oct 2025"
 output:
   bookdown::html_document2:
     toc: true
@@ -62,11 +62,11 @@ Require(c("dplyr", "DEoptim", "igraph", "kableExtra", "LandWebUtils",
 
 if (interactive()) {
   workingDir <- SpaDES.project::findProjectPath() ## e.g., ~/GitHub/LandWeb
-  moduleDir <- file.path(workingDir, "modules") |> Require::checkPath()
+  moduleDir <- file.path(workingDir, "modules") |> checkPath()
 } else {
   ## e.g., when rendering module Rmd
-  workingDir <- file.path("..") |> Require::checkPath() |> dirname()
-  moduleDir <- file.path("..") |> Require::checkPath()
+  workingDir <- file.path("..") |> checkPath() |> dirname()
+  moduleDir <- file.path("..") |> checkPath()
 }
 inputDir <- file.path(workingDir, "inputs") |> checkPath(create = TRUE)
 outputDir <- file.path(workingDir, "outputs") |> checkPath(create = TRUE)

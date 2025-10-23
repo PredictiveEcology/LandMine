@@ -234,7 +234,7 @@ EstimateTruncPareto <- function(sim, verbose = getOption("LandR.verbose", TRUE))
 
   findK_upper <- function(params = c(0.4), upper1) {
     fs <- round(VGAM::rtruncpareto(1e6, 1, upper = upper1, shape = params[1]))
-    # meanFS <- meanTruncPareto(k = params[1], lower = 1, upper = upper1, alpha = 1)
+    # meanFS <- LandWebUtils::meanTruncPareto(k = params[1], lower = 1, upper = upper1, alpha = 1)
     # diff1 <- abs(quantile(fs, 0.95) - meanFS)
 
     ## "90% of area is in 5% of fires" - Dave rule of thumb
@@ -455,7 +455,7 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
     size = 1.3765 ## Eliot lowered this from 1.8765 on Oct 23, 2018 because too constant
   )
   thisYrStartCellsDT <- data.table(
-    pixel = seq(ncell(sim$fireReturnInterval)),
+    pixel = seq(terra::ncell(sim$fireReturnInterval)),
     polygonNumeric = terra::values(sim$fireReturnInterval, mat = FALSE),
     key = "polygonNumeric"
   )
@@ -541,7 +541,7 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
         NULL
       )
 
-      fires <- landmine_burn1(
+      fires <- LandWebUtils::landmine_burn1(
         sim$fireReturnInterval,
         startCells = thisYrStartCells,
         fireSizes = fireSizesInPixels,
@@ -705,7 +705,6 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
 
 ### summary events
 SummarizeFRIsingle <- function(sim) {
-  browser() ## TODO: use terra instead of raster
   studyAreaName <- P(sim)$.studyAreaName
 
   flammableMap <- sim[["rstFlammable"]]   ## SpatRaster
@@ -1093,9 +1092,11 @@ fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
   ## Non-flammable cover types
   ## 2023-02: discontinuous fuels (e.g., shield) may require spread through non-flammable pixels;
   ##          use same value as young deciduous (6L), per Dave's text messages.
-  ROSnonflam <- switch(P(sim)$ROStype,
-                       burny = sim$ROSTable[leading == "decid" & age == "immature_young", ros],
-                       NA_integer_)
+  ROSnonflam <- switch(
+    P(sim)$ROStype,
+    burny = sim$ROSTable[leading == "decid" & age == "immature_young", ros],
+    NA_integer_
+  )
 
   assertthat::assert_that(
     isTRUE(inRange(P(sim)$ROSother, min(sim$ROSTable$ros), max(sim$ROSTable$ros))),
@@ -1107,11 +1108,3 @@ fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
 
   return(ROS)
 })
-
-## older version of SpaDES.core used here doesn't have this function
-if (packageVersion("SpaDES.core") < "2.0.2.9001") {
-  figurePath <- function(sim) {
-    file.path(outputPath(sim), "figures", current(sim)[["moduleName"]]) |>
-      checkPath(create = TRUE)
-  }
-}
