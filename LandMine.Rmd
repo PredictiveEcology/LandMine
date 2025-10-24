@@ -55,22 +55,24 @@ if (!"LandWebUtils" %in% rownames(installed.packages())) {
   pak::pkg_install("PredictiveEcology/LandWebUtils@development")
 }
 
-library("Require")
-Require(c("dplyr", "DEoptim", "igraph", "kableExtra", "LandWebUtils",
-          "raster", "rmarkdown", "SpaDES.core"),
-        install = FALSE, update = FALSE)
+Require::Require(
+  packages = c("dplyr", "DEoptim", "igraph", "kableExtra",
+               "LandWebUtils", "rmarkdown", "SpaDES.core", "terra"),
+  install = FALSE,
+  update = FALSE
+)
 
 if (interactive()) {
   workingDir <- SpaDES.project::findProjectPath() ## e.g., ~/GitHub/LandWeb
-  moduleDir <- file.path(workingDir, "modules") |> checkPath()
+  moduleDir <- file.path(workingDir, "modules") |> fs::path_norm()
 } else {
   ## e.g., when rendering module Rmd
-  workingDir <- file.path("..") |> checkPath() |> dirname()
-  moduleDir <- file.path("..") |> checkPath()
+  workingDir <- file.path("..") |> fs::path_norm() |> dirname()
+  moduleDir <- file.path("..") |> fs::path_norm()
 }
-inputDir <- file.path(workingDir, "inputs") |> checkPath(create = TRUE)
-outputDir <- file.path(workingDir, "outputs") |> checkPath(create = TRUE)
-cacheDir <- file.path(outputDir, "cache_LandMineRmd") |> checkPath(create = TRUE)
+inputDir <- file.path(workingDir, "inputs") |> fs::dir_create()
+outputDir <- file.path(workingDir, "outputs") |> fs::dir_create()
+cacheDir <- file.path(outputDir, "cache_LandMineRmd") |> fs::dir_create()
 ```
 
 :::{.rmdwarning}
@@ -226,8 +228,6 @@ mySimOut <- spades(mySim, .plotInitialTime = times$start, debug = TRUE)
 ## Testing the burn algorithm
 
 ```{r testing}
-Require(c("data.table", "DEoptim", "parallel"))
-
 s <- simInit(
   times = times, 
   params = parameters, 
@@ -245,70 +245,74 @@ The following code chunk tries to find values of `spawnNewActive` that creates "
 
 ```{r fit-values}
 pixelSize <- 240
-ros <- terra::rast(
+
+## terra objects can't be serialized, as-is, so use file as intermediary
+ros_file <- tempfile(fileext = ".tif")
+ros_rast <- terra::rast(
   terra::ext(0, pixelSize * 1e3, 0, pixelSize * 1e3),
   resolution = pixelSize,
   vals = 0
-)
-ros <- ros == 0
-fireSize <- 1e5
+) 
+ros_rast <- ros_rast == 0
+ros_rast <- terra::writeRaster(ros_rast, ros_file)
+ros <- ros_file ## this will be passed to objective function
 
+fireSize <- 1e5
 maxRetriesPerID <- 4 ## 4 retries (5 attempts total)
 spreadProb <- 0.9
 spawnNewActive <- c(0.46, 0.2, 0.26, 0.11)
 sizeCutoffs <- c(8e3, 2e4)
 
 NineCorners <- terra::cellFromRowCol(
-  ros,
-  row = nrow(ros) / 4 * rep(1:3, 3),
-  col = ncol(ros) / 4 * rep(1:3, each = 3)
+  ros_rast,
+  row = terra::nrow(ros_rast) / 4 * rep(1:3, 3),
+  col = terra::ncol(ros_rast) / 4 * rep(1:3, each = 3)
 )
 
 centreCell <- terra::cellFromRowCol(
-  ros,
-  row = nrow(ros) / 2,
-  col = ncol(ros) / 2
+  ros_rast,
+  row = terra::nrow(ros_rast) / 2,
+  col = terra::ncol(ros_rast) / 2
 )
 
 ## Set variables
-objs <- c("ros", "centreCell", "fireSize", "spawnNewActive", "sizeCutoffs", "spreadProb")
-pkgs <- c("data.table", "LandWebUtils", "raster", "SpaDES.tools")
+objs <- c("centreCell", "fireSize", "ros", "spawnNewActive", "sizeCutoffs", "spreadProb")
+pkgs <- c("data.table", "LandWebUtils", "terra", "SpaDES.tools")
 ```
 
+Setup a cluster for parallel computation:
+
 ```{r make-cluster}
-### SET UP CLUSTER FOR PARALLEL
 wantParallel <- TRUE
 
 ## numCores should be >= 70 and needs to be multiple of number of params to be fit (7)
 numCores <- (parallelly::availableCores(constraints = c("connections")) %/% 7) * 7
 
-machineName <- strsplit(Sys.info()["nodename"], "[.]")[[1]][1]
-
-clNames <- switch(machineName,
-                  pinus = c(
-                    rep("localhost", 0),
-                    rep("picea.for-cast.ca", 20),
-                    rep("pseudotsuga.for-cast.ca", 82)
-                  ),
-                  picea = rep("localhost", numCores),
-                  rep("localhost", numCores))
+clNames <- rep("localhost", numCores)
 
 if (wantParallel) {
-  cl <- landmine_optim_clusterSetup(nodes = clNames)
+  cl <- LandWebUtils::landmine_optim_clusterSetup(nodes = clNames)
 } else {
   cl <- NULL
 }
 
 if (!inherits(cl[[1]], "forknode")) {
-  landmine_optim_clusterExport(cl, objs = objs, pkgs = pkgs)
+  LandWebUtils::landmine_optim_clusterExport(cl, objs = objs, pkgs = pkgs)
+}
+
+## double check that necessary objects exist:
+if (!is.null(cl)) {
+  parallel::clusterEvalQ(cl, ls())
 }
 ```
 
 ### Visual examination
 
 ```{r optimization}
+library(DEoptim)
+
 opt_sn <- DEoptim(
-  landmine_optim_fitSN,
+  fn = LandWebUtils::landmine_optim_fitSN,
   lower = c(-2, -3, -3, -3, 1, 3.5, 0.75), 
   upper = c(-0.1, -0.5, -0.5, -1, 3.5, 5, 1),
   control = DEoptim.control(
@@ -333,9 +337,9 @@ optimParams <- data.frame(
 ) |>
   cbind(rbind(opt_sn$optim$bestmem))
 
-fDEoptim <- file.path(moduleDir, "LandMine", "data", "LandMine_DEoptim_params.csv")
-prevVals <- read.csv(fDEoptim)
-write.csv(rbind(prevVals, optimParams), fDEoptim, row.names = FALSE)
+DEoptim_file <- file.path(moduleDir, "LandMine", "data", "LandMine_DEoptim_params.csv")
+prevVals <- read.csv(DEoptim_file)
+write.csv(rbind(prevVals, optimParams), DEoptim_file, row.names = FALSE)
 
 parallel::stopCluster(cl)
 cl <- NULL
@@ -467,7 +471,7 @@ optimParams <- data.frame(
   pixelSize = 100
 ) |>
   cbind(rbind(sns))
-write.csv(optimParams, fDEoptim, row.names = FALSE)
+write.csv(optimParams, DEoptim_file, row.names = FALSE)
 
 ## With spreadProb = 0.9 # Optimal
 sns <- c(-0.978947, -0.540946, -0.790736, -1.583039,  2.532013,  4.267547,  0.946730)
@@ -476,7 +480,7 @@ spawnNewActive <- 10^sns[1:4]
 sizeCutoffs <- 10^(sns[5:6])
 if (length(sns) == 7) spreadProb <- sns[7]
 
-# from linear model version
+## from linear model version
 par <- c(1.548899,-0.396904, 2.191424, 3.903082, 4.854002)
 sizeCutoffs <- 10^c(par[4], par[5])
 sna <- min(-0.15, par[1] + par[2]*log10(fireSize))
@@ -522,7 +526,7 @@ fireSizes <-  10^(4)
 
 for (fs in fireSizes) {
   for (i in 1:1) {
-    ros <- terra::rast(terra::ext(0, 2e5, 0, 2e5), resolution = 240, vals = 1)
+    ros <- terra::rast(terra::ext(0, 2e5, 0, 2e5), resolution = 100, vals = 1)
     NineCorners <- terra::cellFromRowCol(
       ros,
       rownr = nrow(ros) / 4 * rep(1:3, 3),
@@ -569,7 +573,7 @@ This version uses 240m pixels to work with LandWeb v3.
 pixelSize <- 240
 
 ## final optimization after 200 iterations (landmine_optim_fitSN)
-optimParams <- read.csv(fDEoptim)
+optimParams <- read.csv(DEoptim_file)
 sns <- optimParams[, grepl("^par", colnames(optimParams))] |> tail(1) ## take last row
 
 spawnNewActive <- 10^sns[1:4]
@@ -577,23 +581,26 @@ sizeCutoffs <- 10^(sns[5:6])
 spreadProb <- sns[7]
 
 ## from linear model version
-par <- c(1.548899,-0.396904, 2.191424, 3.903082, 4.854002)
-sizeCutoffs <- 10^c(par[4], par[5])
-sna <- min(-0.15, par[1] + par[2]*log10(fireSize))
-sna <- 10^c(sna*par[3], sna*2*par[3], sna*3*par[3], sna*4*par[3])
-spawnNewActive <- sna
+# par <- c(1.548899,-0.396904, 2.191424, 3.903082, 4.854002)
+# sizeCutoffs <- 10^c(par[4], par[5])
+# sna <- min(-0.15, par[1] + par[2]*log10(fireSize))
+# sna <- 10^c(sna*par[3], sna*2*par[3], sna*3*par[3], sna*4*par[3])
+# spawnNewActive <- sna
 
 for (i in 1:5) {
   fireSize <- 10^i
-  dim <- round(sqrt(fireSize)*5 * pixelSize)
-  ros <- terra::rast(terra::ext(0, dim, 0, dim), resolution = pixelSize, vals = 1)
+  dim <- round(sqrt(fireSize) * 5 * pixelSize)
+  ros <- tempfile(fileext = ".tif")
+  ros_rast <- terra::rast(terra::ext(0, dim, 0, dim), resolution = pixelSize, vals = 1) |>
+    terra::writeRaster()
+  
   centreCell <- terra::cellFromRowCol(
-    ros,
-    row = nrow(ros) / 2,
-    col = ncol(ros) / 2
+    rosros_rast,
+    row = terra::nrow(ros_rast) / 2,
+    col = terra::ncol(ros_rast) / 2
   )
   reps <- paste0("rep", 1:4 + (log10(fireSize) - 1)*4)
-  burnedMapList <- landmine_optim_clusterWrap(
+  burnedMapList <- LandWebUtils::landmine_optim_clusterWrap(
     cl = cl, 
     nodes = clNames, 
     reps = reps, 
