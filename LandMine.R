@@ -7,7 +7,7 @@ defineModule(sim, list(
     person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb", "cre"))
   ),
   childModules = character(0),
-  version = list(LandMine = numeric_version("1.0.0")),
+  version = list(LandMine = numeric_version("1.0.1")),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
@@ -253,7 +253,7 @@ EstimateTruncPareto <- function(sim, verbose = getOption("LandR.verbose", TRUE))
     interval = c(0.05, 0.99),
     f = findK_upper,
     upper1 = P(sim)$biggestPossibleFireSizeHa,
-    cacheRepo = cachePath(sim),
+    cachePath = cachePath(sim),
     useCache = FALSE
   )$minimum
 
