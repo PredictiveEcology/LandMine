@@ -979,7 +979,7 @@ SummarizeFRImulti <- function(sim) {
 fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
   ROS <- rep(NA_integer_, terra::ncell(vegTypeMap))
 
-  vegType <- terra::values(vegTypeMap, wat = FALSE)
+  vegType <- terra::values(vegTypeMap, mat = FALSE) ## vector, not matrix (else pixelValue col malformed)
   vegTypes <- data.table(terra::levels(vegTypeMap)[[1]]) ## 2nd column in levels
 
   sppNames <- equivalentName(as.character(vegTypes[[2]]), sim$sppEquiv, P(sim)$sppEquivCol)
