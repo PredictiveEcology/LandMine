@@ -400,11 +400,11 @@ plotFn <- compiler::cmpfun(function(sim) {
     if ("png" %in% P(sim)$.plots) {
       f_gg_fri <- file.path(figurePath(sim), "LandMine_fireReturnInterval.png")
       ggsave(f_gg_fri, gg_fri)
-      # sim <- registerOutputs(f_gg_fri)
+      sim <- registerOutputs(f_gg_fri)
 
       f_gg_flm <- file.path(figurePath(sim), "LandMine_flammableMap.png")
       ggsave(f_gg_flm, gg_flm)
-      # sim <- registerOutputs(f_gg_flm)
+      sim <- registerOutputs(f_gg_flm)
     }
 
     if ("screen" %in% P(sim)$.plots) {
@@ -428,7 +428,7 @@ plotFn <- compiler::cmpfun(function(sim) {
     if ("png" %in% P(sim)$.plots) {
       f_gg_cbc <- file.path(figurePath(sim), sprintf("LandMine_cumulative_burn_map_%04d.png", time(sim)))
       ggsave(f_gg_cbc, gg_cbc)
-      # sim <- registerOutputs(f_gg_cbc)
+      sim <- registerOutputs(f_gg_cbc)
     }
 
     if ("screen" %in% P(sim)$.plots) {
@@ -698,7 +698,7 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   if (time(sim) == end(sim)) {
     fgg_areaBurnedOverTime <- file.path(figurePath(sim), "LandMine_areaBurnedOverTime.png")
     ggsave(fgg_areaBurnedOverTime, mod$gg_areaBurnedOverTime)
-    # sim <- registerOutputs(fgg_areaBurnedOverTime)
+    sim <- registerOutputs(fgg_areaBurnedOverTime)
   }
 
   return(invisible(sim))
@@ -743,7 +743,7 @@ SummarizeFRIsingle <- function(sim) {
 
   f <- file.path(outputPath(sim), paste0("LandMine_FRI_summary.csv"))
   fwrite(sim$friSummary, f)
-  # sim <- registerOutputs(f)
+  sim <- registerOutputs(f)
 
   ## LTHFC/FRI polygons
   ggFriPolys <- landmine_plot_LTHFC(lthfc, studyAreaName) ## rasterVis::levelplot
@@ -756,7 +756,7 @@ SummarizeFRIsingle <- function(sim) {
     print(ggFriPolys)
     dev.off()
 
-    # sim <- registerOutputs(fggFriPolys)
+    sim <- registerOutputs(fggFriPolys)
   }
 
   ## expected vs simulated fire return intervals
@@ -765,7 +765,7 @@ SummarizeFRIsingle <- function(sim) {
   if ("png" %in% P(sim)$.plots) {
     fggFriExpVsSim <- file.path(figurePath(sim), "LandMine_FRI_exp_vs_sim.png")
     ggsave(fggFriExpVsSim, ggFriExpVsSim, height = 10, width = 10) ## NOTE: keep square aspect ratio
-    # sim <- registerOutputs(fggFriExpVsSim)
+    sim <- registerOutputs(fggFriExpVsSim)
   }
 
   return(invisible(sim))
@@ -832,7 +832,7 @@ SummarizeFRImulti <- function(sim) {
 
   f <- file.path(outputPath(sim), paste0("LandMine_FRI_summary_multi.csv"))
   fwrite(sim$friSummary, f)
-  # sim <- registerOutputs(f)
+  sim <- registerOutputs(f)
 
   ## LTHFC/FRI polygons
   ggFriPolys <- landmine_plot_LTHFC(lthfc, studyAreaName)
@@ -842,7 +842,7 @@ SummarizeFRImulti <- function(sim) {
     png(fggFriPolys, height = 1000, width = 1000)
     print(ggFriPolys)
     dev.off()
-    # sim <- registerOutputs(fggFriPolys)
+    sim <- registerOutputs(fggFriPolys)
   }
 
   ## expected vs simulated fire return intervals
@@ -852,7 +852,7 @@ SummarizeFRImulti <- function(sim) {
   if ("png" %in% P(sim)$.plots) {
     fggFriExpVsSim <- file.path(figurePath(sim), "LandMine_FRI_exp_vs_sim.png")
     ggsave(fggFriExpVsSim, ggFriExpVsSim, height = 10, width = 10) ## NOTE: keep square aspect ratio
-    # sim <- registerOutputs(fggFriExpVsSim)
+    sim <- registerOutputs(fggFriExpVsSim)
   }
 
   return(invisible(sim))
