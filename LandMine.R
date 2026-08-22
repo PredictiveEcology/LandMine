@@ -16,7 +16,7 @@ defineModule(sim, list(
     "assertthat", "cli", "data.table", "fpCompare", "ggplot2",
     "RColorBrewer", "stats", "terra", "tidyterra", "VGAM",
     "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
-    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9002)", ## TODO: update version once SDMTools removed
+    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9024)",
     "PredictiveEcology/pemisc@development",
     "PredictiveEcology/SpaDES.tools@development (>= 2.1.2.9000)"
   ),
@@ -279,21 +279,25 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
   terra::compareGeom(sim$rasterToMatch, sim$fireReturnInterval, sim$flammableMap, sim$rstTimeSinceFire)
 
-  ## from DEoptim fitting, run in the LandMine.Rmd file
-  optimPars <- read.csv(file.path(dataPath(sim), "LandMine_DEoptim_params.csv"))
-  optimPars <- optimPars[P(sim)$optimParsRowID, grepl("^par", colnames(optimPars))]
-  optimPars <- unlist(unname(optimPars))
+  ## from DEoptim fitting; see `LandWebUtils::landmine_optim_calibrate()` and LandMine.Rmd.
+  ## The CSV schema and the `10^` parameter convention are defined once, in LandWebUtils.
+  optimPars <- LandWebUtils::landmine_optim_unpack(
+    LandWebUtils::landmine_optim_params_read(
+      file.path(dataPath(sim), "LandMine_DEoptim_params.csv"),
+      rowID = P(sim)$optimParsRowID
+    )
+  )
 
-  mod$spawnNewActive <- 10^c(optimPars[1], optimPars[2], optimPars[3], optimPars[4])
-  mod$sizeCutoffs <- 10^c(optimPars[5], optimPars[6])
+  mod$spawnNewActive <- optimPars$spawnNewActive
+  mod$sizeCutoffs <- optimPars$sizeCutoffs
 
   ## 2024-10: use `sim$flammableMap` instead of `sim$fireReturnInterval` raster
   ##          to ensure coverage across entire studyArea (e.g., boundaries along grasslands)
   mod$spreadProb <- terra::rast(sim$flammableMap)
-  mod$spreadProb[sim$flammableMap[] == 1] <- optimPars[7] ## assign spreadProb to flammable pixels
+  mod$spreadProb[sim$flammableMap[] == 1] <- optimPars$spreadProb ## assign spreadProb to flammable pixels
   mod$spreadProb[is.na(sim$flammableMap[]) | sim$flammableMap[] == 0] <- switch(
     P(sim)$ROStype,
-    burny = optimPars[7], ## non-flammable pixels *can* spread fire (but won't count as burned pixels for fire stats)
+    burny = optimPars$spreadProb, ## non-flammable pixels *can* spread fire (but won't count as burned pixels for fire stats)
     NA_real_ ## non-flammable pixels don't have a spreadProb value (i.e., can't spread)
   )
   mod$spreadProb <- terra::mask(mod$spreadProb, sim$studyArea) ## mask only; don't crop

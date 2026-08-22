@@ -11,6 +11,8 @@ Unreleased changes on the `development` branch since the 1.0.1 release:
 * `omitPixels` is now computed once per `Burn()` event rather than on every reburn iteration; `sim$flammableMap` is not modified within the event, so it was loop-invariant.
 * The eligible start-cell pool is now built once per `Burn()` event rather than re-filtered and re-`na.omit()`ed on every reburn iteration. On a 4.5 Mpix study area this is ~306 ms to ~24 ms per round; at ~8 rounds/yr that is roughly 2.2 s per simulated year. Verified to produce the same start cells in the same order for the same seed.
 * Dropped `magrittr` from `reqdPkgs`: the start-cell pipeline was its only remaining use.
+* The fire-spread calibration moved into LandWebUtils (>= 1.0.3.9024) as `landmine_optim_unpack()`, `landmine_optim_params_read()`/`_append()`, `landmine_optim_landscape()` and `landmine_optim_calibrate()`. `LandMine.R` now reads its parameters through those functions instead of re-implementing the CSV schema and the `10^` convention inline.
+* `LandMine.Rmd`'s calibration section was rewritten against those functions and its stale chunks removed. Because the vignette is knitted with `eval = FALSE`, that code had never run and had drifted: it used the removed `raster` package API, `raster`'s argument names on a `terra` call, and an invalid `read.csv(file, row.names = FALSE)`. Parameter values shown there were also years out of date (`sizeCutoffs` of 8000/20000 against the 1629/52016 actually in use).
 
 # LandMine 1.0.1 (2026-06-30)
 
