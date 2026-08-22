@@ -9,6 +9,8 @@ Unreleased changes on the `development` branch since the 1.0.1 release:
 * Fixed a `terra::values()` argument typo ("wat" to "mat").
 * Fire-spread speedup: `spreadProb` and `spreadProbRel` are now passed to `spread2()` as numeric vectors rather than rasters. `spread2()` re-materialises a raster in full on every iteration, and since `landmine_burn1()` calls `spread2(iterations = 1L)` in a loop, that was one O(ncell) read per spread step. Measured 11-13x faster end-to-end, bit-identical (the same cells burn). Requires SpaDES.tools >= 2.1.2.9000 (PredictiveEcology/SpaDES.tools#106).
 * `omitPixels` is now computed once per `Burn()` event rather than on every reburn iteration; `sim$flammableMap` is not modified within the event, so it was loop-invariant.
+* The eligible start-cell pool is now built once per `Burn()` event rather than re-filtered and re-`na.omit()`ed on every reburn iteration. On a 4.5 Mpix study area this is ~306 ms to ~24 ms per round; at ~8 rounds/yr that is roughly 2.2 s per simulated year. Verified to produce the same start cells in the same order for the same seed.
+* Dropped `magrittr` from `reqdPkgs`: the start-cell pipeline was its only remaining use.
 
 # LandMine 1.0.1 (2026-06-30)
 
