@@ -19,7 +19,7 @@ defineModule(sim, list(
     "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
     "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9002)", ## TODO: update version once SDMTools removed
     "PredictiveEcology/pemisc@development",
-    "PredictiveEcology/SpaDES.tools@development"
+    "PredictiveEcology/SpaDES.tools@development (>= 2.1.2.9000)"
   ),
   parameters = rbind(
     defineParameter("biggestPossibleFireSizeHa", "numeric", 1e6, 1e4, 2e6,
@@ -477,8 +477,19 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   ROSmap <- terra::rast(sim$pixelGroupMap) ## empty raster as template
   ROSmap[] <- fireROS(sim, vegTypeMap = vegTypeMap)
   ROSmap <- terra::mask(ROSmap, sim$studyArea)
+  ## PERFORMANCE: for the same reason as `spreadProbThisStep` below, a raster
+  ## `spreadProbRel` is re-materialised by `spread2()` on *every* spread step.
+  ## Numeric `spreadProbRel` requires SpaDES.tools >= 2.1.2.9000 (SpaDES.tools#106).
+  ROSvals <- terra::values(ROSmap, mat = FALSE)
 
-  spreadProbThisStep <- mod$spreadProb
+  ## PERFORMANCE: `spread2()` re-materialises a `SpatRaster` `spreadProb` on *every*
+  ## spread step (`as.vector(spreadProb)` in SpaDES.tools' spread2.R). Because
+  ## `landmine_burn1()` calls `spread2(iterations = 1L)` in a while loop, that is one
+  ## O(ncell) read per step -- ~36 MB per step on a 4.5 Mpix study area. Passing a
+  ## numeric vector instead is ~1.5x faster overall and bit-identical (same values, so
+  ## the same cells burn). It also makes the `[<-` NA-marking below an O(k) vector
+  ## write rather than an O(ncell) terra raster write.
+  spreadProbThisStep <- terra::values(mod$spreadProb, mat = FALSE)
 
   ## If fire sizes are in hectares, must adjust based on resolution of maps
   ##  NOTE: round causes fires < 0.5 pixels to NOT EXIST ...
@@ -502,6 +513,19 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   firesList <- fireSizes <- list()
   maxOrder <- 0L
   iter <- 1L
+
+  ## 2024-10: normally, non-flammable pixels are NA in ROSvals and spreadProbThisStep;
+  ##          except in 'burny' scenarios, where fires *can* spread through those pixels,
+  ##          but aren't counted towards burn stats/summaries.
+  ## PERFORMANCE: hoisted out of the reburn loop below -- `sim$flammableMap` is not
+  ## modified within this event, so this is loop-invariant. It was previously recomputed
+  ## every reburn iteration (two O(ncell) raster reads + a `which()` per round, and
+  ## burny runs average ~6 rounds/yr).
+  omitPixels <- switch(
+    P(sim)$ROStype,
+    burny = which(is.na(sim$flammableMap[]) | (sim$flammableMap[] == 0)),
+    NULL
+  )
 
   ## 2023-09: after maxReburns, if not reaching fire size, take the last burn,
   ## and start new fire(s) to burn the remaining area until the target is achieved.
@@ -533,20 +557,11 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
       }
       on.exit(data.table::setDTthreads(a), add = TRUE)
 
-      ## 2024-10: normally, non-flammable pixels are NA in ROSmap and spreadProbThisStep;
-      ##          except in 'burny' scenarios, where fires *can* spread through those pixels,
-      ##          but aren't counted towards burn stats/summaries.
-      omitPixels <- switch(
-        P(sim)$ROStype,
-        burny = which(is.na(sim$flammableMap[]) | (sim$flammableMap[] == 0)),
-        NULL
-      )
-
       fires <- LandWebUtils::landmine_burn1(
         sim$fireReturnInterval,
         startCells = thisYrStartCells,
         fireSizes = fireSizesInPixels,
-        spreadProbRel = ROSmap,
+        spreadProbRel = ROSvals,
         sizeCutoffs = mod$sizeCutoffs,
         maxRetriesPerID = P(sim)$maxRetriesPerID,
         spawnNewActive = mod$spawnNewActive,
