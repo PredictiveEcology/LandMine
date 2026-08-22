@@ -259,6 +259,15 @@ lscape <- LandWebUtils::landmine_optim_landscape(pixelSize = pixelSize)
 ros <- lscape$file
 centreCell <- lscape$centreCell
 
+## Fire sizes are specified in HECTARES, because that is how the calibration targets are
+## defined (Andison fitted the shape relationship over 10-3,000 ha), and converted to pixels
+## for the resolution being calibrated. Specifying pixel counts directly means a different
+## physical fire at every resolution -- `c(10, ..., 1e5)` pixels is 10-100,000 ha at 100 m but
+## 57.6-576,000 ha at 240 m -- which put most of the v3 calibration outside the fitted range,
+## and defeats the point of calibrating at several pixel sizes.
+fireSizesHa <- c(50, 200, 600, 1500, 3000)
+fireSizes <- LandWebUtils::landmine_optim_fireSizes(pixelSize, fireSizesHa)
+
 ## Current best-fit parameters, used by the visual-inspection runs further below.
 ## Read via `landmine_optim_params_read()`/`landmine_optim_unpack()` so the CSV schema and
 ## the `10^` convention have a single definition, shared with `LandMine.R`.
@@ -305,12 +314,17 @@ if (!is.null(cl)) {
 ```{r optimization}
 ## `landmine_optim_calibrate()` wraps the DEoptim fit; its defaults reproduce the fit that
 ## was previously written out inline here (same bounds, VTR, itermax, strategy, objective).
+## `objective = "andison"` (the default) fits the shape-vs-area relationship and the remnant
+## island fractions from Andison (1996), rather than a single constant perimeter:area target.
+## `crnSeed` applies common random numbers, so parameter vectors are compared against the same
+## random draws; `replicates` averages over draws, which the island statistic needs.
 opt_sn <- LandWebUtils::landmine_optim_calibrate(
   pixelSize = pixelSize,
-  fireSizes = c(10, 100, 1000, 10000, 100000),
-  desiredPerimeterArea = 0.003,
+  fireSizesHa = fireSizesHa,
   itermax = 200,
   cl = cl,
+  seed = 1234L,   ## with a fixed NP, this makes the per-worker RNG streams reproducible
+  crnSeed = 1L,
   paramsFile = DEoptim_file ## appends the best parameters as a new dated row
 )
 
