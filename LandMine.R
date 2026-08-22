@@ -16,7 +16,7 @@ defineModule(sim, list(
     "assertthat", "cli", "data.table", "fpCompare", "ggplot2",
     "RColorBrewer", "stats", "terra", "tidyterra", "VGAM",
     "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
-    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9024)",
+    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9025)",
     "PredictiveEcology/pemisc@development",
     "PredictiveEcology/SpaDES.tools@development (>= 2.1.2.9000)"
   ),
