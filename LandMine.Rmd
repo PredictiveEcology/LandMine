@@ -309,7 +309,45 @@ if (!is.null(cl)) {
 }
 ```
 
-### Visual examination
+### What the objective fits
+
+The spread parameters are fitted against the landscape statistics @Andison:1996 reported, on a
+uniform, fully-flammable synthetic landscape so the fit is not conditioned on any one study
+area's fuel pattern. Three components, per fire size:
+
+- **shape** --- the simulated shape index against `SHAPE = 1.770 + 0.041 log10(AREA)^4`
+  (thesis §3.3.1). Note this is the coefficient fitted to his *empirical* data; the thesis also
+  reports 1.881 for his own model's output, and targeting that would be circular.
+- **size** --- a continuous shortfall against the target fire size.
+- **islands** --- percent of fire area in remnant islands against Table 3.5 (empirical column:
+  4.0 / 6.0 / 9.0 % by size class).
+
+Four properties of this fit are worth stating plainly, because each was wrong or absent before
+2026-08 and each changes how the results should be read.
+
+**Fire sizes are specified in hectares, not pixels.** Andison rasterized at 50 m
+(quarter-hectare) pixels and fitted the shape relationship over 10--3,000 ha. A fixed
+pixel-count vector means a different physical fire at every resolution --- `c(10, ..., 1e5)`
+pixels is 10--100,000 ha at 100 m but 57.6--576,000 ha at 240 m --- which had put nearly the
+whole 240 m calibration outside the fitted range, and made calibrating at several pixel sizes
+uninterpretable, since the runs were fitting different physical fires.
+
+**The remnant-island term is down-weighted with coarsening resolution.** Table 3.6 puts 65 % of
+island area in the 2--5 ha class for fires under 1,000 ha; at 240 m a single pixel is already
+5.76 ha, so that class cannot exist and the target is unreachable however the parameters are
+set. The weight is `min(1, 50 / pixelSize)`: 1.0 at 50 m, 0.42 at 120 m, 0.21 at 240 m.
+
+**The objective is stochastic, so it must be replicated.** Common random numbers make parameter
+vectors comparable but let the optimizer exploit the particular realization it was given. At
+`replicates = 2` the fits over-fitted their realization by 12.9x (240 m) and 9.3x (120 m) when
+re-scored at independent seeds; at `replicates = 10` that fell to 3.4x and 1.9x. Always re-score
+a fit at independent seeds before adopting it --- `landmine_optim_calibrate()` reports this.
+
+**Iteration count is not the binding constraint.** Improvement stopped at iteration 149 and 128
+of 200 in the first runs, with no gain across the final 50. Noise is the constraint; replication
+addresses it, more generations do not.
+
+### Running the fit
 
 ```{r optimization}
 ## `landmine_optim_calibrate()` wraps the DEoptim fit; its defaults reproduce the fit that
@@ -335,26 +373,58 @@ cl <- NULL
 gc()
 ```
 
-```{r fitSn}
-fs_sn <- c(10, 100, 1000, 10000, 100000)
-fit_sn <- LandWebUtils::landmine_optim_fitSN(
-  sna = c(-1, -1, -1, -2, 2, 4, 0.9),
-  ros = ros,
-  centreCell = centreCell,
-  fireSizes = fs_sn,
-  desiredPerimeterArea = 0.003
+```{r calib-diagnostics}
+## Diagnostics at the fitted solution, using the same functions the project reports use.
+## `components` carries the per-fire-size observed-vs-expected values behind each figure.
+best <- opt_sn$optim$bestmem
+lscape <- LandWebUtils::landmine_optim_landscape(pixelSize = pixelSize)
+comp <- attr(
+  LandWebUtils::landmine_optim_fitAndison(
+    par = as.numeric(best), ros = lscape$file, centreCell = lscape$centreCell,
+    fireSizes = as.integer(fireSizes), replicates = 5L, crnSeed = 99L
+  ),
+  "components"
 )
-bfs1_sn <- purrr::transpose(attr(fit_sn, "bfs1"))
-LM_sn <- do.call(rbind, bfs1_sn$LM)
 
-## NOTE: visual inspection - not too round; not too sinuous
-plot(log10(fs_sn), LM_sn[, "perim.area.ratio"])
+## simulated shape against Andison's fitted relationship
+LandWebUtils::landmine_plot_calibShape(comp)
+
+## simulated remnant islands against Andison Table 3.5
+LandWebUtils::landmine_plot_calibIslands(comp)
+
+## did the run converge, or did it hit itermax while still improving?
+LandWebUtils::landmine_plot_calibConvergence(opt_sn)
 ```
+
+### Results (2026-08)
+
+Calibrated at both 120 m and 240 m with `replicates = 10`, holding everything else identical so
+the two are comparable.
+
+The **120 m fit is well determined**: repeat runs land within 4.6 % of the search interval, and
+its shape fit is close to exact at the large end (7.80 against a target of 7.76 at 3,000 ha).
+
+The **240 m optimum is a broad plateau, not a point**: two 240 m fits differing by 24.8 % of the
+search interval score identically (0.16 pooled sd). That is expected at that grain --- a 50 ha
+fire is 9 pixels, so the shape statistic is quantization-limited, and the island term carries a
+weight of only 0.21.
+
+The parameters **transfer asymmetrically**. The 120 m fit scores as well as the 240 m fit on the
+240 m landscape (0.70 vs 0.81, 0.33 pooled sd) with a fifth of the variance, while the 240 m fit
+is much worse at 120 m (1.78 vs 0.61, 4.91 sd). The 120 m fit is therefore adopted at **every**
+resolution (`optimParsRowID = 1L`); the 240 m fit is retained as row 2 for reference but should
+not be quoted as a determined value.
 
 ## Alternate optimization
 
 A second (alternative) version tries the optimization using fewer parameters, to test whether a simpler version gets better/different results.
 Although this version was not used for the final module, we preserve it here for posterity.
+
+Both `landmine_optim_fitSN()` and `landmine_optim_fitSN2()` are the **legacy** objective: a single
+constant perimeter-to-area target at every fire size. That target works against Andison's central
+result --- that shape complexity *increases* with fire area --- and its size penalty never fired
+(it summed pixel IDs rather than counting cells, from 2018 until 2026-08). They are retained so
+historical fits can be reproduced, not for new calibration.
 
 ```{r optimization2}
 ## NOTE: needs a live cluster; re-create it (the `optimization` chunk stops its own).
