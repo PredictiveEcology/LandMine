@@ -7,7 +7,7 @@ defineModule(sim, list(
     person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb", "cre"))
   ),
   childModules = character(0),
-  version = list(LandMine = numeric_version("1.0.1")),
+  version = list(LandMine = numeric_version("1.0.2")),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
@@ -27,7 +27,7 @@ defineModule(sim, list(
                     "This describes the simulation time at which the first burn event should occur"),
     defineParameter("fireTimestep", "integer", 1L, NA, NA,
                     "This describes the simulation time interval between burn events"),
-    defineParameter("maxReburns", "integer", c(1L, 20L), 1L, 20L,
+    defineParameter("maxReburns", "integer", c(1L, 20L), 1L, 500L,
                     paste("Number of attempts to burn fires that don't reach their target fire size.",
                           "Reburning occurs in two phases, hence accepting a parameter value of length 2.",
                           "In the first phase, fires that did not reach their target size are reignited",
@@ -553,6 +553,7 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   ## 2023-09: after maxReburns, if not reaching fire size, take the last burn,
   ## and start new fire(s) to burn the remaining area until the target is achieved.
   ## Should be OK b/c LandMine replicates FRIs (i.e., area burned each year), not number of fires
+  polysNeedMoreFires <- NULL ## set inside the loop; NULL when the loop body never reburns
   while (sum(numFiresThisPeriod) > 0 && (iter <= sum(P(sim)$maxReburns))) {
     thisYrStartCells <- startCellPool[
       , SpaDES.tools:::resample(pixel, numFiresThisPeriod[.GRP]), by = polygonNumeric
@@ -679,6 +680,27 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
     }
 
     iter <- iter + 1L
+  }
+
+  ## The loop above exits EITHER because every fire reached its target (converged) OR because
+  ## it ran out of reburn attempts. Those two are indistinguishable in the log otherwise, and
+  ## the second one means this year's area-burned target was abandoned unmet. Record WHERE:
+  ## `polygonNumeric` is the fire-return-interval zone, so this says which FRI zones the
+  ## reburn ceiling is failing to satisfy -- the thing a `maxReburns[2]` change has to fix.
+  ## One machine-parseable line per zone; only emitted when the ceiling actually binds.
+  if (sum(numFiresThisPeriod) > 0 && !is.null(polysNeedMoreFires)) {
+    unmet <- polysNeedMoreFires[
+      , list(nFires = N[1], pixelsShort = sum(maxSize, na.rm = TRUE)), by = "polygonNumeric"
+    ][nFires > 0]
+    if (NROW(unmet) > 0) {
+      for (i in seq_len(NROW(unmet))) {
+        message(sprintf(
+          "reburn-ceiling year=%g FRI=%g nFires=%d pixelsShort=%d",
+          as.numeric(time(sim)), as.numeric(unmet$polygonNumeric[i]),
+          as.integer(unmet$nFires[i]), as.integer(unmet$pixelsShort[i])
+        ))
+      }
+    }
   }
 
   firesDT <- rbindlist(firesList)
