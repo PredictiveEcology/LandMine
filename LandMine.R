@@ -7,7 +7,7 @@ defineModule(sim, list(
     person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb", "cre"))
   ),
   childModules = character(0),
-  version = list(LandMine = numeric_version("1.0.3")),
+  version = list(LandMine = numeric_version("1.0.4")),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
@@ -16,7 +16,7 @@ defineModule(sim, list(
     "assertthat", "cli", "data.table", "fpCompare", "ggplot2",
     "RColorBrewer", "stats", "terra", "tidyterra", "VGAM",
     "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
-    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9025)",
+    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9026)",
     "PredictiveEcology/pemisc@development",
     "PredictiveEcology/SpaDES.tools@development (>= 2.1.2.9000)"
   ),
@@ -460,10 +460,12 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   ## END DEBUGGING
 
   sim$numFiresPerYear <- na.omit(sim$numFiresPerYear)
-  numFiresThisPeriod <- rnbinom(
-    length(sim$numFiresPerYear),
-    mu = sim$numFiresPerYear * P(sim)$fireTimestep,
-    size = 1.3765 ## Eliot lowered this from 1.8765 on Oct 23, 2018 because too constant
+  ## Promoted to LandWebUtils (unit-tested: names survive the draw -- `rnbinom()` drops them,
+  ## and the counts are indexed by zone below -- and the overdispersion still gives a
+  ## low-rate zone its long runs of zero-fire years).
+  numFiresThisPeriod <- LandWebUtils::landmine_draw_num_fires(
+    sim$numFiresPerYear,
+    fireTimestep = P(sim)$fireTimestep
   )
   thisYrStartCellsDT <- data.table(
     pixel = seq(terra::ncell(sim$fireReturnInterval)),
@@ -513,12 +515,12 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
 
   ## Because annual number of fires includes fires <6.25 ha, sometimes this will round down to 0 pixels.
   ##   This calculation makes that probabilistic.
-  fireSizesInPixels <- fireSizesThisPeriod / (prod(res(sim$flammableMap)) / 1e4)
-  ranDraws <- runif(length(fireSizesInPixels))
-  truncVals <- trunc(fireSizesInPixels)
-  decimalVals <- (unname(fireSizesInPixels - (truncVals))) > ranDraws
-
-  fireSizesInPixels <- truncVals + decimalVals
+  ## Promoted to LandWebUtils (unit-tested: the rounding preserves E[pixels], which is the
+  ## entire reason it is probabilistic, and exact pixel multiples never round up).
+  fireSizesInPixels <- LandWebUtils::landmine_sizes_to_pixels(
+    fireSizesThisPeriod,
+    pixelAreaHa = prod(res(sim$flammableMap)) / 1e4
+  )
 
   firesList <- fireSizes <- list()
   maxOrder <- 0L
@@ -716,18 +718,16 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   ## `polygonNumeric` is the fire-return-interval zone, so this says which FRI zones the
   ## reburn ceiling is failing to satisfy -- the thing a `maxReburns[2]` change has to fix.
   ## One machine-parseable line per zone; only emitted when the ceiling actually binds.
-  if (sum(numFiresThisPeriod) > 0 && !is.null(polysNeedMoreFires)) {
-    unmet <- polysNeedMoreFires[
-      , list(nFires = N[1], pixelsShort = sum(maxSize, na.rm = TRUE)), by = "polygonNumeric"
-    ][nFires > 0]
-    if (NROW(unmet) > 0) {
-      for (i in seq_len(NROW(unmet))) {
-        message(sprintf(
-          "reburn-ceiling year=%g FRI=%g nFires=%d pixelsShort=%d",
-          as.numeric(time(sim)), as.numeric(unmet$polygonNumeric[i]),
-          as.integer(unmet$nFires[i]), as.integer(unmet$pixelsShort[i])
-        ))
-      }
+  ## The tabulation is promoted to LandWebUtils (unit-tested: zero-outstanding zones and the
+  ## NA-FRI row are excluded, and NULL/empty input gives zero rows rather than an error --
+  ## a silently wrong diagnostic would mislead the next `maxReburns` decision).
+  if (sum(numFiresThisPeriod) > 0) {
+    unmet <- LandWebUtils::landmine_reburn_ceiling(polysNeedMoreFires, year = time(sim))
+    for (i in seq_len(NROW(unmet))) {
+      message(sprintf(
+        "reburn-ceiling year=%g FRI=%g nFires=%d pixelsShort=%d",
+        unmet$year[i], unmet$FRI[i], unmet$nFires[i], unmet$pixelsShort[i]
+      ))
     }
   }
 
@@ -765,18 +765,16 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   }
 
   currBurn <- terra::mask(sim$rstCurrentBurn, sim$studyAreaReporting)
-  fris <- unique(na.omit(sim$fireReturnInterval[]))
-  npix <- vapply(fris, function(x) {
-    ids <- which(sim$fireReturnInterval[] == x)
-    unname(table(currBurn[ids])[2])
-  }, numeric(1)) |> unname()
-  npix[is.na(npix)] <- 0 # Show that zero pixels burned in a year with no pixels burned, rather than NA
-
-  burnedDF <- data.frame(
+  ## NOTE: this previously counted burned pixels with `table(currBurn[ids])[2]`, which returns
+  ## NA when a zone burns COMPLETELY (only one level in the table) -- and the following
+  ## `npix[is.na(npix)] <- 0` then recorded that total burn as ZERO ha. Promoted to
+  ## LandWebUtils, where it counts with `sum(vals == 1)` and is unit-tested for the
+  ## fully-burned, partly-burned and unburned cases.
+  burnedDF <- LandWebUtils::landmine_area_burned_by_zone(
+    currentBurn = currBurn,
+    fireReturnInterval = sim$fireReturnInterval,
     time = as.numeric(times(sim)$current),
-    nPixelsBurned = npix,
-    haBurned = npix * prod(res(sim$rstCurrentBurn)) / 100^2, ## area in ha
-    FRI = as.factor(fris)
+    pixelAreaHa = prod(res(sim$rstCurrentBurn)) / 100^2
   )
   mod$areaBurnedOverTime <- rbind(mod$areaBurnedOverTime, burnedDF)
   mod$gg_areaBurnedOverTime <- landmine_plot_areaBurnedOverTime(mod$areaBurnedOverTime)
@@ -803,28 +801,15 @@ SummarizeFRIsingle <- function(sim) {
   ## sanity check
   compareGeom(flammableMap, lthfc, meanAnnualCumulBurnMap, res = TRUE)
 
-  nonFlammable <- which(is.na(flammableMap[]) | flammableMap[] == 0)
-  if (length(nonFlammable) > 0) {
-    flammableMap[nonFlammable] <- NA
-    lthfc[nonFlammable] <- NA
-    meanAnnualCumulBurnMap[nonFlammable] <- NA
-  }
-
-  expFRIs <- terra::values(lthfc, mat = FALSE) |>
-    unique() |>
-    na.omit() |>
-    sort()
-
-  simFRIs <- vapply(expFRIs, function(fri) {
-    pixIds <- which(terra::values(lthfc, mat = FALSE) == fri)
-    1 / (sum(meanAnnualCumulBurnMap[pixIds]) / (length(pixIds)))
-  }, numeric(1))
-
-  sim$friSummary <- data.table(
-    studyArea = studyAreaName,
-    LTHFC = expFRIs,
-    FRI = simFRIs,
-    stringsAsFactors = FALSE
+  ## Promoted to LandWebUtils: this block was duplicated VERBATIM in the single- and
+  ## multi-mode summaries, so the two could silently diverge. It is now one unit-tested
+  ## function (covering the non-flammable masking, the never-burned -> Inf case, and the
+  ## implicit contract that the NA masks of `lthfc` and the burn map agree).
+  sim$friSummary <- LandWebUtils::landmine_fri_summary(
+    lthfc = lthfc,
+    flammableMap = flammableMap,
+    meanAnnualCumulBurnMap = meanAnnualCumulBurnMap,
+    studyAreaName = studyAreaName
   )
 
   f <- file.path(outputPath(sim), paste0("LandMine_FRI_summary.csv"))
@@ -892,28 +877,15 @@ SummarizeFRImulti <- function(sim) {
 
   meanAnnualCumulBurnMap <- burnMaps / length(allReps)
 
-  nonFlammable <- which(is.na(flammableMap[]) | flammableMap[] == 0)
-  if (length(nonFlammable) > 0) {
-    flammableMap[nonFlammable] <- NA
-    lthfc[nonFlammable] <- NA
-    meanAnnualCumulBurnMap[nonFlammable] <- NA
-  }
-
-  expFRIs <- terra::values(lthfc, mat = FALSE) |>
-    unique() |>
-    na.omit() |>
-    sort()
-
-  simFRIs <- vapply(expFRIs, function(fri) {
-    pixIds <- which(terra::values(lthfc, mat = FALSE) == fri)
-    1 / (sum(meanAnnualCumulBurnMap[pixIds]) / (length(pixIds)))
-  }, numeric(1))
-
-  sim$friSummary <- data.table(
-    studyArea = studyAreaName,
-    LTHFC = expFRIs,
-    FRI = simFRIs,
-    stringsAsFactors = FALSE
+  ## Promoted to LandWebUtils: this block was duplicated VERBATIM in the single- and
+  ## multi-mode summaries, so the two could silently diverge. It is now one unit-tested
+  ## function (covering the non-flammable masking, the never-burned -> Inf case, and the
+  ## implicit contract that the NA masks of `lthfc` and the burn map agree).
+  sim$friSummary <- LandWebUtils::landmine_fri_summary(
+    lthfc = lthfc,
+    flammableMap = flammableMap,
+    meanAnnualCumulBurnMap = meanAnnualCumulBurnMap,
+    studyAreaName = studyAreaName
   )
 
   f <- file.path(outputPath(sim), paste0("LandMine_FRI_summary_multi.csv"))
