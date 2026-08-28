@@ -7,7 +7,7 @@ defineModule(sim, list(
     person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb", "cre"))
   ),
   childModules = character(0),
-  version = list(LandMine = numeric_version("1.0.2")),
+  version = list(LandMine = numeric_version("1.0.3")),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
@@ -460,7 +460,6 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   ## END DEBUGGING
 
   sim$numFiresPerYear <- na.omit(sim$numFiresPerYear)
-  NA_ids <- as.integer(attr(sim$numFiresPerYear, "na.action"))
   numFiresThisPeriod <- rnbinom(
     length(sim$numFiresPerYear),
     mu = sim$numFiresPerYear * P(sim)$fireTimestep,
@@ -546,9 +545,38 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   ## Verified to give the same start cells, in the same order, for the same seed: order
   ## matters because `fireSizesInPixels` is matched positionally to `thisYrStartCells`
   ## and `numFiresThisPeriod[.GRP]` depends on group order.
-  thisYrStartCellsDT[polygonNumeric %in% c(0, NA_ids), polygonNumeric := NA]
-  startCellPool <- na.omit(thisYrStartCellsDT)
+  ## `polygonNumeric` is read from `sim$fireReturnInterval`, which Init() has ALREADY set to NA
+  ## on both zero-FRI and non-flammable pixels -- so `na.omit()` alone drops every ineligible
+  ## start cell, and non-flammable pixels are never ignition locations. The `> 0` filter is a
+  ## belt-and-braces guard for a caller-supplied raster that skipped Init's zero handling.
+  ##
+  ## This previously also tested `polygonNumeric %in% NA_ids`, where `NA_ids` came from
+  ## `attr(na.omit(numFiresPerYear), "na.action")` -- i.e. POSITIONS compared against FRI
+  ## VALUES. It was harmless only by accident (no study area has an FRI equal to one of those
+  ## positions). Had it ever matched, that zone would have been dropped from `startCellPool`
+  ## while remaining in `numFiresPerYear`, and the positional `.GRP` indexing below would then
+  ## have silently handed every subsequent zone another zone's fire count.
+  startCellPool <- na.omit(thisYrStartCellsDT)[polygonNumeric > 0]
   data.table::setkeyv(startCellPool, "polygonNumeric")
+
+  ## The `numFiresThisPeriod[.GRP]` indexing below is POSITIONAL: it assumes the groups of
+  ## `startCellPool` (keyed, so ascending `polygonNumeric`) line up 1:1 and in order with
+  ## `sim$numFiresPerYear` (named by FRI, ascending from `terra::freq()`). Nothing enforces
+  ## that, and a mismatch would not error -- it would quietly simulate the wrong fire regime.
+  ## Assert it, so a future change to the masking, the FRI values, or the freq() ordering
+  ## fails loudly here instead of producing plausible-looking wrong output.
+  assertthat::assert_that(
+    identical(
+      as.character(startCellPool[, unique(polygonNumeric)]),
+      names(sim$numFiresPerYear)
+    ),
+    msg = paste(
+      "LandMine: start-cell pool zones do not match `numFiresPerYear` -- the positional",
+      "`.GRP` indexing of `numFiresThisPeriod` would assign fire counts to the wrong FRI",
+      "zones. Pool:", paste(startCellPool[, unique(polygonNumeric)], collapse = ","),
+      "| numFiresPerYear:", paste(names(sim$numFiresPerYear), collapse = ",")
+    )
+  )
 
   ## 2023-09: after maxReburns, if not reaching fire size, take the last burn,
   ## and start new fire(s) to burn the remaining area until the target is achieved.
