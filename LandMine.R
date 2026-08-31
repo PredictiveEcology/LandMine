@@ -7,7 +7,7 @@ defineModule(sim, list(
     person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb", "cre"))
   ),
   childModules = character(0),
-  version = list(LandMine = numeric_version("1.0.5")),
+  version = list(LandMine = numeric_version("1.0.6")),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
@@ -1090,6 +1090,15 @@ fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
     cuts[[2]] <- cuts[[2]] & vegType %in% sppEquiv["immature"]$pixelValue
   }
 
+  ## NOTE (2026-08-31): this guard is `all(...)` while its two siblings above are `!all(...)`.
+  ## The asymmetry is undocumented and its intent is unknown -- it may be deliberate or a typo.
+  ## DELIBERATELY NOT "fixed": inverting it changes which pixels get the young-class ROS, and
+  ## therefore the rate of spread, and therefore the fire regime. That is exactly the code path
+  ## currently under suspicion for FRI zones 55 and 170 (12.3x and 3.4x under-burning, with
+  ## geometry and fuel-barrier explanations all measured and refuted), so changing it blind
+  ## would confound the very investigation it might explain. Resolve it by measurement -- run
+  ## `fireROS()` both ways and compare the ROS maps and per-zone ROS distributions -- not by
+  ## guessing which sibling is the odd one out.
   if (all(sppEquiv["young"]$pixelValue %in% vegTypes[[1]])) {
     cuts[[3]] <- cuts[[3]] & vegType %in% sppEquiv["young"]$pixelValue
   }
@@ -1130,8 +1139,8 @@ fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
 
   ## Other vegetation (flammable, non-forest; e.g., grasslands, lichen, shrub)
   ## The original default value is the same as that of mature spruce stands (30L)
-  # ROSother <- sim$ROSTable[leading == "spruce" & age == "mature", ros]
   ROSother <- P(sim)$ROSother
+  ROSotherRef <- sim$ROSTable[leading == "spruce" & age == "mature", ros]
 
   ## Non-flammable cover types
   ## 2023-02: discontinuous fuels (e.g., shield) may require spread through non-flammable pixels;
@@ -1142,9 +1151,14 @@ fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
     NA_integer_
   )
 
+  ## The second check compared `P(sim)$ROSother` against 0.95-1.05x of `ROSother`, which was
+  ## assigned FROM `P(sim)$ROSother` two lines earlier -- i.e. a value against +/-5% of itself,
+  ## vacuously TRUE for any input. The commented-out line it replaced shows the intent: compare
+  ## against MATURE SPRUCE ROS, which is what `ROSother`'s default (30L) is documented to match.
+  ## Restored against that reference, so the guard actually guards.
   assertthat::assert_that(
     isTRUE(inRange(P(sim)$ROSother, min(sim$ROSTable$ros), max(sim$ROSTable$ros))),
-    isTRUE(inRange(P(sim)$ROSother, 0.95*ROSother, 1.05*ROSother)) ## TODO: tweak this to allow greater range
+    isTRUE(inRange(P(sim)$ROSother, 0.95 * ROSotherRef, 1.05 * ROSotherRef)) ## TODO: tweak this to allow greater range
   )
 
   ROS[sim$flammableMap[] == 1L & is.na(ROS)] <- as.integer(ROSother) ## flammable
