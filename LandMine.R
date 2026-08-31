@@ -7,7 +7,7 @@ defineModule(sim, list(
     person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb", "cre"))
   ),
   childModules = character(0),
-  version = list(LandMine = numeric_version("1.0.4")),
+  version = list(LandMine = numeric_version("1.0.5")),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
@@ -16,7 +16,7 @@ defineModule(sim, list(
     "assertthat", "cli", "data.table", "fpCompare", "ggplot2",
     "RColorBrewer", "stats", "terra", "tidyterra", "VGAM",
     "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
-    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9026)",
+    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9028)",
     "PredictiveEcology/pemisc@development",
     "PredictiveEcology/SpaDES.tools@development (>= 2.1.2.9000)"
   ),
@@ -322,44 +322,26 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   sim$fireTimestep <- P(sim)$fireTimestep
   sim$fireInitialTime <- P(sim)$burnInitialTime
 
-  ## fireReturnInterval should have no zeros
-  zeros <- sim$fireReturnInterval[] == 0L
-  if (any(zeros, na.rm = TRUE)) {
-    sim$fireReturnInterval[zeros] <- NA_integer_
-  }
-
-  ## 2023-09: exclude non-flammable pixels for FRI calculations
-  nonFlammable <- which(is.na(sim[["flammableMap"]][]) | sim[["flammableMap"]][] == 0)
-  if (length(nonFlammable) > 0) {
-    sim$fireReturnInterval[nonFlammable] <- NA
-  }
-
-  ## NOTE: need to keep the frequencies of the NAs for use in burn function
-  numPixelsPerPolygonNumeric <- terra::freq(sim$fireReturnInterval, bylayer = FALSE) |>
-    rbind(terra::freq(sim$fireReturnInterval, value = NA, bylayer = FALSE)) |>
-    setNames(c("fri", "count"))
-  numPixelsPerPolygonNumeric <- cbind(value = seq_len(NROW(numPixelsPerPolygonNumeric)), numPixelsPerPolygonNumeric)
-
-  ordPolygons <- order(numPixelsPerPolygonNumeric[, "value"])
-  numPixelsPerPolygonNumeric <- numPixelsPerPolygonNumeric[ordPolygons, , drop = FALSE]
-  sim$fireReturnIntervalsByPolygonNumeric <- numPixelsPerPolygonNumeric[, "fri"]
-  numPixelsPerPolygonNumeric <- numPixelsPerPolygonNumeric[, "count"]
-  names(numPixelsPerPolygonNumeric) <- sim$fireReturnIntervalsByPolygonNumeric
-
-  numHaPerPolygonNumeric <- numPixelsPerPolygonNumeric * (prod(res(sim$fireReturnInterval)) / 1e4)
-  returnInterval <- sim$fireReturnIntervalsByPolygonNumeric
-
   if (verbose > 0) {
-    message("Determine mean fire size...")
+    message("Determine mean fire size and per-zone ignition budget...")
   }
-  meanFireSizeHa <- LandWebUtils::meanTruncPareto(
-    k = sim$kBest,
-    lower = 1,
-    upper = P(sim)$biggestPossibleFireSizeHa,
-    alpha = 1
+  ## Promoted to LandWebUtils: masks zero-FRI and non-flammable pixels out of the raster,
+  ## tabulates pixels per FRI zone, and converts to expected fires/yr
+  ## (`(area / meanFireSize) / FRI`). Unit-tested there for the ORDERING CONTRACT that the
+  ## reburn loop below consumes POSITIONALLY via `numFiresThisPeriod[.GRP]`: `terra::freq()`
+  ## sorts ascending, the NA row is appended last, and that entry is NA-VALUED so `na.omit()`
+  ## drops it (an NA *name* alone would not). Break any one and zones silently receive each
+  ## other's fire counts. Masking here is also why non-flammable pixels can never be ignition
+  ## locations: the start-cell pool is built from this same raster.
+  ignitionBudget <- LandWebUtils::landmine_ignition_budget(
+    fireReturnInterval = sim$fireReturnInterval,
+    flammableMap = sim[["flammableMap"]],
+    kBest = sim$kBest,
+    biggestPossibleFireSizeHa = P(sim)$biggestPossibleFireSizeHa
   )
-  numFiresByPolygonNumeric <- numHaPerPolygonNumeric / meanFireSizeHa
-  sim$numFiresPerYear <- numFiresByPolygonNumeric / returnInterval
+  sim$fireReturnInterval <- ignitionBudget$fireReturnInterval
+  sim$fireReturnIntervalsByPolygonNumeric <- ignitionBudget$fireReturnIntervalsByPolygonNumeric
+  sim$numFiresPerYear <- ignitionBudget$numFiresPerYear
 
   sim$rstCurrentBurn <- terra::rast(sim$fireReturnInterval) ## creates no-value raster
   sim$rstCurrentBurn[] <- 0L
@@ -648,7 +630,6 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
       if (length(tooSmall)) {
         tooSmallDT <- fa[tooSmall, c("initialPixels", "maxSize")]
         tooSmallByPoly <- thisYrStartCellsDT[tooSmallDT, on = c(pixel = "initialPixels")]
-        friByPolyDT <- data.table(polygonNumeric = sim$fireReturnIntervalsByPolygonNumeric)
 
         if (iter <= P(sim)$maxReburns[1]) {
           firesOK <- fires[!initialPixels %in% tooSmallDT$initialPixels, ]
@@ -656,13 +637,14 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
           fireSizes <- append(fireSizes, list(fa[!tooSmall, c("size", "maxSize")]))
           maxOrder <- max(fires$order)
 
-          polysNeedMoreFires <- tooSmallByPoly[, N := .N, by = polygonNumeric]
-          polysNeedMoreFires <- polysNeedMoreFires[friByPolyDT, on = "polygonNumeric"]
-          polysNeedMoreFires[is.na(N), N := 0]
-          set(polysNeedMoreFires, NULL, "pixel", NULL)
-
-          numFiresThisPeriod <- polysNeedMoreFires[, N[1], by = "polygonNumeric"]$V1
-          fireSizesInPixels <- na.omit(polysNeedMoreFires)$maxSize
+          ## Promoted to LandWebUtils. Phase 1: each too-small fire keeps its FULL original
+          ## target and is re-ignited from a fresh start cell.
+          reburn <- LandWebUtils::landmine_reburn_budget(
+            tooSmallByPoly, sim$fireReturnIntervalsByPolygonNumeric
+          )
+          polysNeedMoreFires <- reburn$polysNeedMoreFires
+          numFiresThisPeriod <- reburn$numFiresThisPeriod
+          fireSizesInPixels <- reburn$fireSizesInPixels
           spreadProbThisStep[firesOK$pixels] <- NA_real_
         } else {
           firesTooSmall <- fires[initialPixels %in% tooSmallDT$initialPixels, ]
@@ -681,14 +663,17 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
           fireSizes <- append(fireSizes, list(fa2))
           maxOrder <- max(fires$order)
 
-          polysNeedMoreFires <- tooSmallByPoly[, N := .N, by = polygonNumeric]
-          polysNeedMoreFires <- polysNeedMoreFires[, maxSize := fa3$maxSize] ## update what's left to burn
-          polysNeedMoreFires <- polysNeedMoreFires[friByPolyDT, on = "polygonNumeric"]
-          polysNeedMoreFires[is.na(N), N := 0]
-          set(polysNeedMoreFires, NULL, "pixel", NULL)
-
-          numFiresThisPeriod <- polysNeedMoreFires[, N[1], by = "polygonNumeric"]$V1
-          fireSizesInPixels <- na.omit(polysNeedMoreFires)$maxSize
+          ## Promoted to LandWebUtils. Phase 2: NEW fires sized to the REMAINING shortfall
+          ## (`fa3$maxSize`), assigned positionally onto the too-small rows -- both descend
+          ## from the same `fa[tooSmall]` subset. The promoted function is equivalence-tested
+          ## against this exact logic over randomised multi-zone inputs.
+          reburn <- LandWebUtils::landmine_reburn_budget(
+            tooSmallByPoly, sim$fireReturnIntervalsByPolygonNumeric,
+            remainingSize = fa3$maxSize
+          )
+          polysNeedMoreFires <- reburn$polysNeedMoreFires
+          numFiresThisPeriod <- reburn$numFiresThisPeriod
+          fireSizesInPixels <- reburn$fireSizesInPixels
           spreadProbThisStep[firesTooSmall$pixels] <- NA_real_
         }
       } else {
