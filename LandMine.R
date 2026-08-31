@@ -7,7 +7,7 @@ defineModule(sim, list(
     person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb", "cre"))
   ),
   childModules = character(0),
-  version = list(LandMine = numeric_version("1.0.6")),
+  version = list(LandMine = numeric_version("1.0.7")),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
@@ -16,7 +16,7 @@ defineModule(sim, list(
     "assertthat", "cli", "data.table", "fpCompare", "ggplot2",
     "RColorBrewer", "stats", "terra", "tidyterra", "VGAM",
     "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
-    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9028)",
+    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9029)",
     "PredictiveEcology/pemisc@development",
     "PredictiveEcology/SpaDES.tools@development (>= 2.1.2.9000)"
   ),
@@ -73,7 +73,7 @@ defineModule(sim, list(
                     paste0("default ROS value for non-forest vegetation classes.",
                            "this is needed when passing a modified `ROSTable`, e.g. using log-transformed values.")),
     defineParameter("ROStype", "character", "default", NA, NA,
-                    "One of 'burny', 'equal', 'log', or 'default'."),
+                    "One of 'default' or 'burny'."),
     defineParameter("sppEquivCol", "character", "LandR", NA, NA,
                     "The column in `sim$specieEquivalency` data.table to use as a naming convention."),
     defineParameter("useSeed", "integer", NULL, NA, NA,
@@ -357,17 +357,7 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   )
 
   ## knownSpecies needs to use 'LandWeb' column, not 'LandR'!
-  mod$knownSpecies <- c(
-    Abie_spp = "softwood",
-    Lari_spp = "decid",
-    Pice_gla = "spruce",
-    Pice_mar = "spruce",
-    Pinu_spp = "pine",
-    Popu_spp = "decid",
-    Pseu_men = "softwood",
-    Thuj_pli = "softwood",
-    Tsug_het = "softwood"
-  )
+  mod$knownSpecies <- LandWebUtils::landmine_known_species()
   sim$sppEquiv[, LandMine := mod$knownSpecies[LandWeb]]
 
   return(invisible(sim))
@@ -469,7 +459,17 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
     doAssertion = P(sim)$.unitTest
   )
   ROSmap <- terra::rast(sim$pixelGroupMap) ## empty raster as template
-  ROSmap[] <- fireROS(sim, vegTypeMap = vegTypeMap)
+  ROSmap[] <- LandWebUtils::landmine_fire_ros(
+    vegTypeMap = vegTypeMap,
+    rstTimeSinceFire = sim$rstTimeSinceFire,
+    flammableMap = sim$flammableMap,
+    ROSTable = sim$ROSTable,
+    sppEquiv = sim$sppEquiv,
+    sppEquivCol = P(sim)$sppEquivCol,
+    ROSother = P(sim)$ROSother,
+    knownSpecies = mod$knownSpecies,
+    ROStype = P(sim)$ROStype
+  )
   ROSmap <- terra::mask(ROSmap, sim$studyArea)
   ## PERFORMANCE: for the same reason as `spreadProbThisStep` below, a raster
   ## `spreadProbRel` is re-materialised by `spread2()` on *every* spread step.
@@ -1019,150 +1019,3 @@ SummarizeFRImulti <- function(sim) {
   return(invisible(sim))
 }
 
-fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
-  ROS <- rep(NA_integer_, terra::ncell(vegTypeMap))
-
-  vegType <- terra::values(vegTypeMap, mat = FALSE) ## vector, not matrix (else pixelValue col malformed)
-  vegTypes <- data.table(terra::levels(vegTypeMap)[[1]]) ## 2nd column in levels
-
-  sppNames <- equivalentName(as.character(vegTypes[[2]]), sim$sppEquiv, P(sim)$sppEquivCol)
-  suppressWarnings({
-    onRaster <- rbindlist(list(
-      list("mixed", which(is.na(sppNames))),
-      list("spruce", grep(sppNames, pattern = "Pice")),
-      list("pine", grep(sppNames, pattern = "Pinu")),
-      list("decid", grep(sppNames, pattern = "Popu")),
-      list("softwood", grep(sppNames, pattern = "Pice|Pinu|Popu", invert = TRUE))
-    ))
-  })
-  ## remove duplicates of softwood, which is NA
-  onRaster <- na.omit(unique(onRaster, by = "V2")) |>
-    setnames(old = 1:2, new = c("leading", "pixelValue")) |>
-    setkeyv("pixelValue")
-  onRaster[, species := sppNames]
-
-  sppEquiv <- sim$sppEquiv[, c("LandMine", "LandWeb")][, leading := mod$knownSpecies[LandWeb]] |>
-    na.omit(on = "LandMine")
-  sppEquiv <- sppEquiv[onRaster, on = c("LandMine" = "leading", "LandWeb" = "species")] |>
-    unique()
-
-  sppEquivHere <- unique(na.omit(sppEquiv$LandWeb))
-  haveAllKnown <- sppEquivHere %in% names(mod$knownSpecies)
-  if (!all(haveAllKnown)) {
-    stop("LandMine only has rate of spread burn rates for\n",
-         paste(names(mod$knownSpecies), collapse = ", "),
-         "\nMissing rate of spread for ", paste(sppEquivHere[!haveAllKnown], collapse = ", "))
-  }
-
-  sppEquiv <- unique(sppEquiv, by = c("LandMine", "leading", "pixelValue"))
-  sppEquiv <- sppEquiv[sim$ROSTable, on = "leading", allow.cartesian = TRUE, nomatch = NULL]
-  sppEquiv <- sppEquiv[, c("leading", "age", "ros", "pixelValue")]
-  sppEquiv <- unique(sppEquiv, by = c("age", "leading", "pixelValue"))
-
-  sppEquiv[, used := "no"]
-  sppEquiv[(used == "no") & grepl("(^|_)mature", age), used := "mature"]
-  sppEquiv[(used == "no") & grepl("(^|_)immature", age), used := "immature"]
-  sppEquiv[(used == "no") & grepl("(^|_)young", age), used := "young"]
-  setkeyv(sppEquiv, "used")
-
-  # if there are no "mature_immature"
-  cuts <- list()
-  if (!any(grepl("_mature$|^mature_|_mature_", sppEquiv$age))) {
-    cuts[[1]] <- sim$rstTimeSinceFire[] > 120
-  } else {
-    cuts[[1]] <- !is.na(sim$rstTimeSinceFire[])
-  }
-
-  if (!any(grepl("_immature$|^immature_|_immature_", sppEquiv$age))) {
-    cuts[[2]] <- sim$rstTimeSinceFire[] > 40 & sim$rstTimeSinceFire[] <= 120
-  } else {
-    cuts[[2]] <- sim$rstTimeSinceFire[] <= 120
-  }
-
-  cuts[[3]] <- sim$rstTimeSinceFire[] <= 40
-
-  ## Now go through from mature through immature through young
-  if (!all(sppEquiv["mature"]$pixelValue %in% vegTypes[[1]])) {
-    cuts[[1]] <- cuts[[1]] & vegType %in% sppEquiv["mature"]$pixelValue
-  }
-
-  if (!all(sppEquiv["immature"]$pixelValue %in% vegTypes[[1]])) {
-    cuts[[2]] <- cuts[[2]] & vegType %in% sppEquiv["immature"]$pixelValue
-  }
-
-  ## NOTE (2026-08-31): this guard is `all(...)` while its two siblings above are `!all(...)`.
-  ## The asymmetry is undocumented and its intent is unknown -- it may be deliberate or a typo.
-  ## DELIBERATELY NOT "fixed": inverting it changes which pixels get the young-class ROS, and
-  ## therefore the rate of spread, and therefore the fire regime. That is exactly the code path
-  ## currently under suspicion for FRI zones 55 and 170 (12.3x and 3.4x under-burning, with
-  ## geometry and fuel-barrier explanations all measured and refuted), so changing it blind
-  ## would confound the very investigation it might explain. Resolve it by measurement -- run
-  ## `fireROS()` both ways and compare the ROS maps and per-zone ROS distributions -- not by
-  ## guessing which sibling is the odd one out.
-  if (all(sppEquiv["young"]$pixelValue %in% vegTypes[[1]])) {
-    cuts[[3]] <- cuts[[3]] & vegType %in% sppEquiv["young"]$pixelValue
-  }
-
-  mature <- which(cuts[[1]])
-  immature <- which(cuts[[2]])
-  young <- which(cuts[[3]])
-
-  if (length(mature)) {
-    ROS[mature] <- sppEquiv["mature"]$ros[match(vegType[mature], sppEquiv["mature"]$pixelValue)]
-  }
-
-  if (length(immature)) {
-    ROS[immature] <- sppEquiv["immature"]$ros[match(vegType[immature], sppEquiv["immature"]$pixelValue)]
-  }
-
-  if (length(young)) {
-    ROS[young] <- sppEquiv["young"]$ros[match(vegType[young], sppEquiv["young"]$pixelValue)]
-  }
-
-  if (getOption("LandR.assertions", TRUE)) {
-    names(cuts) <- c("mature", "immature", "young")
-    dt <- data.table(
-      ROS = ROS,
-      pixelValue = vegType,
-      age = cut(sim$rstTimeSinceFire[], breaks = c(0, 40, 120, 999),
-                labels = c("young", "immature", "mature")),
-      as.data.table(cuts)
-    )
-    dt <- na.omit(dt, cols = c("ROS", "age"))
-    dtSumm <- dt[, list(derivedROS = unique(ROS)), by = c("pixelValue", "age")]
-    dtSumm <- dtSumm[sppEquiv, on = c("pixelValue", "age" = "used"), nomatch = NULL]
-
-    if (!(identical(dtSumm$derivedROS, dtSumm$ros))) {
-      stop("fireROS failed its test")
-    }
-  }
-
-  ## Other vegetation (flammable, non-forest; e.g., grasslands, lichen, shrub)
-  ## The original default value is the same as that of mature spruce stands (30L)
-  ROSother <- P(sim)$ROSother
-  ROSotherRef <- sim$ROSTable[leading == "spruce" & age == "mature", ros]
-
-  ## Non-flammable cover types
-  ## 2023-02: discontinuous fuels (e.g., shield) may require spread through non-flammable pixels;
-  ##          use same value as young deciduous (6L), per Dave's text messages.
-  ROSnonflam <- switch(
-    P(sim)$ROStype,
-    burny = sim$ROSTable[leading == "decid" & age == "immature_young", ros],
-    NA_integer_
-  )
-
-  ## The second check compared `P(sim)$ROSother` against 0.95-1.05x of `ROSother`, which was
-  ## assigned FROM `P(sim)$ROSother` two lines earlier -- i.e. a value against +/-5% of itself,
-  ## vacuously TRUE for any input. The commented-out line it replaced shows the intent: compare
-  ## against MATURE SPRUCE ROS, which is what `ROSother`'s default (30L) is documented to match.
-  ## Restored against that reference, so the guard actually guards.
-  assertthat::assert_that(
-    isTRUE(inRange(P(sim)$ROSother, min(sim$ROSTable$ros), max(sim$ROSTable$ros))),
-    isTRUE(inRange(P(sim)$ROSother, 0.95 * ROSotherRef, 1.05 * ROSotherRef)) ## TODO: tweak this to allow greater range
-  )
-
-  ROS[sim$flammableMap[] == 1L & is.na(ROS)] <- as.integer(ROSother) ## flammable
-  ROS[sim$flammableMap[] == 0L | is.na(sim$flammableMap[])] <- as.integer(ROSnonflam) ## nonflammable
-
-  return(ROS)
-})
