@@ -7,7 +7,7 @@ defineModule(sim, list(
     person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb", "cre"))
   ),
   childModules = character(0),
-  version = list(LandMine = numeric_version("1.0.10")),
+  version = list(LandMine = numeric_version("1.0.11")),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
@@ -16,7 +16,7 @@ defineModule(sim, list(
     "assertthat", "cli", "data.table", "fpCompare", "ggplot2",
     "RColorBrewer", "stats", "terra", "tidyterra", "VGAM",
     "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
-    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9033)",
+    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9034)",
     "PredictiveEcology/pemisc@development",
     "PredictiveEcology/SpaDES.tools@development (>= 2.1.2.9000)"
   ),
@@ -169,7 +169,8 @@ defineModule(sim, list(
     createsOutput("fireSizes", "list", paste(
       "A list of data.tables, one per burn event, each with two columns, `size` and `maxSize`.",
       "These indicate the actual sizes and expected sizes burned, respectively.",
-      "These can be put into a single data.table with `rbindlist(sim$fireSizes, idcol = 'year')`")
+      "Named by simulation year, so `rbindlist(sim$fireSizes, idcol = 'year')` gives a",
+      "`year` column carrying the actual year (as character) rather than a 1..n counter.")
     ),
     createsOutput("fireReturnInterval", "SpatRaster", paste(
       "A `Raster` map showing the fire return interval. This is created from the `rstCurrentBurn`.")
@@ -246,29 +247,16 @@ EstimateTruncPareto <- function(sim, verbose = getOption("LandR.verbose", TRUE))
     message("Estimate Truncated Pareto parameters")
   }
 
-  findK_upper <- function(params = c(0.4), upper1) {
-    fs <- round(VGAM::rtruncpareto(1e6, 1, upper = upper1, shape = params[1]))
-    # meanFS <- LandWebUtils::meanTruncPareto(k = params[1], lower = 1, upper = upper1, alpha = 1)
-    # diff1 <- abs(quantile(fs, 0.95) - meanFS)
-
-    ## "90% of area is in 5% of fires" - Dave rule of thumb
-    # abs(sum(fs[fs>quantile(fs, 0.95)])/sum(fs) - 0.95)
-
-    ## Eliot's adjustment because each year was too constant; should create greater variation.
-    abs(sum(fs[fs > quantile(fs, 0.95)]) / sum(fs) - 0.95) ## "95% of area (2nd term) is in 5% of fires (1st term)"
-
-    ## 2018-110-23: Eliot's adjustment because each year still too constant; need greater variation.
-    # abs(sum(fs[fs > quantile(fs, 0.90)]) / sum(fs) - 0.95) # "95% of area (2nd term) is in 10% of fires (1st term)"
-  }
-
+  ## Promoted to LandWebUtils: fits the truncated-Pareto shape to Dave Andison's "95% of the
+  ## area is in 5% of the fires" rule of thumb -- deliberately a rule of thumb, not a fit to
+  ## NBAC/NFDB. The module previously carried the two superseded versions of that rule as
+  ## commented-out code; they are recorded in the function's documentation instead.
   sim$kBest <- Cache(
-    optimize,
-    interval = c(0.05, 0.99),
-    f = findK_upper,
-    upper1 = P(sim)$biggestPossibleFireSizeHa,
+    LandWebUtils::landmine_estimate_kBest,
+    biggestPossibleFireSizeHa = P(sim)$biggestPossibleFireSizeHa,
     cachePath = cachePath(sim),
     useCache = FALSE
-  )$minimum
+  )
 
   return(invisible(sim))
 }
@@ -749,7 +737,12 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
     fireSizesDT <- data.table(size = 0L, maxSize = 0L)
   }
 
-  sim$fireSizes[[round(time(sim) - P(sim)$burnInitialTime + 1, 0)]] <- fireSizesDT
+  ## Keyed by YEAR, not by position. The index was `time - burnInitialTime + 1`, which
+  ## coincides with the year only when `fireTimestep` is 1: with a longer timestep the burn
+  ## years are spaced out, the intervening list slots stay NULL, and `rbindlist()` drops them
+  ## -- so the `idcol` this object's documentation tells users to read as the year would
+  ## silently be a 1..n counter instead. A named list keeps the year attached to the data.
+  sim$fireSizes[[as.character(time(sim))]] <- fireSizesDT
 
   sim$rstCurrentBurn[] <- 0L
   if (nrow(firesDT) > 0) {
