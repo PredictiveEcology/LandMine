@@ -7,7 +7,7 @@ defineModule(sim, list(
     person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb", "cre"))
   ),
   childModules = character(0),
-  version = list(LandMine = numeric_version("1.0.7")),
+  version = list(LandMine = numeric_version("1.0.8")),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
@@ -16,7 +16,7 @@ defineModule(sim, list(
     "assertthat", "cli", "data.table", "fpCompare", "ggplot2",
     "RColorBrewer", "stats", "terra", "tidyterra", "VGAM",
     "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
-    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9029)",
+    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9031)",
     "PredictiveEcology/pemisc@development",
     "PredictiveEcology/SpaDES.tools@development (>= 2.1.2.9000)"
   ),
@@ -181,6 +181,12 @@ defineModule(sim, list(
       "The number of time units between successive fire events in a fire module.")
     ),
     createsOutput("friSummary", "data.table", "summary fire return interval table"),
+    createsOutput("friDiagnostics", "data.table", paste(
+      "per-FRI-zone attainment diagnostics: achieved/target ratio over the BURNABLE area,",
+      "the same ratio computed the way `friSummary` does it, the share of each zone that",
+      "lies inside the study area, and the structural measurements that tell the failure",
+      "modes apart (flammable fraction, patch structure, cohort coverage)."
+    )),
     createsOutput("kBest", "numeric", paste(
       "A numeric scalar that is the optimal value of `K` in the",
       "Truncated Pareto distribution (`rtruncpareto`)")
@@ -790,12 +796,52 @@ SummarizeFRIsingle <- function(sim) {
   ## multi-mode summaries, so the two could silently diverge. It is now one unit-tested
   ## function (covering the non-flammable masking, the never-burned -> Inf case, and the
   ## implicit contract that the NA masks of `lthfc` and the burn map agree).
+  ##
+  ## `studyArea` is what keeps unburnable pixels OUT of the denominator: `ROSmap` and
+  ## `mod$spreadProb` are both masked to it, so a pixel outside cannot be ignited or spread
+  ## into, while `fireReturnInterval` is not masked and overhangs the polygon. Without this,
+  ## every such pixel inflates its zone's achieved interval -- on WesternAlbertaUpland that was
+  ## 29.4% of flammable zone pixels, and made two zones look as though they under-burned by
+  ## 3.5x and 12.2x when in fact every zone was within 0.90-1.07 of its target.
   sim$friSummary <- LandWebUtils::landmine_fri_summary(
     lthfc = lthfc,
     flammableMap = flammableMap,
     meanAnnualCumulBurnMap = meanAnnualCumulBurnMap,
-    studyAreaName = studyAreaName
+    studyAreaName = studyAreaName,
+    studyArea = sim$studyArea
   )
+
+  ## per-zone attainment diagnostics: a CSV a developer can diff between runs, two figures,
+  ## and a one-line verdict, so nobody has to read this log to learn a zone missed its target.
+  sim$friDiagnostics <- LandWebUtils::landmine_fri_metrics(
+    lthfc = lthfc,
+    flammableMap = flammableMap,
+    meanAnnualCumulBurnMap = meanAnnualCumulBurnMap,
+    studyAreaName = studyAreaName,
+    pixelAreaHa = prod(pixelRes) / 1e4,
+    studyArea = sim$studyArea,
+    nYears = end(sim) - start(sim)
+  )
+
+  fDiag <- file.path(outputPath(sim), "LandMine_FRI_diagnostics.csv")
+  fwrite(sim$friDiagnostics, fDiag)
+  sim <- registerOutputs(fDiag)
+
+  message(LandWebUtils::landmine_fri_verdict(sim$friDiagnostics))
+
+  if ("png" %in% P(sim)$.plots) {
+    fggFriZones <- file.path(figurePath(sim), "LandMine_FRI_zones_diagnostic.png")
+    ggsave(fggFriZones, LandWebUtils::landmine_plot_fri_zones(
+      lthfc, sim$friDiagnostics, studyAreaName
+    ), height = 7, width = 12)
+    sim <- registerOutputs(fggFriZones)
+
+    fggFriDrivers <- file.path(figurePath(sim), "LandMine_FRI_drivers.png")
+    ggsave(fggFriDrivers, LandWebUtils::landmine_plot_fri_drivers(
+      sim$friDiagnostics, studyAreaName
+    ), height = 5, width = 12)
+    sim <- registerOutputs(fggFriDrivers)
+  }
 
   f <- file.path(outputPath(sim), paste0("LandMine_FRI_summary.csv"))
   fwrite(sim$friSummary, f)
@@ -866,12 +912,52 @@ SummarizeFRImulti <- function(sim) {
   ## multi-mode summaries, so the two could silently diverge. It is now one unit-tested
   ## function (covering the non-flammable masking, the never-burned -> Inf case, and the
   ## implicit contract that the NA masks of `lthfc` and the burn map agree).
+  ##
+  ## `studyArea` is what keeps unburnable pixels OUT of the denominator: `ROSmap` and
+  ## `mod$spreadProb` are both masked to it, so a pixel outside cannot be ignited or spread
+  ## into, while `fireReturnInterval` is not masked and overhangs the polygon. Without this,
+  ## every such pixel inflates its zone's achieved interval -- on WesternAlbertaUpland that was
+  ## 29.4% of flammable zone pixels, and made two zones look as though they under-burned by
+  ## 3.5x and 12.2x when in fact every zone was within 0.90-1.07 of its target.
   sim$friSummary <- LandWebUtils::landmine_fri_summary(
     lthfc = lthfc,
     flammableMap = flammableMap,
     meanAnnualCumulBurnMap = meanAnnualCumulBurnMap,
-    studyAreaName = studyAreaName
+    studyAreaName = studyAreaName,
+    studyArea = sim$studyArea
   )
+
+  ## per-zone attainment diagnostics: a CSV a developer can diff between runs, two figures,
+  ## and a one-line verdict, so nobody has to read this log to learn a zone missed its target.
+  sim$friDiagnostics <- LandWebUtils::landmine_fri_metrics(
+    lthfc = lthfc,
+    flammableMap = flammableMap,
+    meanAnnualCumulBurnMap = meanAnnualCumulBurnMap,
+    studyAreaName = studyAreaName,
+    pixelAreaHa = prod(pixelRes) / 1e4,
+    studyArea = sim$studyArea,
+    nYears = end(sim) - start(sim)
+  )
+
+  fDiag <- file.path(outputPath(sim), "LandMine_FRI_diagnostics_multi.csv")
+  fwrite(sim$friDiagnostics, fDiag)
+  sim <- registerOutputs(fDiag)
+
+  message(LandWebUtils::landmine_fri_verdict(sim$friDiagnostics))
+
+  if ("png" %in% P(sim)$.plots) {
+    fggFriZones <- file.path(figurePath(sim), "LandMine_FRI_zones_diagnostic_multi.png")
+    ggsave(fggFriZones, LandWebUtils::landmine_plot_fri_zones(
+      lthfc, sim$friDiagnostics, studyAreaName
+    ), height = 7, width = 12)
+    sim <- registerOutputs(fggFriZones)
+
+    fggFriDrivers <- file.path(figurePath(sim), "LandMine_FRI_drivers_multi.png")
+    ggsave(fggFriDrivers, LandWebUtils::landmine_plot_fri_drivers(
+      sim$friDiagnostics, studyAreaName
+    ), height = 5, width = 12)
+    sim <- registerOutputs(fggFriDrivers)
+  }
 
   f <- file.path(outputPath(sim), paste0("LandMine_FRI_summary_multi.csv"))
   fwrite(sim$friSummary, f)
