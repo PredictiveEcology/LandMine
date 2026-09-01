@@ -7,7 +7,7 @@ defineModule(sim, list(
     person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb", "cre"))
   ),
   childModules = character(0),
-  version = list(LandMine = numeric_version("1.0.8")),
+  version = list(LandMine = numeric_version("1.0.9")),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
@@ -16,7 +16,7 @@ defineModule(sim, list(
     "assertthat", "cli", "data.table", "fpCompare", "ggplot2",
     "RColorBrewer", "stats", "terra", "tidyterra", "VGAM",
     "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
-    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9031)",
+    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9032)",
     "PredictiveEcology/pemisc@development",
     "PredictiveEcology/SpaDES.tools@development (>= 2.1.2.9000)"
   ),
@@ -337,13 +337,22 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   ## reburn loop below consumes POSITIONALLY via `numFiresThisPeriod[.GRP]`: `terra::freq()`
   ## sorts ascending, the NA row is appended last, and that entry is NA-VALUED so `na.omit()`
   ## drops it (an NA *name* alone would not). Break any one and zones silently receive each
-  ## other's fire counts. Masking here is also why non-flammable pixels can never be ignition
-  ## locations: the start-cell pool is built from this same raster.
+  ## other's fire counts. Masking here is also why non-flammable pixels -- and now pixels outside
+  ## the study area -- can never be ignition locations: the start-cell pool is built from this
+  ## same raster.
+  ## `studyArea` matters as much as `flammableMap` here, and for the same reason. `ROSmap` and
+  ## `mod$spreadProb` are both masked to it, so a fire ignited outside burns its own start cell
+  ## and spreads no further -- yet `fireReturnInterval` is not masked and overhangs the polygon,
+  ## so those pixels were inflating each zone's area and therefore its expected fires per year,
+  ## AND entering the start-cell pool. On WesternAlbertaUpland that allocated 2,918 fires/yr
+  ## against a correct 2,015: 31% of every year's ignitions aimed at unburnable ground, with one
+  ## zone (99.95% outside) over-allocated 2,008-fold.
   ignitionBudget <- LandWebUtils::landmine_ignition_budget(
     fireReturnInterval = sim$fireReturnInterval,
     flammableMap = sim[["flammableMap"]],
     kBest = sim$kBest,
-    biggestPossibleFireSizeHa = P(sim)$biggestPossibleFireSizeHa
+    biggestPossibleFireSizeHa = P(sim)$biggestPossibleFireSizeHa,
+    studyArea = sim$studyArea
   )
   sim$fireReturnInterval <- ignitionBudget$fireReturnInterval
   sim$fireReturnIntervalsByPolygonNumeric <- ignitionBudget$fireReturnIntervalsByPolygonNumeric
