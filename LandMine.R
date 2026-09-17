@@ -7,7 +7,7 @@ defineModule(sim, list(
     person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb", "cre"))
   ),
   childModules = character(0),
-  version = list(LandMine = numeric_version("1.0.11")),
+  version = list(LandMine = numeric_version("1.0.12")),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
@@ -16,7 +16,7 @@ defineModule(sim, list(
     "assertthat", "cli", "data.table", "fpCompare", "ggplot2",
     "RColorBrewer", "stats", "terra", "tidyterra", "VGAM",
     "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
-    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9034)",
+    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9036)",
     "PredictiveEcology/pemisc@development",
     "PredictiveEcology/SpaDES.tools@development (>= 2.1.2.9000)"
   ),
@@ -1049,22 +1049,7 @@ SummarizeFRImulti <- function(sim) {
 
   if (!suppliedElsewhere(sim$ROSTable)) {
     ## ROS classes and values from Table 3.2 of Andison 1996
-    ## - omitting 'water', 'non-productive brush', and 'non-productive black spruce' classes;
-    ## - typo in Andison 1996: 'young mixed wood = 6' is really 'young hardwood = 6'.
-    sim$ROSTable <- data.table::rbindlist(list(
-      list("immature_young", "decid", 6L), ## aka hardwood
-      list("mature", "decid", 9L), ## aka hardwood
-      list("immature_young", "mixed", 12L),
-      list("immature", "pine", 14L),
-      list("mature", "mixed", 17L),
-      list("immature_young", "softwood", 18L),
-      list("immature_young", "spruce", 20L),
-      list("mature", "pine", 21L),
-      list("young", "pine", 22L),
-      list("mature", "softwood", 27L),
-      list("mature", "spruce", 30L)
-    )) |>
-      data.table::setnames(old = 1:3, new = c("age", "leading", "ros"))
+    sim$ROSTable <- LandWebUtils::landmine_ros_table()
   }
 
   if (!suppliedElsewhere("pixelGroupMap", sim)) {

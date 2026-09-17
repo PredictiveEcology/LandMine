@@ -26,6 +26,7 @@ Unreleased changes on the `development` branch since the 1.0.1 release:
 * `LandMine.Rmd`'s calibration now specifies fire sizes in **hectares** (`landmine_optim_fireSizes()`) rather than pixel counts, and uses the repaired `objective = "andison"` with common random numbers. A fixed pixel-count vector meant a different physical fire at every resolution, which put the v3 (240 m) calibration outside the 10-3,000 ha range Andison fitted.
 * The fire-spread calibration moved into LandWebUtils (>= 1.0.3.9024) as `landmine_optim_unpack()`, `landmine_optim_params_read()`/`_append()`, `landmine_optim_landscape()` and `landmine_optim_calibrate()`. `LandMine.R` now reads its parameters through those functions instead of re-implementing the CSV schema and the `10^` convention inline.
 * `LandMine.Rmd`'s calibration section was rewritten against those functions and its stale chunks removed. Because the vignette is knitted with `eval = FALSE`, that code had never run and had drifted: it used the removed `raster` package API, `raster`'s argument names on a `terra` call, and an invalid `read.csv(file, row.names = FALSE)`. Parameter values shown there were also years out of date (`sizeCutoffs` of 8000/20000 against the 1629/52016 actually in use).
+* The default `ROSTable` now comes from `LandWebUtils::landmine_ros_table()` (LandWebUtils >= 1.0.3.9036), the single definition of Andison's (1996) Table 3.2 that `LandWeb_preamble` also uses. The values are unchanged; they were written out inline in both modules.
 
 # LandMine 1.0.1 (2026-06-30)
 
