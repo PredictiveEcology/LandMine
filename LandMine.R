@@ -7,7 +7,7 @@ defineModule(sim, list(
     person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb", "cre"))
   ),
   childModules = character(0),
-  version = list(LandMine = numeric_version("1.0.12")),
+  version = list(LandMine = numeric_version("1.0.13")),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
@@ -16,7 +16,7 @@ defineModule(sim, list(
     "assertthat", "cli", "data.table", "fpCompare", "ggplot2",
     "RColorBrewer", "stats", "terra", "tidyterra", "VGAM",
     "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
-    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9036)",
+    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9038)",
     "PredictiveEcology/pemisc@development",
     "PredictiveEcology/SpaDES.tools@development (>= 2.1.2.9000)"
   ),
@@ -167,8 +167,17 @@ defineModule(sim, list(
       "This is simply a reassignment from `P(sim)$burnInitialTime`.")
     ),
     createsOutput("fireSizes", "list", paste(
-      "A list of data.tables, one per burn event, each with two columns, `size` and `maxSize`.",
-      "These indicate the actual sizes and expected sizes burned, respectively.",
+      "A list of data.tables, one per burn event, with `size`, `maxSize` and the fire-identity",
+      "columns `fireID`, `attempt` and `targetSize`.",
+      "`size` and `maxSize` are the actual and expected sizes burned.",
+      "`fireID` is issued per burn YEAR, so (rep, year, fireID) identifies one fire; rows",
+      "sharing it are the pieces that fire was burned in, and are NOT necessarily contiguous.",
+      "`attempt` is the reburn round that produced the row, and `targetSize` the ORIGINAL",
+      "target, constant across a fire's rows.",
+      "NOTE: `maxSize` is NOT an independent record of the target. When a fire stalls, the",
+      "retry loop rewrites its `maxSize` to the area that did burn and issues the shortfall",
+      "as new fires, so `size == maxSize` by construction and cannot be used as evidence",
+      "that fires reach their targets; stalling shows up in the fire COUNT instead.",
       "Named by simulation year, so `rbindlist(sim$fireSizes, idcol = 'year')` gives a",
       "`year` column carrying the actual year (as character) rather than a 1..n counter.")
     ),
@@ -511,6 +520,17 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   maxOrder <- 0L
   iter <- 1L
 
+  ## Fire identity, carried through every reburn round so `fireSizes` can be collapsed back to
+  ## one row per FIRE (LandWebUtils::landmine_fire_attainment()). Needed because `size` and
+  ## `maxSize` agree on every recorded row by construction -- a stalled fire is either dropped
+  ## and retried at full target, or has `maxSize` rewritten to what burned -- so a shortfall is
+  ## only visible as sum(size) per fireID against its original `targetSize`.
+  ## Issued per burn YEAR, so the identifying key downstream is (rep, year, fireID).
+  ## These three stay positionally paired with `fireSizesInPixels` through every filter below.
+  fireIDs <- seq_along(fireSizesInPixels)
+  attempts <- rep(1L, length(fireSizesInPixels))
+  targetSizes <- fireSizesInPixels
+
   ## 2024-10: normally, non-flammable pixels are NA in ROSvals and spreadProbThisStep;
   ##          except in 'burny' scenarios, where fires *can* spread through those pixels,
   ##          but aren't counted towards burn stats/summaries.
@@ -577,6 +597,9 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
     firesGT0 <- fireSizesInPixels > 0L
     thisYrStartCells <- thisYrStartCells[firesGT0]
     fireSizesInPixels <- fireSizesInPixels[firesGT0]
+    fireIDs <- fireIDs[firesGT0]
+    attempts <- attempts[firesGT0]
+    targetSizes <- targetSizes[firesGT0]
 
     if (!all(is.na(thisYrStartCells)) && length(thisYrStartCells) > 0) {
       if (iter > 1 && iter <= P(sim)$maxReburns[1]) {
@@ -618,6 +641,15 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
       }
 
       fa <- attr(fires, "spreadState")$clusterDT
+      ## `spread2()` returns clusters in its own order, so identity is JOINED on the start
+      ## cell rather than assigned by position; an unmatched cluster is an error there.
+      fa <- LandWebUtils::landmine_attach_identity(
+        fa,
+        data.table(
+          initialPixels = thisYrStartCells,
+          fireID = fireIDs, attempt = attempts, targetSize = targetSizes
+        )
+      )
       fa1 <- fa[, list(numPixelsBurned = sum(size),
                        expectedNumBurned = sum(maxSize),
                        proportionBurned = sum(size) / sum(maxSize))]
@@ -631,13 +663,16 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
 
       tooSmall <- which(fa$size != fa$maxSize)
       if (length(tooSmall)) {
-        tooSmallDT <- fa[tooSmall, c("initialPixels", "maxSize")]
+        tooSmallDT <- fa[tooSmall, c("initialPixels", "maxSize", "fireID", "attempt", "targetSize")]
+        tooSmallDT[, attempt := attempt + 1L] ## this fire is about to be tried again
         tooSmallByPoly <- thisYrStartCellsDT[tooSmallDT, on = c(pixel = "initialPixels")]
 
         if (iter <= P(sim)$maxReburns[1]) {
           firesOK <- fires[!initialPixels %in% tooSmallDT$initialPixels, ]
           firesList <- append(firesList, list(firesOK))
-          fireSizes <- append(fireSizes, list(fa[!tooSmall, c("size", "maxSize")]))
+          fireSizes <- append(
+            fireSizes, list(fa[!tooSmall, c("fireID", "attempt", "targetSize", "size", "maxSize")])
+          )
           maxOrder <- max(fires$order)
 
           ## Promoted to LandWebUtils. Phase 1: each too-small fire keeps its FULL original
@@ -648,14 +683,29 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
           polysNeedMoreFires <- reburn$polysNeedMoreFires
           numFiresThisPeriod <- reburn$numFiresThisPeriod
           fireSizesInPixels <- reburn$fireSizesInPixels
+          fireIDs <- reburn$fireIDs
+          attempts <- reburn$attempts
+          targetSizes <- reburn$targetSizes
           spreadProbThisStep[firesOK$pixels] <- NA_real_
         } else {
           firesTooSmall <- fires[initialPixels %in% tooSmallDT$initialPixels, ]
 
-          fa2 <- fa[tooSmall, c("size", "maxSize")] ## track the fires that did burn
+          fa2 <- fa[tooSmall, c("fireID", "attempt", "targetSize", "size", "maxSize")] ## what did burn
           fa3 <- copy(fa2)                          ## track what's left to burn
 
-          fa2[, maxSize := size] ## consider the area that did burn as having reached target
+          ## Consider the area that did burn as having reached target, and issue the shortfall
+          ## (`fa3`) as new fires. Deliberate: LandMine replicates FRIs (area burned per year),
+          ## not fire counts. Note what it does to the RECORD, though: no branch here ever writes
+          ## a row with `size < maxSize`. A fire that reaches target is recorded truthfully; one
+          ## that stalls is either discarded and retried at full target (the `iter <=
+          ## maxReburns[1]` branch above) or recorded with its target rewritten to match (here).
+          ## So `simSize == expSize` downstream in `burnSummaries_fireSizes.csv` is uninformative
+          ## about target attainment -- not because the equality is fabricated (most fires really
+          ## do reach target) but because a shortfall has no way to appear. The observable
+          ## signature of stalling is the fire COUNT, not the shortfall. Per-fire attainment is
+          ## recoverable from the identity columns:
+          ## `LandWebUtils::landmine_fire_attainment(fireSizes, by = c("year", "fireID"))`.
+          fa2[, maxSize := size]
 
           fa3[, maxSize2 := maxSize - size]
           fa3[, size := 0]
@@ -677,11 +727,16 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
           polysNeedMoreFires <- reburn$polysNeedMoreFires
           numFiresThisPeriod <- reburn$numFiresThisPeriod
           fireSizesInPixels <- reburn$fireSizesInPixels
+          fireIDs <- reburn$fireIDs
+          attempts <- reburn$attempts
+          targetSizes <- reburn$targetSizes
           spreadProbThisStep[firesTooSmall$pixels] <- NA_real_
         }
       } else {
         firesList <- append(firesList, list(fires))
-        fireSizes <- append(fireSizes, list(fa[, c("size", "maxSize")]))
+        fireSizes <- append(
+          fireSizes, list(fa[, c("fireID", "attempt", "targetSize", "size", "maxSize")])
+        )
 
         if (length(tooSmall) == 0) {
           assertthat::assert_that(fa1$proportionBurned %==% 1)
