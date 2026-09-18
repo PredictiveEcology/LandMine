@@ -2972,7 +2972,7 @@ border-radius: 0px;
 
 
 <h1 class="title toc-ignore">LandMine Manual</h1>
-<h3 class="subtitle">v.1.0.0</h3>
+<h3 class="subtitle">v.1.0.13</h3>
 <h4 class="date">18 May 2018; updated 29 Oct 2025</h4>
 
 </div>
@@ -3078,7 +3078,7 @@ Each of the species groups has its own Rate of Spread (ROS) for fire spreading:<
 <div id="module-inputs-and-parameters" class="section level3">
 <h3>Module inputs and parameters</h3>
 <p>Table <a href="#tab:moduleInputs-LandMine">2</a> shows the full list of module inputs.</p>
-<table class="table" style="color: black; width: auto !important; margin-left: auto; margin-right: auto;">
+<table class="table" style="width: auto !important; margin-left: auto; margin-right: auto;">
 <caption>
 <span id="tab:moduleInputs-LandMine">Table 2: </span><span id="tab:moduleInputs-LandMine">Table 3: </span>List of <em>LandMine</em> input objects and their description.
 </caption>
@@ -3171,7 +3171,7 @@ NA
 </tr>
 <tr>
 <td style="text-align:left;">
-rstFlammable
+flammableMap
 </td>
 <td style="text-align:left;">
 SpatRaster
@@ -3270,7 +3270,7 @@ NA
 </tbody>
 </table>
 <p>Summary of user-visible parameters (Table <a href="#tab:moduleParams-LandMine">4</a>).</p>
-<table class="table" style="color: black; width: auto !important; margin-left: auto; margin-right: auto;">
+<table class="table" style="width: auto !important; margin-left: auto; margin-right: auto;">
 <caption>
 <span id="tab:moduleParams-LandMine">Table 4: </span><span id="tab:moduleParams-LandMine">Table 5: </span>List of <em>LandMine</em> parameters and their description.
 </caption>
@@ -3371,7 +3371,7 @@ integer
 1
 </td>
 <td style="text-align:left;">
-20
+500
 </td>
 <td style="text-align:left;">
 Number of attempts to burn fires that don’t reach their target fire size. Reburning occurs in two phases, hence accepting a parameter value of length 2. In the first phase, fires that did not reach their target size are reignited from new pixels within the FRI zone, so they are less likely to continue being stuck in a region with sinuous fires or discontinuous fuels. If, after <code>maxReburns[1]</code> attempts, there are still fires that haven’t reached their target size, the second reburn phase is attempted. After recording the the pixels that did burn in phase one, new fires are ignited, whose target sizes are set equal the difference between the previous target and the previously burned area. Repeats up to <code>maxReburns[2]</code> times. This results in additional (smaller) fires, but since the purpose of LandMine is to replicate area burned per year to achieve LTHFC, this is an acceptable compromise.
@@ -3474,7 +3474,7 @@ integer
 NA
 </td>
 <td style="text-align:left;">
-which set of optimization parameter values to use for simulating fire spread, specified by row number of the <code>LandMine_DEoptim_params.csv</code> file. <code>1L</code> specifies the original 2018 values at 100m pixels; all other rows were calculated using 250m pixels.
+which set of optimization parameter values to use for simulating fire spread, specified by row number of the <code>LandMine_DEoptim_params.csv</code> file. Row 1 is the 120 m fit, and is the default at EVERY resolution: it scores as well as the 240 m fit on the 240 m landscape (0.70 vs 0.81, 0.33 pooled sd) with a fifth of the variance, while the 240 m fit is much worse at 120 m (1.78 vs 0.61, 4.91 sd). The 120 m fit is also far better determined: repeat runs land within 4.6% of the search interval, against 24.8% at 240 m. <code>2L</code> is the 240 m fit, retained for reference. Rows fitted before 2026-08 were removed: they used a different objective (a size penalty that never fired, a constant perimeter:area target, and fire sizes in pixels rather than hectares) and are not comparable. They remain in git history.
 </td>
 </tr>
 <tr>
@@ -3534,7 +3534,7 @@ NA
 NA
 </td>
 <td style="text-align:left;">
-One of ‘burny’, ‘equal’, ‘log’, or ‘default’.
+One of ‘default’ or ‘burny’.
 </td>
 </tr>
 <tr>
@@ -3782,7 +3782,7 @@ Used in burning. Will be passed to <code>data.table::setDTthreads()</code>. NOTE
 <div id="module-outputs" class="section level3">
 <h3>Module outputs</h3>
 <p>Description of the module outputs (Table <a href="#tab:moduleOutputs-LandMine">6</a>).</p>
-<table class="table" style="color: black; width: auto !important; margin-left: auto; margin-right: auto;">
+<table class="table" style="width: auto !important; margin-left: auto; margin-right: auto;">
 <caption>
 <span id="tab:moduleOutputs-LandMine">Table 6: </span><span id="tab:moduleOutputs-LandMine">Table 7: </span>List of <em>LandMine</em> outputs and their description.
 </caption>
@@ -3819,7 +3819,7 @@ fireSizes
 list
 </td>
 <td style="text-align:left;">
-A list of data.tables, one per burn event, each with two columns, <code>size</code> and <code>maxSize</code>. These indicate the actual sizes and expected sizes burned, respectively. These can be put into a single data.table with <code>rbindlist(sim$fireSizes, idcol = &#39;year&#39;)</code>
+A list of data.tables, one per burn event, with <code>size</code>, <code>maxSize</code> and the fire-identity columns <code>fireID</code>, <code>attempt</code> and <code>targetSize</code>. <code>size</code> and <code>maxSize</code> are the actual and expected sizes burned. <code>fireID</code> is issued per burn YEAR, so (rep, year, fireID) identifies one fire; rows sharing it are the pieces that fire was burned in, and are NOT necessarily contiguous. <code>attempt</code> is the reburn round that produced the row, and <code>targetSize</code> the ORIGINAL target, constant across a fire’s rows. NOTE: <code>maxSize</code> is NOT an independent record of the target. When a fire stalls, the retry loop rewrites its <code>maxSize</code> to the area that did burn and issues the shortfall as new fires, so <code>size == maxSize</code> by construction and cannot be used as evidence that fires reach their targets; stalling shows up in the fire COUNT instead. Named by simulation year, so <code>rbindlist(sim$fireSizes, idcol = &#39;year&#39;)</code> gives a <code>year</code> column carrying the actual year (as character) rather than a 1..n counter.
 </td>
 </tr>
 <tr>
@@ -3868,6 +3868,17 @@ summary fire return interval table
 </tr>
 <tr>
 <td style="text-align:left;">
+friDiagnostics
+</td>
+<td style="text-align:left;">
+data.table
+</td>
+<td style="text-align:left;">
+per-FRI-zone attainment diagnostics: achieved/target ratio over the BURNABLE area, the same ratio computed the way <code>friSummary</code> does it, the share of each zone that lies inside the study area, and the structural measurements that tell the failure modes apart (flammable fraction, patch structure, cohort coverage).
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
 kBest
 </td>
 <td style="text-align:left;">
@@ -3901,7 +3912,7 @@ A raster layer, produced at each timestep, where each pixel is either 1 or 0 ind
 </tr>
 <tr>
 <td style="text-align:left;">
-rstCurrentBurnCumulative
+burnMap
 </td>
 <td style="text-align:left;">
 SpatRaster
@@ -3923,6 +3934,60 @@ Same as input, but with new column, <code>LandMine</code>.
 </tr>
 </tbody>
 </table>
+</div>
+<div id="reported-fire-sizes-what-maxsize-does-and-does-not-mean" class="section level3">
+<h3>Reported fire sizes: what <code>maxSize</code> does and does not mean</h3>
+<p><code>fireSizes</code> carries <code>size</code> and <code>maxSize</code> per fire, which <code>burnSummaries</code> writes out as <code>simSize</code>
+and <code>expSize</code>. They agree for essentially every fire — 100 % of 1,081,686 in the v3 Western
+Alberta Upland run — and it is tempting to read that as evidence fires reach their targets.
+<strong>It is not evidence either way</strong>, and the reason is worth stating precisely, because the naive
+version of this warning is wrong.</p>
+<p>Most fires genuinely do reach their target, and those are recorded truthfully. The problem is that
+<strong>no branch of the burn loop ever records a fire that fell short.</strong> There are three ways a fire’s
+row reaches <code>fireSizes</code>, and none of them can carry <code>size &lt; maxSize</code>:</p>
+<ol style="list-style-type: decimal">
+<li><strong>Everything reached target this iteration</strong> — all rows recorded as-is, with a
+<code>proportionBurned == 1</code> assertion. The equality is real.</li>
+<li><strong>A fire stalled, within the first <code>maxReburns[1]</code> attempts</strong> — that fire is <em>dropped</em> from
+the record entirely and re-ignited from a fresh start cell keeping its <strong>full original target</strong>.
+Only the fires that did reach target are recorded for that iteration. The stalled attempt leaves
+no row behind.</li>
+<li><strong>A fire stalled, past <code>maxReburns[1]</code></strong> — its <code>maxSize</code> is rewritten to the area that did
+burn, and the shortfall is re-issued as new fires. The equality here is bookkeeping.</li>
+</ol>
+<p>So a shortfall is either discarded and retried (2) or laundered into equality plus extra fires (3).
+The statistic is not “always fabricated” — it is <em>incapable of expressing the failure mode</em>, which
+is why it reads as a perfect score.</p>
+<p>This is a deliberate design trade-off rather than a defect, and follows from what the model is
+actually calibrated to: LandMine replicates fire <em>return intervals</em> — area burned per year — not
+the number of fires. Annual area burned is therefore preserved, while the realized size
+distribution is pushed away from the calibrated heavy tail.</p>
+<p>The practical consequences:</p>
+<ul>
+<li><strong>Never cite <code>simSize</code>/<code>expSize</code> agreement</strong> in a report or diagnostic as evidence of target
+attainment. The record cannot show disagreement, so the agreement carries no information.</li>
+<li><strong>Stalling shows up in the fire count instead.</strong> One stalled large fire is recorded as several
+smaller fires that each “reached target”, so an inflated fire count at a small mean size is the
+observable signature. The same v3 WAU run recorded 1,082 fires/yr (min 258, max 3,271) at a mean
+of 33.8 pixels.</li>
+<li><strong>Judge the size distribution directly</strong>, against the calibrated truncated Pareto or against
+NBAC/NFDB, rather than against <code>expSize</code>.</li>
+</ul>
+</div>
+<div id="measuring-attainment-properly" class="section level3">
+<h3>Measuring attainment properly</h3>
+<p>Since v1.0.13 the rows carry <code>fireID</code>, <code>attempt</code> and <code>targetSize</code>, which make the questions above
+answerable. <code>fireID</code> is issued per burn <strong>year</strong>, so <code>(rep, year, fireID)</code> identifies one fire, and
+the rows sharing it are the pieces that fire was burned in — not necessarily contiguous ones.</p>
+<pre class="r"><code>att &lt;- LandWebUtils::landmine_fire_attainment(
+  data.table::rbindlist(sim$fireSizes, idcol = &quot;year&quot;),
+  by = c(&quot;year&quot;, &quot;fireID&quot;)
+)
+att[reached == FALSE]        ## fires that exhausted maxReburns[2] and fell short
+att[, .N, by = attempts]     ## reached on the 1st attempt, the 2nd, the 3rd...</code></pre>
+<p><code>reached == FALSE</code> is the shortfall that no <code>size</code>-versus-<code>maxSize</code> comparison can show. Note that
+attempts abandoned within the first <code>maxReburns[1]</code> rounds still leave no row of their own — the
+fire is retried at full target — so <code>attempts</code> counts rounds, not burned-then-discarded area.</p>
 <div style="page-break-after: always;"></div>
 </div>
 </div>
@@ -3940,16 +4005,15 @@ Same as input, but with new column, <code>LandMine</code>.
 ##  [4] &quot;data.table&quot;                                                
 ##  [5] &quot;fpCompare&quot;                                                 
 ##  [6] &quot;ggplot2&quot;                                                   
-##  [7] &quot;magrittr&quot;                                                  
-##  [8] &quot;PredictiveEcology/LandR@development (&gt;= 1.1.0.9003)&quot;       
-##  [9] &quot;PredictiveEcology/LandWebUtils@development (&gt;= 1.0.3.9002)&quot;
-## [10] &quot;PredictiveEcology/pemisc@development&quot;                      
-## [11] &quot;PredictiveEcology/SpaDES.tools@development&quot;                
-## [12] &quot;RColorBrewer&quot;                                              
-## [13] &quot;stats&quot;                                                     
-## [14] &quot;terra&quot;                                                     
-## [15] &quot;tidyterra&quot;                                                 
-## [16] &quot;VGAM&quot;</code></pre>
+##  [7] &quot;PredictiveEcology/LandR@development (&gt;= 1.1.0.9003)&quot;       
+##  [8] &quot;PredictiveEcology/LandWebUtils@development (&gt;= 1.0.3.9038)&quot;
+##  [9] &quot;PredictiveEcology/pemisc@development&quot;                      
+## [10] &quot;PredictiveEcology/SpaDES.tools@development (&gt;= 2.1.2.9000)&quot;
+## [11] &quot;RColorBrewer&quot;                                              
+## [12] &quot;stats&quot;                                                     
+## [13] &quot;terra&quot;                                                     
+## [14] &quot;tidyterra&quot;                                                 
+## [15] &quot;VGAM&quot;</code></pre>
 </div>
 <div id="module-usage" class="section level3">
 <h3>Module usage</h3>
@@ -4002,40 +4066,40 @@ mySimOut &lt;- spades(mySim, .plotInitialTime = times$start, debug = TRUE)</code
 <h2>Optimizing parameters</h2>
 <p>The following code chunk tries to find values of <code>spawnNewActive</code> that creates “reasonable” fire shapes at all sizes.</p>
 <pre class="r"><code>pixelSize &lt;- 240
+DEoptim_file &lt;- file.path(moduleDir, &quot;LandMine&quot;, &quot;data&quot;, &quot;LandMine_DEoptim_params.csv&quot;)
 
-## terra objects can&#39;t be serialized, as-is, so use file as intermediary
-ros_file &lt;- tempfile(fileext = &quot;.tif&quot;)
-ros_rast &lt;- terra::rast(
-  terra::ext(0, pixelSize * 1e3, 0, pixelSize * 1e3),
-  resolution = pixelSize,
-  vals = 0
-) 
-ros_rast &lt;- ros_rast == 0
-ros_rast &lt;- terra::writeRaster(ros_rast, ros_file)
-ros &lt;- ros_file ## this will be passed to objective function
+## The calibration landscape is deliberately uniform and fully flammable, so the fitted
+## shape statistics aren&#39;t confounded by any one study area&#39;s fuel pattern. The helper
+## also returns the ignition cell and a file path -- the objective takes the landscape as
+## a path because `SpatRaster`s can&#39;t be serialized to cluster workers.
+lscape &lt;- LandWebUtils::landmine_optim_landscape(pixelSize = pixelSize)
+ros &lt;- lscape$file
+centreCell &lt;- lscape$centreCell
 
+## Fire sizes are specified in HECTARES, because that is how the calibration targets are
+## defined (Andison fitted the shape relationship over 10-3,000 ha), and converted to pixels
+## for the resolution being calibrated. Specifying pixel counts directly means a different
+## physical fire at every resolution -- `c(10, ..., 1e5)` pixels is 10-100,000 ha at 100 m but
+## 57.6-576,000 ha at 240 m -- which put most of the v3 calibration outside the fitted range,
+## and defeats the point of calibrating at several pixel sizes.
+fireSizesHa &lt;- c(50, 200, 600, 1500, 3000)
+fireSizes &lt;- LandWebUtils::landmine_optim_fireSizes(pixelSize, fireSizesHa)
+
+## Current best-fit parameters, used by the visual-inspection runs further below.
+## Read via `landmine_optim_params_read()`/`landmine_optim_unpack()` so the CSV schema and
+## the `10^` convention have a single definition, shared with `LandMine.R`.
+nRuns &lt;- nrow(LandWebUtils::landmine_optim_params_read(DEoptim_file))
+pars &lt;- LandWebUtils::landmine_optim_unpack(
+  LandWebUtils::landmine_optim_params_read(DEoptim_file, rowID = nRuns)
+)
+spawnNewActive &lt;- pars$spawnNewActive
+sizeCutoffs &lt;- pars$sizeCutoffs
+spreadProb &lt;- pars$spreadProb
 fireSize &lt;- 1e5
-maxRetriesPerID &lt;- 4 ## 4 retries (5 attempts total)
-spreadProb &lt;- 0.9
-spawnNewActive &lt;- c(0.46, 0.2, 0.26, 0.11)
-sizeCutoffs &lt;- c(8e3, 2e4)
 
-NineCorners &lt;- terra::cellFromRowCol(
-  ros_rast,
-  row = terra::nrow(ros_rast) / 4 * rep(1:3, 3),
-  col = terra::ncol(ros_rast) / 4 * rep(1:3, each = 3)
-)
-
-centreCell &lt;- terra::cellFromRowCol(
-  ros_rast,
-  row = terra::nrow(ros_rast) / 2,
-  col = terra::ncol(ros_rast) / 2
-)
-
-## Set variables
+## Set variables to be exported to the cluster workers
 objs &lt;- c(&quot;centreCell&quot;, &quot;fireSize&quot;, &quot;ros&quot;, &quot;spawnNewActive&quot;, &quot;sizeCutoffs&quot;, &quot;spreadProb&quot;)
 pkgs &lt;- c(&quot;data.table&quot;, &quot;LandWebUtils&quot;, &quot;terra&quot;, &quot;SpaDES.tools&quot;)</code></pre>
-<p>Setup a cluster for parallel computation:</p>
 <pre class="r"><code>wantParallel &lt;- TRUE
 
 ## numCores should be &gt;= 70 and needs to be multiple of number of params to be fit (7)
@@ -4057,68 +4121,130 @@ if (!inherits(cl[[1]], &quot;forknode&quot;)) {
 if (!is.null(cl)) {
   parallel::clusterEvalQ(cl, ls())
 }</code></pre>
-<div id="visual-examination" class="section level3">
-<h3>Visual examination</h3>
-<pre class="r"><code>library(DEoptim)
-
-opt_sn &lt;- DEoptim(
-  fn = LandWebUtils::landmine_optim_fitSN,
-  lower = c(-2, -3, -3, -3, 1, 3.5, 0.75), 
-  upper = c(-0.1, -0.5, -0.5, -1, 3.5, 5, 1),
-  control = DEoptim.control(
-    VTR = 0.001,
-    NP = as.integer(length(clNames)),
-    itermax = 200,
-    cluster = cl,
-    strategy = 6
-  ),
-  ros = ros,
-  centreCell = centreCell,
-  fireSizes = c(10, 100, 1000, 10000, 100000),
-  desiredPerimeterArea = 0.003
+<div id="what-the-objective-fits" class="section level3">
+<h3>What the objective fits</h3>
+<p>The spread parameters are fitted against the landscape statistics <span class="citation">@Andison:1996</span> reported, on a
+uniform, fully-flammable synthetic landscape so the fit is not conditioned on any one study
+area’s fuel pattern. Three components, per fire size:</p>
+<ul>
+<li><strong>shape</strong> — the simulated shape index against <code>SHAPE = 1.770 + 0.041 log10(AREA)^4</code>
+(thesis §3.3.1). Note this is the coefficient fitted to his <em>empirical</em> data; the thesis also
+reports 1.881 for his own model’s output, and targeting that would be circular.</li>
+<li><strong>size</strong> — a continuous shortfall against the target fire size.</li>
+<li><strong>islands</strong> — percent of fire area in remnant islands against Table 3.5 (empirical column:
+4.0 / 6.0 / 9.0 % by size class).</li>
+</ul>
+<p>Four properties of this fit are worth stating plainly, because each was wrong or absent before
+2026-08 and each changes how the results should be read.</p>
+<p><strong>Fire sizes are specified in hectares, not pixels.</strong> Andison rasterized at 50 m
+(quarter-hectare) pixels and fitted the shape relationship over 10–3,000 ha. A fixed
+pixel-count vector means a different physical fire at every resolution — <code>c(10, ..., 1e5)</code>
+pixels is 10–100,000 ha at 100 m but 57.6–576,000 ha at 240 m — which had put nearly the
+whole 240 m calibration outside the fitted range, and made calibrating at several pixel sizes
+uninterpretable, since the runs were fitting different physical fires.</p>
+<p><strong>The remnant-island term is down-weighted with coarsening resolution.</strong> Table 3.6 puts 65 % of
+island area in the 2–5 ha class for fires under 1,000 ha; at 240 m a single pixel is already
+5.76 ha, so that class cannot exist and the target is unreachable however the parameters are
+set. The weight is <code>min(1, 50 / pixelSize)</code>: 1.0 at 50 m, 0.42 at 120 m, 0.21 at 240 m.</p>
+<p><strong>The objective is stochastic, so it must be replicated.</strong> Common random numbers make parameter
+vectors comparable but let the optimizer exploit the particular realization it was given. At
+<code>replicates = 2</code> the fits over-fitted their realization by 12.9x (240 m) and 9.3x (120 m) when
+re-scored at independent seeds; at <code>replicates = 10</code> that fell to 3.4x and 1.9x. Always re-score
+a fit at independent seeds before adopting it — <code>landmine_optim_calibrate()</code> reports this.</p>
+<p><strong>Iteration count is not the binding constraint.</strong> Improvement stopped at iteration 149 and 128
+of 200 in the first runs, with no gain across the final 50. Noise is the constraint; replication
+addresses it, more generations do not.</p>
+</div>
+<div id="running-the-fit" class="section level3">
+<h3>Running the fit</h3>
+<pre class="r"><code>## `landmine_optim_calibrate()` wraps the DEoptim fit; its defaults reproduce the fit that
+## was previously written out inline here (same bounds, VTR, itermax, strategy, objective).
+## `objective = &quot;andison&quot;` (the default) fits the shape-vs-area relationship and the remnant
+## island fractions from Andison (1996), rather than a single constant perimeter:area target.
+## `crnSeed` applies common random numbers, so parameter vectors are compared against the same
+## random draws; `replicates` averages over draws, which the island statistic needs.
+opt_sn &lt;- LandWebUtils::landmine_optim_calibrate(
+  pixelSize = pixelSize,
+  fireSizesHa = fireSizesHa,
+  itermax = 200,
+  cl = cl,
+  seed = 1234L,   ## with a fixed NP, this makes the per-worker RNG streams reproducible
+  crnSeed = 1L,
+  paramsFile = DEoptim_file ## appends the best parameters as a new dated row
 )
 
 opt_sn$optim$bestmem ## best param values
 
-## add dated row to facilitate multiple DEoptim runs
-optimParams &lt;- data.frame(
-  date = format(Sys.time(), &quot;%Y-%m-%d&quot;),
-  pixelSize = pixelSize
-) |&gt;
-  cbind(rbind(opt_sn$optim$bestmem))
-
-DEoptim_file &lt;- file.path(moduleDir, &quot;LandMine&quot;, &quot;data&quot;, &quot;LandMine_DEoptim_params.csv&quot;)
-prevVals &lt;- read.csv(DEoptim_file)
-write.csv(rbind(prevVals, optimParams), DEoptim_file, row.names = FALSE)
-
 parallel::stopCluster(cl)
 cl &lt;- NULL
 gc()</code></pre>
-<pre class="r"><code>fs_sn &lt;- c(10, 100, 1000, 10000, 100000)
-fit_sn &lt;- LandWebUtils::landmine_optim_fitSN(
-  sna = c(-1, -1, -1, -2, 2, 4, 0.9),
-  ros = ros,
-  centreCell = centreCell,
-  fireSizes = fs_sn,
-  desiredPerimeterArea = 0.003
+<pre class="r"><code>## Diagnostics at the fitted solution, using the same functions the project reports use.
+## `components` carries the per-fire-size observed-vs-expected values behind each figure.
+best &lt;- opt_sn$optim$bestmem
+lscape &lt;- LandWebUtils::landmine_optim_landscape(pixelSize = pixelSize)
+comp &lt;- attr(
+  LandWebUtils::landmine_optim_fitAndison(
+    par = as.numeric(best), ros = lscape$file, centreCell = lscape$centreCell,
+    fireSizes = as.integer(fireSizes), replicates = 5L, crnSeed = 99L
+  ),
+  &quot;components&quot;
 )
-bfs1_sn &lt;- purrr::transpose(attr(fit_sn, &quot;bfs1&quot;))
-LM_sn &lt;- do.call(rbind, bfs1_sn$LM)
 
-## NOTE: visual inspection - not too round; not too sinuous
-plot(log10(fs_sn), LM_sn[, &quot;perim.area.ratio&quot;])</code></pre>
+## simulated shape against Andison&#39;s fitted relationship
+LandWebUtils::landmine_plot_calibShape(comp)
+
+## simulated remnant islands against Andison Table 3.5
+LandWebUtils::landmine_plot_calibIslands(comp)
+
+## did the run converge, or did it hit itermax while still improving?
+LandWebUtils::landmine_plot_calibConvergence(opt_sn)</code></pre>
+</div>
+<div id="results-2026-08" class="section level3">
+<h3>Results (2026-08)</h3>
+<p>Calibrated at both 120 m and 240 m with <code>replicates = 10</code>, holding everything else identical so
+the two are comparable.</p>
+<p>The <strong>120 m fit is well determined</strong>: repeat runs land within 4.6 % of the search interval, and
+its shape fit is close to exact at the large end (7.80 against a target of 7.76 at 3,000 ha).</p>
+<p>The <strong>240 m optimum is a broad plateau, not a point</strong>: two 240 m fits differing by 24.8 % of the
+search interval score identically (0.16 pooled sd). That is expected at that grain — a 50 ha
+fire is 9 pixels, so the shape statistic is quantization-limited, and the island term carries a
+weight of only 0.21.</p>
+<p>The parameters <strong>transfer asymmetrically</strong>. The 120 m fit scores as well as the 240 m fit on the
+240 m landscape (0.70 vs 0.81, 0.33 pooled sd) with a fifth of the variance, while the 240 m fit
+is much worse at 120 m (1.78 vs 0.61, 4.91 sd). The 120 m fit is therefore adopted at <strong>every</strong>
+resolution (<code>optimParsRowID = 1L</code>); the 240 m fit is retained as row 2 for reference but should
+not be quoted as a determined value.</p>
+<p><strong>The objective identifies some parameters and not others, and any single fit is one draw from a
+broad optimum.</strong> Fitted against the <em>previous</em> objective, 43 repeat runs of the same configuration
+scattered four of the seven parameters across more than 90 % of their search interval, and repeat
+solutions proved statistically indistinguishable from one another — and from some randomly drawn
+parameter vectors. That objective was effectively fitting seven parameters to one statistic,
+because its size penalty was dead code: <code>landmine_optim_burnFun()</code> filled every burned cell with
+the <em>ignition cell index</em> rather than 1, so summing the burned map summed pixel IDs instead of
+counting cells. That defect is fixed (the count is now <code>nBurned</code>), and the current objective adds
+constraints and does separate fitted from random parameters — but it still cannot rank
+near-equivalent solutions. Report fitted parameters as a region, not a point estimate, and re-score
+any candidate fit at independent seeds before adopting it.</p>
 </div>
 </div>
 <div id="alternate-optimization" class="section level2">
 <h2>Alternate optimization</h2>
 <p>A second (alternative) version tries the optimization using fewer parameters, to test whether a simpler version gets better/different results.
 Although this version was not used for the final module, we preserve it here for posterity.</p>
-<pre class="r"><code>fs_optim2 &lt;- c(0.2, 1:8) * 10000
-opt_sn2 &lt;- DEoptim(
-  landmine_optim_fitSN2,
+<p>Both <code>landmine_optim_fitSN()</code> and <code>landmine_optim_fitSN2()</code> are the <strong>legacy</strong> objective: a single
+constant perimeter-to-area target at every fire size. That target works against Andison’s central
+result — that shape complexity <em>increases</em> with fire area — and its size penalty never fired
+(it summed pixel IDs rather than counting cells, from 2018 until 2026-08). They are retained so
+historical fits can be reproduced, not for new calibration.</p>
+<pre class="r"><code>## NOTE: needs a live cluster; re-create it (the `optimization` chunk stops its own).
+cl &lt;- LandWebUtils::landmine_optim_clusterSetup(nodes = clNames)
+
+fs_optim2 &lt;- c(0.2, 1:8) * 10000
+opt_sn2 &lt;- DEoptim::DEoptim(
+  fn = LandWebUtils::landmine_optim_fitSN2,
   lower = c(1, -1, 1, 3, 4),
   upper = c(3, -0.3, 3, 4, 5), 
-  control = DEoptim.control(
+  control = DEoptim::DEoptim.control(
     VTR = 0.001, 
     itermax = 40, 
     cluster = cl,
@@ -4129,7 +4255,7 @@ opt_sn2 &lt;- DEoptim(
   fireSizes = fs_optim2, 
   desiredPerimeterArea = 0.003
 )</code></pre>
-<div id="visual-examination-1" class="section level3">
+<div id="visual-examination" class="section level3">
 <h3>Visual examination</h3>
 <pre class="r"><code>fs_sn2 &lt;- round(runif(10, 10, 4000))
 fit_sn2 &lt;- LandWebUtils::landmine_optim_fitSN2(
@@ -4150,196 +4276,27 @@ plot(log10(fs_sn2), LM_sn2[, &quot;perim.area.ratio&quot;]) </code></pre>
 </div>
 <div id="manual-inspection-of-optimization-results" class="section level2">
 <h2>Manual inspection of optimization results</h2>
-<div id="original-2018-version" class="section level3">
-<h3>Original (2018) version</h3>
-<p>The original version was run using 100m pixels, despite the simulations being run using 250m pixels.
-This was corrected and rerun below.</p>
-<pre class="r"><code>## 10,000 hectares burns gave this
-spawnNewActive[2:3] &lt;- c(0.0235999945606232, 0.0263073265505955)
-
-#100,000 hectare burns gave this
-#spawnNewActive &lt;- 10^c(-1.264780,   -1.970946,   -1.288213,   -2.202580)
-spawnNewActive &lt;- 10^c(-0.586503645288758, -1.08108837273903,
-                       -2.14391896536108, -1.00221184641123)
-sizeCutoffs &lt;- 10^c(3.37711253212765, 4.52040993282571)
-
-sns &lt;- c(-1.733262, -0.933318, -2.562183, -2.493687, 3.064458, 4.812305)
-spawnNewActive &lt;- 10^sns[1:4]
-sizeCutoffs &lt;- 10^sns[5:6]
-#spawnNewActive &lt;- 10^c(-1.646419, -1.815395, -2.809013, -2.613337)
-#sizeCutoffs &lt;- 10^c(3.888317,    4.641961)
-
-## 100,000 pixel fires -- the next worked, but I think we can get better
-# sns &lt;- structure(
-#   c(-1.652459,-0.962121,-0.964879,-2.304902, 3.522345, 4.173242),
-#   .Names = c(&quot;par1&quot;, 
-sns &lt;- structure(
-  c(-1.641197,-1.152821,-0.697335,-1.751917, 3.720378, 4.034059),
-  .Names = c(&quot;par1&quot;, &quot;par2&quot;, &quot;par3&quot;, &quot;par4&quot;, &quot;par5&quot;, &quot;par6&quot;)
-)
-spawnNewActive &lt;- 10^sns[1:4]
-sizeCutoffs &lt;- 10^(sns[5:6])
-fireSize &lt;- 30000
-
-## 100
-sns &lt;- c(-0.77716149196811, -0.769325340166688, -1.2772046867758,
-         -1.99332102853805, 3.14260408212431, 4.46155184064992) 
-
-## 1000
-sns &lt;- c(-0.775107,-1.031760,-0.599669,-1.958105, 3.048958, 4.275831)
-
-## seemed good for 100,000, pretty good for 1e3
-sns &lt;- c(-1.54885, -0.97052, -1.38305, -1.93759, 3.20379, 4.13237)
-
-## good for 100 000, 10 000 ha -- too sinuous for 1000 and 100 ha
-sns &lt;- c(-1.537203,-1.462981,-0.524957,-1.002567, 3.642046, 4.501754)
-
-## good for 100 000, 10 000 ha (except some fires @ 1e5 don&#39;t make it to full size)
-## -- too sinuous for smaller
-sns &lt;- c(-1.484338,-1.220440,-2.948275,-2.155940, 3.945281, 4.904893)
-
-sns &lt;- c(-1.495247,-0.800494,-1.582350,-2.270646, 3.530671, 4.663245)
-
-## final optimization after 75 iterations, Good: 1e5, 1e4
-sns &lt;- c(-1.47809, -0.86224, -1.34532, -1.93568, 3.27149, 4.20741)
-
-## based on equal weights 10^(1:5)
-sns &lt;- c(-0.923528, -1.804549, -1.760455, -1.793594,  1.683355,  4.466668)
-
-## With spreadProb = 0.9 # Pretty GOOD!
-sns &lt;- c(-0.731520, -0.501823, -0.605968, -1.809726,  2.202732,  4.696060, 0.9) ## used in module
-optimParams &lt;- data.frame(
-  date = &quot;2018-05-18&quot;,
-  pixelSize = 100
-) |&gt;
-  cbind(rbind(sns))
-write.csv(optimParams, DEoptim_file, row.names = FALSE)
-
-## With spreadProb = 0.9 # Optimal
-sns &lt;- c(-0.978947, -0.540946, -0.790736, -1.583039,  2.532013,  4.267547,  0.946730)
-
-spawnNewActive &lt;- 10^sns[1:4]
-sizeCutoffs &lt;- 10^(sns[5:6])
-if (length(sns) == 7) spreadProb &lt;- sns[7]
-
-## from linear model version
-par &lt;- c(1.548899,-0.396904, 2.191424, 3.903082, 4.854002)
-sizeCutoffs &lt;- 10^c(par[4], par[5])
-sna &lt;- min(-0.15, par[1] + par[2]*log10(fireSize))
-sna &lt;- 10^c(sna*par[3], sna*2*par[3], sna*3*par[3], sna*4*par[3])
-spawnNewActive &lt;- sna
-
-###########################
-dev.new()
-
-for (i in 1:5) {
-  fireSize &lt;- 10^i
-  dim &lt;- round(sqrt(fireSize)*5 * 250)
-  ros &lt;- raster(extent(0, dim,0,dim), res = 250, vals = 1)
-  centreCell &lt;- cellFromRowCol(ros,
-                               rownr = nrow(ros) / 2,
-                               colnr = ncol(ros) / 2)
-  reps &lt;- paste0(&quot;rep&quot;, 1:4 + (log10(fireSize) - 1)*4)
-  burnedMapList &lt;- landmine_optim_clusterWrap(cl = cl, nodes = clNames, reps = reps, objs = objs, pkgs = pkgs)
-  names(burnedMapList$out) &lt;- reps
-  burnedMapList &lt;- purrr::transpose(burnedMapList$out)
-  cl &lt;- burnedMapList$cl
-  do.call(rbind, burnedMapList$LM)
-  
-  terra::plot(
-    burnedMapList$burnedMap,
-    col = &quot;red&quot;,
-    colNA = &quot;white&quot;,
-    legend = FALSE,
-    main = paste0(&quot;Fire size: &quot;, fireSize)
-  )
-}</code></pre>
-<pre class="r"><code>reps &lt;- paste0(&quot;rep&quot;, 1:1)
-perims &lt;- list()
-perm &lt;- list()
-mod &lt;- list()
-
-dev.new()
-
-fireSizes &lt;-  10^(4)
-
-for (fs in fireSizes) {
-  for (i in 1:1) {
-    ros &lt;- terra::rast(terra::ext(0, 2e5, 0, 2e5), resolution = 100, vals = 1)
-    NineCorners &lt;- terra::cellFromRowCol(
-      ros,
-      rownr = terra::nrow(ros) / 4 * rep(1:3, 3),
-      colnr = terra::ncol(ros) / 4 * rep(1:3, each = 3)
-    )
-    centreCell &lt;- NineCorners
-    ran &lt;- runif(4, -3, -1)
-    spawnNewActive &lt;- 10^ran
-    # spawnNewActive &lt;- 10^c(-0.1, -0.75, -1.2, ran*2.5)
-    fireSize = rep(fs, length(centreCell))
-    sizeCutoffs &lt;- 10^c(1,3)
-    burnedMapList &lt;- LandWebUtils::landmine_optim_clusterWrap(cl = cl, nodes = clNames, reps = reps, objs = objs, pkgs = pkgs)
-    names(burnedMapList$out) &lt;- reps
-    burnedMapList &lt;- purrr::transpose(burnedMapList$out)
-    cl &lt;- burnedMapList$cl
-    do.call(rbind, burnedMapList$LM)
-    terra::plot(burnedMapList$burnedMap)
-    perims[[i]] &lt;- data.frame(
-      perim = burnedMapList$LM$rep1$perim.area.ratio,
-      spawnNewActive = mean(spawnNewActive),
-      others = t(spawnNewActive)
-    )
-  }
-  fsChar &lt;- as.character(fs)
-  perm[[fsChar]] &lt;- rbindlist(perims)
-  perm[[fsChar]]$perim &lt;- log10(perm[[fsChar]]$perim)
-  perm[[fsChar]]$spawnNewActive &lt;- perm[[fsChar]]$spawnNewActive
-  plot(perm[[fsChar]]$perim, perm[[fsChar]]$spawnNewActive, add = TRUE)
-  mod[[fsChar]] &lt;- lm(spawnNewActive ~ perim, data = perm[[fsChar]])
-}
-
-(predict(mod[[&quot;10&quot;]], data.frame(perim = log10(0.003))))
-(predict(mod[[&quot;100&quot;]], data.frame(perim = log10(0.003))))
-log10(predict(mod[[&quot;1000&quot;]], data.frame(perim = log10(0.003))))</code></pre>
-</div>
-<div id="current-2025-version" class="section level3">
-<h3>Current (2025) version</h3>
-<p>The original version was run using 100m pixels, despite the simulations being run using 250m pixels.</p>
-<p>This version uses 240m pixels to work with LandWeb v3.</p>
+<p>Fires are simulated at a range of sizes and replicated, then plotted for visual
+inspection: the shapes should be neither too round nor too sinuous. This uses 240 m pixels,
+matching LandWeb v3. (Earlier 100 m and 250 m explorations are in the git history.)</p>
 <pre class="r"><code>library(ggplot2)
 library(tidyterra)
 
-pixelSize &lt;- 240
-
-## final optimization after 200 iterations (landmine_optim_fitSN)
-optimParams &lt;- read.csv(DEoptim_file, row.names = FALSE)
-sns &lt;- optimParams[, grepl(&quot;^par&quot;, colnames(optimParams))] |&gt; tail(1) ## take last row
-
-spawnNewActive &lt;- 10^sns[1:4] |&gt; as.numeric()
-sizeCutoffs &lt;- 10^(sns[5:6]) |&gt; as.numeric()
-spreadProb &lt;- sns[7] |&gt; as.numeric()
-
-## from linear model version
-# par &lt;- c(1.548899,-0.396904, 2.191424, 3.903082, 4.854002)
-# sizeCutoffs &lt;- 10^c(par[4], par[5])
-# sna &lt;- min(-0.15, par[1] + par[2]*log10(fireSize))
-# sna &lt;- 10^c(sna*par[3], sna*2*par[3], sna*3*par[3], sna*4*par[3])
-# spawnNewActive &lt;- sna
+## `spawnNewActive`, `sizeCutoffs` and `spreadProb` are set in the `fit-values` chunk
+## above, from the most recent row of the calibration CSV.
 
 cl &lt;- NULL ## new cluster created below; will be reused for each fireSize
 n &lt;- 3^2 ## number of reps per fireSize (square numbers best for plotting)
 
 for (i in 1:5) {
   fireSize &lt;- 10^i
-  dim &lt;- round(sqrt(fireSize) * 5 * pixelSize)
-  ros &lt;- tempfile(fileext = &quot;.tif&quot;)
-  ros_rast &lt;- terra::rast(terra::ext(0, dim, 0, dim), resolution = pixelSize, vals = 1) |&gt;
-    terra::writeRaster(ros)
-  
-  centreCell &lt;- terra::cellFromRowCol(
-    ros_rast,
-    row = terra::nrow(ros_rast) / 2,
-    col = terra::ncol(ros_rast) / 2
+  ## landscape sized to the fire (5x the fire&#39;s linear extent), via the shared helper
+  lscape_i &lt;- LandWebUtils::landmine_optim_landscape(
+    pixelSize = pixelSize,
+    n = round(sqrt(fireSize) * 5)
   )
+  ros &lt;- lscape_i$file
+  centreCell &lt;- lscape_i$centreCell
   reps &lt;- sprintf(&quot;rep%02d&quot;, 1:n + (i - 1)*n)
   burnedMapList &lt;- LandWebUtils::landmine_optim_clusterWrap(
     cl = cl,
@@ -4364,14 +4321,11 @@ for (i in 1:5) {
     theme_void() +
     theme(legend.position = &quot;none&quot;)
     
-  f_gg &lt;- file.path(moduleDir, &quot;LandMine&quot;, &quot;figures&quot;) |&gt;
-    fs::dir_create() |&gt;
-    file.path(sprintf(&quot;%s_fireSize_1e%d.png&quot;, format(Sys.Date(), &quot;%Y-%m-%d&quot;), i))
+  f_gg &lt;- file.path(figDir, sprintf(&quot;%s_fireSize_1e%d.png&quot;, format(Sys.Date(), &quot;%Y-%m-%d&quot;), i))
   ggsave(f_gg, gg)
   
   print(gg)
 }</code></pre>
-</div>
 <div id="cleaning-up" class="section level3">
 <h3>Cleaning up</h3>
 <pre class="r"><code>parallel::stopCluster(cl)
