@@ -1,0 +1,24 @@
+## Caller for the testthat-module reusable workflow.
+
+name: testthat-module
+
+on:
+  pull_request:
+    branches: [main, master, development]
+  push:
+    branches: [main, master, development]
+    paths:
+      - .github/workflows/testthat-module.yaml
+      - LandMine.R
+      - R/**
+      - tests/**
+  workflow_dispatch:
+
+jobs:
+  testthat-module:
+    ## No permissions block: unlike render-module-rmd, this workflow writes nothing
+    ## back to the repository, so the default `contents: read` it declares for
+    ## itself is all it needs.
+    uses: PredictiveEcology/actions/.github/workflows/testthat-module.yaml@main
+    with:
+      module: LandMine
