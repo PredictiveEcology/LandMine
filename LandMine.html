@@ -2972,7 +2972,7 @@ border-radius: 0px;
 
 
 <h1 class="title toc-ignore">LandMine Manual</h1>
-<h3 class="subtitle">v.1.0.13</h3>
+<h3 class="subtitle">v.1.0.14</h3>
 <h4 class="date">18 May 2018; updated 29 Oct 2025</h4>
 
 </div>
@@ -3233,7 +3233,7 @@ sppEquiv
 data.table
 </td>
 <td style="text-align:left;">
-Multi-columned data.table indicating species name equivalencies. Default taken from <code>LandR::sppEquivalencies_CA</code> which has names for species of trees in Canada
+Multi-columned data.table indicating species name equivalencies. Must have a <code>LandWeb</code> column. Default is <code>LandR::sppEquivalencies_CA</code> with the LandWeb species groups added by <code>LandWebUtils::landweb_sppEquiv()</code>.
 </td>
 <td style="text-align:left;">
 NA
@@ -3545,7 +3545,7 @@ sppEquivCol
 character
 </td>
 <td style="text-align:left;">
-LandR
+LandWeb
 </td>
 <td style="text-align:left;">
 NA
@@ -3554,7 +3554,7 @@ NA
 NA
 </td>
 <td style="text-align:left;">
-The column in <code>sim$specieEquivalency</code> data.table to use as a naming convention.
+The column in <code>sim$sppEquiv</code> data.table to use as a naming convention. LandMine’s fuel types are keyed on the LandWeb species groups: Init() and <code>LandWebUtils::landmine_fire_ros()</code> read the <code>LandWeb</code> column directly, so species must be named by that column.
 </td>
 </tr>
 <tr>
@@ -3830,7 +3830,7 @@ fireReturnInterval
 SpatRaster
 </td>
 <td style="text-align:left;">
-A <code>Raster</code> map showing the fire return interval. This is created from the <code>rstCurrentBurn</code>.
+The input <code>fireReturnInterval</code>, coerced to integer and with zero-valued pixels set to <code>NA</code>. It is NOT masked to flammable pixels or to <code>studyArea</code>, so the FRI summaries can report how much of each zone is flammable and inside the study area. Fires are ignited and counted on an internal copy masked to both.
 </td>
 </tr>
 <tr>
