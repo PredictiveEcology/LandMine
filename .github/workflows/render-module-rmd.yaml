@@ -1,0 +1,139 @@
+on:
+  pull_request:
+    branches:
+      - development
+      - main
+  push:
+    branches:
+      - development
+      - main
+    paths:
+      - .github/workflows/render-module-rmd.yaml
+      - LandMine.Rmd
+      - LandMine.R
+
+name: Render module Rmd
+
+jobs:
+  render:
+    name: Render module Rmd
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      ## Deliberately NOT PredictiveEcology/actions/install-spatial-deps: it adds the ubuntugis
+      ## PPA, which upgrades GDAL to 3.11 (libgdal37). P3M's binary terra/sf are built against
+      ## Ubuntu 24.04's stock GDAL 3.8, so the PPA breaks them at load time --
+      ## "libgdal.so.34: cannot open shared object file". Require never hit this only because it
+      ## compiled every package from source against whatever GDAL happened to be installed.
+      ## Stock repos keep the system libraries and the binaries on the same ABI.
+      - name: Install system dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo -E apt-get update -y
+          sudo -E apt-get install -y --no-install-recommends \
+            libcurl4-openssl-dev \
+            libfribidi-dev \
+            libgdal-dev \
+            libgeos-dev \
+            libgit2-dev \
+            libglpk-dev \
+            libharfbuzz-dev \
+            libmagick++-dev \
+            libproj-dev \
+            libsqlite3-dev \
+            libudunits2-dev \
+            libuv1-dev \
+            libxml2-dev
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+          Ncpus: 2
+
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      ## pak, not Require. Require installs with `require = FALSE`, which downgrades a failed
+      ## install to a warning: when textshaping could not compile for want of libfribidi-dev the
+      ## install step still went green and the job failed ~15 min later at render time as
+      ## "there is no package called 'kableExtra'" (kableExtra -> svglite -> textshaping). pak
+      ## fails at the point of failure, names the missing system library, and installs system
+      ## requirements itself. setup-r-dependencies also caches the library between runs.
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::animation
+            any::bookdown
+            any::DEoptim
+            any::dplyr
+            any::git2r
+            any::igraph
+            any::kableExtra
+            any::knitr
+            any::modelr
+            any::openxlsx
+            any::pak
+            any::pander
+            any::purrr
+            any::rmarkdown
+            any::stringi
+            github::PredictiveEcology/SpaDES.core@development
+
+      - name: Install SpaDES.docs
+        run: |
+          ## Installed on its own, with dependencies = FALSE, because SpaDES.docs' DESCRIPTION
+          ## declares a BRANCHLESS `Remotes: PredictiveEcology/Require` while SpaDES.core@development
+          ## requires `PredictiveEcology/Require@development`. Resolved in the same pass, pak
+          ## refuses -- "PredictiveEcology/Require@development conflicts with
+          ## PredictiveEcology/Require, to be installed" -- and reports every other package as a
+          ## dependency conflict. Its imports (data.table, knitr, kableExtra, modelr, pander,
+          ## Require, stringi) are all installed by the step above, so skipping dependency
+          ## resolution here is safe.
+          pak::pkg_install("PredictiveEcology/SpaDES.docs@development",
+                           dependencies = FALSE, ask = FALSE)
+        shell: Rscript {0}
+
+      - name: Install module reqdPkgs
+        run: |
+          ## A SpaDES module declares its dependencies in `reqdPkgs` inside the module .R file
+          ## rather than a DESCRIPTION, so they can only be read once SpaDES.core is installed.
+          ## GitHub checks the repo out at <workspace>/<repo>/<repo>, so the module directory IS
+          ## the repo root and `paths = ".."` is the directory holding it -- which is what
+          ## SpaDES.core::packages() expects.
+          specs <- unlist(SpaDES.core::packages(modules = "LandMine", paths = ".."))
+
+          ## `reqdPkgs` entries carry version constraints -- "pkg (>= 1.2.3)" and
+          ## "org/repo@branch (>= 1.2.3)" -- which pak does not parse. Strip the constraint and
+          ## keep the ref: pak installs current CRAN / branch HEAD, which satisfies a `>=` floor.
+          refs <- sub("\\s*\\(.*\\)\\s*$", "", trimws(specs))
+          refs <- unique(refs[nzchar(refs)])
+
+          ## Bare names in `reqdPkgs` ("SpaDES.core", "reproducible") name packages whose
+          ## DEVELOPMENT versions were already installed above, from GitHub. Handing pak the bare
+          ## name makes it resolve to CRAN and then refuse -- "Conflicts with reproducible",
+          ## "Can't find package called SpaDES.core" -- and the entire solve fails, reporting
+          ## every other package as a "dependency conflict". So: always keep a GitHub ref (it
+          ## carries org/repo), and keep a bare name only when nothing by that name is installed.
+          refs <- refs[grepl("/", refs) | !(refs %in% rownames(installed.packages()))]
+
+          cat("::group::module reqdPkgs\n"); cat(refs, sep = "\n"); cat("\n::endgroup::\n")
+          pak::pkg_install(refs, ask = FALSE)
+        shell: Rscript {0}
+
+      - name: Render module Rmd
+        run: |
+          rmarkdown::render("LandMine.Rmd", encoding = "UTF-8")
+        shell: Rscript {0}
+
+      - name: Commit results
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git commit LandMine.html -m 'Re-build LandMine.Rmd' || echo "No changes to commit"
+          git push https://${{github.actor}}:${{secrets.GITHUB_TOKEN}}@github.com/${{github.repository}}.git HEAD:${{github.ref}} || echo "No changes to commit"

@@ -3,31 +3,31 @@ defineModule(sim, list(
   description = "Reimplementation of Andison (1999) LandMine fire model",
   keywords = c("Fire", "Landscape", "Percolation", "Pixel-based"),
   authors = c(
-    person(c("Eliot", "J", "B"), "McIntire", email = "eliot.mcintire@nrcan-rncan.gc.ca", role = c("aut", "cre")),
-    person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb"))
+    person(c("Eliot", "J", "B"), "McIntire", email = "eliot.mcintire@nrcan-rncan.gc.ca", role = c("aut")),
+    person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb", "cre"))
   ),
   childModules = character(0),
-  version = list(LandMine = numeric_version("0.0.3")),
-  spatialExtent = raster::extent(rep(NA_real_, 4)),
+  version = list(LandMine = numeric_version("1.0.14")),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = list("README.md", "LandMine.Rmd"),
-  reqdPkgs = list("assertthat", "data.table", "fpCompare", "ggplot2", "grDevices", "gridExtra",
-                  "magrittr", "raster", "RColorBrewer", "stats", "VGAM",
-                  "quickPlot", "fasterize",
-                  "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
-                  "PredictiveEcology/LandWebUtils@development (>= 0.1.7)",
-                  "PredictiveEcology/pemisc@development",
-                  "PredictiveEcology/SpaDES.tools@development"),
+  reqdPkgs = list(
+    "assertthat", "cli", "data.table", "fpCompare", "ggplot2",
+    "RColorBrewer", "stats", "terra", "tidyterra", "VGAM",
+    "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
+    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9038)",
+    "PredictiveEcology/pemisc@development",
+    "PredictiveEcology/SpaDES.tools@development (>= 2.1.2.9000)"
+  ),
   parameters = rbind(
     defineParameter("biggestPossibleFireSizeHa", "numeric", 1e6, 1e4, 2e6,
                     "An upper limit, in hectares, of the truncated Pareto distribution of fire sizes"),
     defineParameter("burnInitialTime", "numeric", start(sim, "year") + 1, NA, NA,
                     "This describes the simulation time at which the first burn event should occur"),
-    defineParameter("fireTimestep", "numeric", 1, NA, NA,
+    defineParameter("fireTimestep", "integer", 1L, NA, NA,
                     "This describes the simulation time interval between burn events"),
-    defineParameter("maxReburns", "integer", c(1L, 20L), 1L, 20L,
+    defineParameter("maxReburns", "integer", c(1L, 20L), 1L, 500L,
                     paste("Number of attempts to burn fires that don't reach their target fire size.",
                           "Reburning occurs in two phases, hence accepting a parameter value of length 2.",
                           "In the first phase, fires that did not reach their target size are reignited",
@@ -56,17 +56,29 @@ defineModule(sim, list(
     defineParameter("optimParsRowID", "integer", 1L, 1L, NA,
                     paste("which set of optimization parameter values to use for simulating fire spread,",
                           "specified by row number of the `LandMine_DEoptim_params.csv` file.",
-                          "`1L` specifies the original 2018 values at 100m pixels;",
-                          "all other rows were calculated using 250m pixels.")),
+                          "Row 1 is the 120 m fit, and is the default at EVERY resolution:",
+                          "it scores as well as the 240 m fit on the 240 m landscape (0.70 vs",
+                          "0.81, 0.33 pooled sd) with a fifth of the variance, while the 240 m",
+                          "fit is much worse at 120 m (1.78 vs 0.61, 4.91 sd). The 120 m fit is",
+                          "also far better determined: repeat runs land within 4.6% of the",
+                          "search interval, against 24.8% at 240 m.",
+                          "`2L` is the 240 m fit, retained for reference. Rows fitted before",
+                          "2026-08 were removed: they used a different objective (a size penalty",
+                          "that never fired, a constant perimeter:area target, and fire sizes in",
+                          "pixels rather than hectares) and are not comparable. They remain in",
+                          "git history.")),
     defineParameter("reps", "integer", NA_integer_, 1L, NA_integer_,
                     paste("number of replicates/runs per study area when running in 'multi' mode.")),
     defineParameter("ROSother", "integer", 30L, NA, NA,
                     paste0("default ROS value for non-forest vegetation classes.",
                            "this is needed when passing a modified `ROSTable`, e.g. using log-transformed values.")),
     defineParameter("ROStype", "character", "default", NA, NA,
-                    "One of 'burny', 'equal', 'log', or 'default'."),
-    defineParameter("sppEquivCol", "character", "LandR", NA, NA,
-                    "The column in `sim$specieEquivalency` data.table to use as a naming convention."),
+                    "One of 'default' or 'burny'."),
+    defineParameter("sppEquivCol", "character", "LandWeb", NA, NA,
+                    paste("The column in `sim$sppEquiv` data.table to use as a naming convention.",
+                          "LandMine's fuel types are keyed on the LandWeb species groups: Init() and",
+                          "`LandWebUtils::landmine_fire_ros()` read the `LandWeb` column directly,",
+                          "so species must be named by that column.")),
     defineParameter("useSeed", "integer", NULL, NA, NA,
                     paste("Only used for creating a starting `cohortData` dataset.",
                           "If `NULL`, then it will be randomly generated;",
@@ -104,14 +116,14 @@ defineModule(sim, list(
                  desc = paste("Columns: B, pixelGroup, speciesCode (as a factor of the names), age.",
                               "indicating several features about the current vegetation of stand."),
                  sourceURL = NA),
-    expectsInput("fireReturnInterval", "Raster",
+    expectsInput("fireReturnInterval", "SpatRaster",
                  desc = paste("A raster layer that is a factor raster, with at least 1 column called",
                               "`fireReturnInterval`, representing the fire return interval in years."),
                  sourceURL = NA),
-    expectsInput("pixelGroupMap", "RasterLayer",
+    expectsInput("pixelGroupMap", "SpatRaster",
                  desc = "Pixels with identical values share identical stand features",
                  sourceURL = NA),
-    expectsInput("rasterToMatch", "RasterLayer",
+    expectsInput("rasterToMatch", "SpatRaster",
                  desc = paste("a raster of the `studyArea` to use as a template raster",
                               "(resolution, projection, etc.) for all other rasters in the simulation."),
                  sourceURL = NA),
@@ -123,11 +135,11 @@ defineModule(sim, list(
                               "'leading' should be vegetation type.",
                               "'ros' gives the rate of spread values for each age and type."),
                  sourceURL = NA),
-    expectsInput("rstFlammable", "Raster",
+    expectsInput("flammableMap", "SpatRaster",
                  desc = paste("A raster layer, with 0, 1 and NA, where 1 indicates areas",
                               "that are flammable, 0 not flammable (e.g., lakes)",
                               "and NA not applicable (e.g., masked)")),
-    expectsInput("rstTimeSinceFire", "Raster",
+    expectsInput("rstTimeSinceFire", "SpatRaster",
                  desc = "a time since fire raster layer",
                  sourceURL = NA),
     expectsInput("species", "data.table",
@@ -138,15 +150,15 @@ defineModule(sim, list(
                  sourceURL = NA),
     expectsInput("sppEquiv", "data.table",
                  desc = paste("Multi-columned data.table indicating species name equivalencies.",
-                              "Default taken from `LandR::sppEquivalencies_CA` which has names for",
-                              "species of trees in Canada"),
+                              "Must have a `LandWeb` column. Default is `LandR::sppEquivalencies_CA`",
+                              "with the LandWeb species groups added by `LandWebUtils::landweb_sppEquiv()`."),
                  sourceURL = NA),
-    expectsInput("studyArea", "SpatialPolygonsDataFrame",
+    expectsInput("studyArea", "SpatVector",
                  desc = paste("multipolygon, typically buffered around an area of interest",
                               "(i.e., `studyAreaReporting`) to use for simulation.",
                               "Defaults to an area in Southwestern Alberta, Canada."),
                  sourceURL = NA),
-    expectsInput("studyAreaReporting", "SpatialPolygonsDataFrame",
+    expectsInput("studyAreaReporting", "sf",
                  desc = paste("multipolygon (typically smaller/unbuffered than `studyArea`)",
                               "to use for plotting/reporting.",
                               "Defaults to an area in Southwestern Alberta, Canada."),
@@ -158,12 +170,25 @@ defineModule(sim, list(
       "This is simply a reassignment from `P(sim)$burnInitialTime`.")
     ),
     createsOutput("fireSizes", "list", paste(
-      "A list of data.tables, one per burn event, each with two columns, `size` and `maxSize`.",
-      "These indicate the actual sizes and expected sizes burned, respectively.",
-      "These can be put into a single data.table with `rbindlist(sim$fireSizes, idcol = 'year')`")
+      "A list of data.tables, one per burn event, with `size`, `maxSize` and the fire-identity",
+      "columns `fireID`, `attempt` and `targetSize`.",
+      "`size` and `maxSize` are the actual and expected sizes burned.",
+      "`fireID` is issued per burn YEAR, so (rep, year, fireID) identifies one fire; rows",
+      "sharing it are the pieces that fire was burned in, and are NOT necessarily contiguous.",
+      "`attempt` is the reburn round that produced the row, and `targetSize` the ORIGINAL",
+      "target, constant across a fire's rows.",
+      "NOTE: `maxSize` is NOT an independent record of the target. When a fire stalls, the",
+      "retry loop rewrites its `maxSize` to the area that did burn and issues the shortfall",
+      "as new fires, so `size == maxSize` by construction and cannot be used as evidence",
+      "that fires reach their targets; stalling shows up in the fire COUNT instead.",
+      "Named by simulation year, so `rbindlist(sim$fireSizes, idcol = 'year')` gives a",
+      "`year` column carrying the actual year (as character) rather than a 1..n counter.")
     ),
-    createsOutput("fireReturnInterval", "RasterLayer", paste(
-      "A `Raster` map showing the fire return interval. This is created from the `rstCurrentBurn`.")
+    createsOutput("fireReturnInterval", "SpatRaster", paste(
+      "The input `fireReturnInterval`, coerced to integer and with zero-valued pixels set to `NA`.",
+      "It is NOT masked to flammable pixels or to `studyArea`, so the FRI summaries can report",
+      "how much of each zone is flammable and inside the study area. Fires are ignited and",
+      "counted on an internal copy masked to both.")
     ),
     createsOutput("fireReturnIntervalsByPolygonNumeric", "numeric", paste(
       "A vector of the fire return intervals, ordered by the numeric representation of polygon ID")
@@ -172,6 +197,12 @@ defineModule(sim, list(
       "The number of time units between successive fire events in a fire module.")
     ),
     createsOutput("friSummary", "data.table", "summary fire return interval table"),
+    createsOutput("friDiagnostics", "data.table", paste(
+      "per-FRI-zone attainment diagnostics: achieved/target ratio over the BURNABLE area,",
+      "the same ratio computed the way `friSummary` does it, the share of each zone that",
+      "lies inside the study area, and the structural measurements that tell the failure",
+      "modes apart (flammable fraction, patch structure, cohort coverage)."
+    )),
     createsOutput("kBest", "numeric", paste(
       "A numeric scalar that is the optimal value of `K` in the",
       "Truncated Pareto distribution (`rtruncpareto`)")
@@ -179,11 +210,11 @@ defineModule(sim, list(
     createsOutput("numFiresPerYear", "numeric", paste(
       "The average number of fires per year, by fire return interval level on `rstCurrentBurn`.")
     ),
-    createsOutput("rstCurrentBurn", "RasterLayer", paste(
+    createsOutput("rstCurrentBurn", "SpatRaster", paste(
       "A raster layer, produced at each timestep, where each",
       "pixel is either 1 or 0 indicating burned or not burned.")
     ),
-    createsOutput("rstCurrentBurnCumulative", "RasterLayer", "Cumulative number of times a pixel has burned"),
+    createsOutput("burnMap", "SpatRaster", "Cumulative number of times a pixel has burned"),
     createsOutput("sppEquiv", "data.table", paste("Same as input, but with new column, `LandMine`."))
   )
 ))
@@ -203,38 +234,14 @@ doEvent.LandMine <- function(sim, eventTime, eventType, debug = FALSE) {
     if (P(sim)$mode == "single") {
       sim <- scheduleEvent(sim, P(sim)$burnInitialTime, "LandMine", "Burn", 2.5)
       sim <- scheduleEvent(sim, P(sim)$.plotInitialTime, "LandMine", "plot")
-      sim <- scheduleEvent(sim, P(sim)$.saveInitialTime, "LandMine", "save")
+      sim <- scheduleEvent(sim, end(sim), "LandMine", "plot")
       sim <- scheduleEvent(sim, end(sim), "LandMine", "summarySingle")
     } else if (P(sim)$mode == "multi") {
       sim <- scheduleEvent(sim, start(sim), "LandMine", "summaryMulti")
     }
   } else if (eventType == "plot") {
-    ## TODO: allow plot to file
-    if (anyPlotting(P(sim)$.plots) && any(P(sim)$.plots == "screen")) {
-
-      if (is.null(mod$LandMineDevice)) {
-        dl <- dev.list()
-        quickPlot::dev.useRSGD(FALSE)
-        # if the device was already "this" size, meaning probably made here
-        needDev <- FALSE
-        desiredDims <- c(width = 14.3, height = 9.5)
-        if (is.null(dl)) {
-          needDev <- TRUE
-        } else {
-          if (!all(abs(dev.size() - desiredDims) < 0.5))
-            needDev <- TRUE
-        }
-        if (needDev) {
-          newDev <- max(dl) + 1
-          do.call(quickPlot::dev, append(list(newDev), as.list(desiredDims)))
-        }
-        mod$LandMineDevice <- dev.cur()
-      }
-      quickPlot::dev(mod$LandMineDevice)
-      sim <- plotFn(sim)
-
-      sim <- scheduleEvent(sim, P(sim)$.plotInterval, "LandMine", "plot")
-    }
+    sim <- plotFn(sim)
+    sim <- scheduleEvent(sim, time(sim) + P(sim)$.plotInterval, "LandMine", "plot")
   } else if (eventType == "Burn") {
     sim <- Burn(sim)
     sim <- scheduleEvent(sim, time(sim) + P(sim)$fireTimestep, "LandMine", "Burn", 2.5)
@@ -255,29 +262,16 @@ EstimateTruncPareto <- function(sim, verbose = getOption("LandR.verbose", TRUE))
     message("Estimate Truncated Pareto parameters")
   }
 
-  findK_upper <- function(params = c(0.4), upper1) {
-    fs <- round(VGAM::rtruncpareto(1e6, 1, upper = upper1, shape = params[1]))
-    # meanFS <- meanTruncPareto(k = params[1], lower = 1, upper = upper1, alpha = 1)
-    # diff1 <- abs(quantile(fs, 0.95) - meanFS)
-
-    ## "90% of area is in 5% of fires" - Dave rule of thumb
-    # abs(sum(fs[fs>quantile(fs, 0.95)])/sum(fs) - 0.95)
-
-    ## Eliot's adjustment because each year was too constant; should create greater variation.
-    abs(sum(fs[fs > quantile(fs, 0.95)]) / sum(fs) - 0.95) ## "95% of area (2nd term) is in 5% of fires (1st term)"
-
-    ## 2018-110-23: Eliot's adjustment because each year still too constant; need greater variation.
-    # abs(sum(fs[fs > quantile(fs, 0.90)]) / sum(fs) - 0.95) # "95% of area (2nd term) is in 10% of fires (1st term)"
-  }
-
+  ## Promoted to LandWebUtils: fits the truncated-Pareto shape to Dave Andison's "95% of the
+  ## area is in 5% of the fires" rule of thumb -- deliberately a rule of thumb, not a fit to
+  ## NBAC/NFDB. The module previously carried the two superseded versions of that rule as
+  ## commented-out code; they are recorded in the function's documentation instead.
   sim$kBest <- Cache(
-    optimize,
-    interval = c(0.05, 0.99),
-    f = findK_upper,
-    upper1 = P(sim)$biggestPossibleFireSizeHa,
-    cacheRepo = cachePath(sim),
+    LandWebUtils::landmine_estimate_kBest,
+    biggestPossibleFireSizeHa = P(sim)$biggestPossibleFireSizeHa,
+    cachePath = cachePath(sim),
     useCache = FALSE
-  )$minimum
+  )
 
   return(invisible(sim))
 }
@@ -300,79 +294,103 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
   P(sim, "maxReburns", "LandMine") <- as.integer(P(sim, "maxReburns", "LandMine"))
   P(sim, "maxRetriesPerID", "LandMine") <- as.integer(P(sim, "maxRetriesPerID", "LandMine"))
 
-  compareRaster(sim$rasterToMatch, sim$fireReturnInterval, sim$rstFlammable, sim$rstTimeSinceFire)
+  terra::compareGeom(sim$rasterToMatch, sim$fireReturnInterval, sim$flammableMap, sim$rstTimeSinceFire)
 
-  ## from DEoptim fitting, run in the LandMine.Rmd file
-  optimPars <- read.csv(file.path(dataPath(sim), "LandMine_DEoptim_params.csv"))
-  optimPars <- optimPars[P(sim)$optimParsRowID, grepl("^par", colnames(optimPars))]
-  optimPars <- unlist(unname(optimPars))
+  ## from DEoptim fitting; see `LandWebUtils::landmine_optim_calibrate()` and LandMine.Rmd.
+  ## The CSV schema and the `10^` parameter convention are defined once, in LandWebUtils.
+  optimPars <- LandWebUtils::landmine_optim_unpack(
+    LandWebUtils::landmine_optim_params_read(
+      file.path(dataPath(sim), "LandMine_DEoptim_params.csv"),
+      rowID = P(sim)$optimParsRowID
+    )
+  )
 
-  mod$spawnNewActive <- 10^c(optimPars[1], optimPars[2], optimPars[3], optimPars[4])
-  mod$sizeCutoffs <- 10^c(optimPars[5], optimPars[6])
+  mod$spawnNewActive <- optimPars$spawnNewActive
+  mod$sizeCutoffs <- optimPars$sizeCutoffs
 
-  mod$spreadProb <- !is.na(sim$fireReturnInterval)
-  mod$spreadProb[mod$spreadProb[] == 0] <- NA_real_
-  mod$spreadProb[mod$spreadProb[] == 1] <- optimPars[7]
+  ## 2024-10: use `sim$flammableMap` instead of `sim$fireReturnInterval` raster
+  ##          to ensure coverage across entire studyArea (e.g., boundaries along grasslands)
+  mod$spreadProb <- terra::rast(sim$flammableMap)
+  mod$spreadProb[sim$flammableMap[] == 1] <- optimPars$spreadProb ## assign spreadProb to flammable pixels
+  mod$spreadProb[is.na(sim$flammableMap[]) | sim$flammableMap[] == 0] <- switch(
+    P(sim)$ROStype,
+    burny = optimPars$spreadProb, ## non-flammable pixels *can* spread fire (but won't count as burned pixels for fire stats)
+    NA_real_ ## non-flammable pixels don't have a spreadProb value (i.e., can't spread)
+  )
+  mod$spreadProb <- terra::mask(mod$spreadProb, sim$studyArea) ## mask only; don't crop
 
   sim$fireSizes <- list()
 
-  if (!is.integer(sim$fireReturnInterval[]))
+  ## `sim$fireReturnInterval` stays as supplied apart from these two normalisations: it is NOT
+  ## masked to flammable pixels or to `studyArea`. The FRI summaries need each zone's whole
+  ## extent to report `pctFlam` and `pctInStudyArea`; the fire code uses the masked copy
+  ## `mod$fireReturnIntervalMasked` built below. A zero means "no interval", so it becomes NA
+  ## here, or the summaries would report a zone with a target interval of 0 years.
+  if (!is.integer(sim$fireReturnInterval[])) {
     sim$fireReturnInterval[] <- as.integer(sim$fireReturnInterval[])
+  }
+  zeroFRI <- which(sim$fireReturnInterval[] == 0L)
+  if (length(zeroFRI) > 0) {
+    sim$fireReturnInterval[zeroFRI] <- NA_integer_
+  }
 
-  if (verbose > 0)
+  if (verbose > 0) {
     message("Initializing fire maps")
+  }
   sim$fireTimestep <- P(sim)$fireTimestep
   sim$fireInitialTime <- P(sim)$burnInitialTime
 
-  ## fireReturnInterval should have no zeros
-  zeros <- sim$fireReturnInterval[] == 0L
-  if (any(zeros, na.rm = TRUE)) {
-    sim$fireReturnInterval[zeros] <- NA_integer_
-  }
-
-  ## 2023-09: exclude non-flammable pixels for FRI calculations
-  nonFlammable <- which(is.na(sim[["rstFlammable"]][]) | sim[["rstFlammable"]][] == 0)
-  if (length(nonFlammable) > 0) {
-    sim$fireReturnInterval[nonFlammable] <- NA
-  }
-
-  numPixelsPerPolygonNumeric <- Cache(freq, sim$fireReturnInterval, useNA = "no", cacheRepo = cachePath(sim)) |>
-    na.omit()
-  colnames(numPixelsPerPolygonNumeric) <- c("fri", "count")
-  numPixelsPerPolygonNumeric <- cbind(value = seq_len(NROW(numPixelsPerPolygonNumeric)), numPixelsPerPolygonNumeric)
-  ordPolygons <- order(numPixelsPerPolygonNumeric[, "value"])
-  numPixelsPerPolygonNumeric <- numPixelsPerPolygonNumeric[ordPolygons, , drop = FALSE]
-  sim$fireReturnIntervalsByPolygonNumeric <- numPixelsPerPolygonNumeric[, "fri"]
-  numPixelsPerPolygonNumeric <- numPixelsPerPolygonNumeric[, "count"]
-  names(numPixelsPerPolygonNumeric) <- sim$fireReturnIntervalsByPolygonNumeric
-
-  numHaPerPolygonNumeric <- numPixelsPerPolygonNumeric * (prod(res(sim$fireReturnInterval)) / 1e4)
-  returnInterval <- sim$fireReturnIntervalsByPolygonNumeric
-
   if (verbose > 0) {
-    message("Determine mean fire size...")
+    message("Determine mean fire size and per-zone ignition budget...")
   }
-  meanFireSizeHa <- meanTruncPareto(k = sim$kBest, lower = 1,
-                                    upper = P(sim)$biggestPossibleFireSizeHa,
-                                    alpha = 1)
-  numFiresByPolygonNumeric <- numHaPerPolygonNumeric / meanFireSizeHa
-  sim$numFiresPerYear <- numFiresByPolygonNumeric / returnInterval
+  ## Promoted to LandWebUtils: masks zero-FRI and non-flammable pixels out of the raster,
+  ## tabulates pixels per FRI zone, and converts to expected fires/yr
+  ## (`(area / meanFireSize) / FRI`). Unit-tested there for the ORDERING CONTRACT that the
+  ## reburn loop below consumes POSITIONALLY via `numFiresThisPeriod[.GRP]`: `terra::freq()`
+  ## sorts ascending, the NA row is appended last, and that entry is NA-VALUED so `na.omit()`
+  ## drops it (an NA *name* alone would not). Break any one and zones silently receive each
+  ## other's fire counts. Masking here is also why non-flammable pixels -- and now pixels outside
+  ## the study area -- can never be ignition locations: the start-cell pool is built from this
+  ## same raster.
+  ## `studyArea` matters as much as `flammableMap` here, and for the same reason. `ROSmap` and
+  ## `mod$spreadProb` are both masked to it, so a fire ignited outside burns its own start cell
+  ## and spreads no further -- yet the supplied `fireReturnInterval` overhangs the polygon, so
+  ## unmasked, those pixels inflate each zone's area and therefore its expected fires per year,
+  ## AND enter the start-cell pool. On WesternAlbertaUpland that allocated 2,918 fires/yr
+  ## against a correct 2,015: 31% of every year's ignitions aimed at unburnable ground, with one
+  ## zone (99.95% outside) over-allocated 2,008-fold.
+  ##
+  ## The masked raster is kept in `mod`, NOT written back to `sim$fireReturnInterval`. Writing it
+  ## back made every zone look 100% flammable and 100% inside the study area to
+  ## `landmine_fri_metrics()` (`pctFlam`, `pctInStudyArea`), because those are measured on the
+  ## raster the summaries read. Everything that ignites, spreads or counts fire uses this copy.
+  ignitionBudget <- LandWebUtils::landmine_ignition_budget(
+    fireReturnInterval = sim$fireReturnInterval,
+    flammableMap = sim[["flammableMap"]],
+    kBest = sim$kBest,
+    biggestPossibleFireSizeHa = P(sim)$biggestPossibleFireSizeHa,
+    studyArea = sim$studyArea
+  )
+  mod$fireReturnIntervalMasked <- ignitionBudget$fireReturnInterval
+  sim$fireReturnIntervalsByPolygonNumeric <- ignitionBudget$fireReturnIntervalsByPolygonNumeric
+  sim$numFiresPerYear <- ignitionBudget$numFiresPerYear
 
-  sim$rstCurrentBurn <- raster(sim$fireReturnInterval) ## creates no-value raster
+  sim$rstCurrentBurn <- terra::rast(mod$fireReturnIntervalMasked) ## creates no-value raster
   sim$rstCurrentBurn[] <- 0L
-  if (verbose > 0)
+  if (verbose > 0) {
     message("6: ", Sys.time())
+  }
 
-  mod$areaBurnedOverTime <- data.frame(time = numeric(0),
-                                       nPixelsBurned = numeric(0),
-                                       haBurned = numeric(0),
-                                       FRI = numeric(0))
+  mod$areaBurnedOverTime <- data.frame(
+    time = numeric(0),
+    nPixelsBurned = numeric(0),
+    haBurned = numeric(0),
+    FRI = numeric(0)
+  )
 
-  mod$knownSpecies <- c(Pice_mar = "spruce", Pice_gla = "spruce",
-                        Pinu_con = "pine", Pinu_ban = "pine",
-                        Popu_tre = "decid", Betu_pap = "decid",
-                        Abie_bal = "softwood", Abie_las = "softwood", Abie_sp = "softwood")
-  sim$sppEquiv[, LandMine := mod$knownSpecies[LandR]]
+  ## knownSpecies needs to use 'LandWeb' column, not 'LandR'!
+  mod$knownSpecies <- LandWebUtils::landmine_known_species()
+  sim$sppEquiv[, LandMine := mod$knownSpecies[LandWeb]]
 
   return(invisible(sim))
 }
@@ -380,29 +398,59 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 ### plot events
 plotFn <- compiler::cmpfun(function(sim) {
   if (time(sim) == P(sim)$.plotInitialTime) {
-    friRast <- sim$fireReturnInterval
-    friRast[] <- as.factor(sim$fireReturnInterval[])
-    Plot(friRast, title = "Fire Return Interval", cols = c("pink", "darkred"), new = TRUE)
-    sar <- sim$studyAreaReporting
-    Plot(sar, addTo = "friRast", title = "", cols = "transparent")
+    ## the zones as supplied, not the masked copy the fires use: the flammability panel beside
+    ## it shows which parts can burn, and this matches the LTHFC map the summaries write.
+    gg_fri <- ggplot() +
+      tidyterra::geom_spatraster(data = terra::as.factor(sim$fireReturnInterval)) +
+      tidyterra::scale_fill_terrain_d() +
+      tidyterra::geom_spatvector(data = sim$studyAreaReporting, fill = NA, linewidth = 1.5) +
+      ggtitle("Fire Return Interval (i.e., LTHFC)") +
+      theme_minimal()
 
-    rstFlammable <- raster(sim$rstFlammable)
-    rstFlammable[] <- getValues(sim$rstFlammable)
-    Plot(rstFlammable, title = "Land Type (rstFlammable)", cols = c("mediumblue", "firebrick"), new = TRUE)
-    Plot(sar, addTo = "rstFlammable", title = "", cols = "transparent")
+    gg_flm <- ggplot() +
+      tidyterra::geom_spatraster(data = terra::as.factor(sim$flammableMap)) +
+      tidyterra::scale_fill_whitebox_d(palette = "bl_yl_rd") +
+      tidyterra::geom_spatvector(data = sim$studyAreaReporting, fill = NA, linewidth = 1.5) +
+      ggtitle("Landscape flammability") +
+      theme_minimal()
+
+    if ("png" %in% P(sim)$.plots) {
+      f_gg_fri <- file.path(figurePath(sim), "LandMine_fireReturnInterval.png")
+      ggsave(f_gg_fri, gg_fri)
+      sim <- registerOutputs(f_gg_fri)
+
+      f_gg_flm <- file.path(figurePath(sim), "LandMine_flammableMap.png")
+      ggsave(f_gg_flm, gg_flm)
+      sim <- registerOutputs(f_gg_flm)
+    }
+
+    if ("screen" %in% P(sim)$.plots) {
+      print(cowplot::plot_grid(gg_fri, gg_flm))
+    }
   } else {
-    firstPlot <- isTRUE(time(sim) == P(sim)$.plotInitialTime + P(sim)$.plotInterval)
-    title1 <- if (firstPlot) "Current area burned (ha)" else ""
-    abot <- mod$gg_areaBurnedOverTime
-    Plot(abot, title = title1, new = TRUE, addTo = "areaBurnedOverTime")
+    gg_abot <- mod$gg_areaBurnedOverTime +
+      ggtitle("Current area burned (ha)")
 
-    title2 <- if (firstPlot) "Cumulative Fire Map" else ""
-    rcbc <- sim$rstCurrentBurnCumulative
+    rcbc <- sim$burnMap
     rcbc[!is.na(sim$rstCurrentBurn) & sim$rstCurrentBurn == 0 &
-           sim$rstCurrentBurnCumulative == 0] <- 0L
-    Plot(rcbc, new = TRUE, title = title2, cols = c("pink", "red"), zero.color = "transparent")
-    sar <- sim$studyAreaReporting
-    Plot(sar, addTo = "rcbc", title = "", cols = "transparent")
+           sim$burnMap == 0] <- 0L
+
+    gg_cbc <- ggplot() +
+      tidyterra::geom_spatraster(data = rcbc) +
+      tidyterra::scale_fill_princess_c(palette = "maori") +
+      tidyterra::geom_spatvector(data = sim$studyAreaReporting, fill = NA, linewidth = 1.5) +
+      ggtitle(sprintf("Cumulative Fire Map (t = %d)", time(sim))) +
+      theme_minimal()
+
+    if ("png" %in% P(sim)$.plots) {
+      f_gg_cbc <- file.path(figurePath(sim), sprintf("LandMine_cumulative_burn_map_%04d.png", time(sim)))
+      ggsave(f_gg_cbc, gg_cbc)
+      sim <- registerOutputs(f_gg_cbc)
+    }
+
+    if ("screen" %in% P(sim)$.plots) {
+      print(cowplot::plot_grid(gg_abot, gg_cbc))
+    }
   }
 
   # ! ----- STOP EDITING ----- ! #
@@ -418,63 +466,162 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   ## END DEBUGGING
 
   sim$numFiresPerYear <- na.omit(sim$numFiresPerYear)
-  NA_ids <- as.integer(attr(sim$numFiresPerYear, "na.action"))
-  numFiresThisPeriod <- rnbinom(length(sim$numFiresPerYear),
-                                mu = sim$numFiresPerYear * P(sim)$fireTimestep,
-                                size = 1.3765) # Eliot lowered this from 1.8765 on Oct 23, 2018 because too constant
-  thisYrStartCellsDT <- data.table(pixel = seq(ncell(sim$fireReturnInterval)),
-                                   polygonNumeric = sim$fireReturnInterval[],
-                                   key = "polygonNumeric")
+  ## Promoted to LandWebUtils (unit-tested: names survive the draw -- `rnbinom()` drops them,
+  ## and the counts are indexed by zone below -- and the overdispersion still gives a
+  ## low-rate zone its long runs of zero-fire years).
+  numFiresThisPeriod <- LandWebUtils::landmine_draw_num_fires(
+    sim$numFiresPerYear,
+    fireTimestep = P(sim)$fireTimestep
+  )
+  thisYrStartCellsDT <- data.table(
+    pixel = seq(terra::ncell(mod$fireReturnIntervalMasked)),
+    polygonNumeric = terra::values(mod$fireReturnIntervalMasked, mat = FALSE),
+    key = "polygonNumeric"
+  )
 
   ## August 2022: reburn fires that did not meet their target size
 
   ## Rate of Spread
-  vegTypeMap <- vegTypeMapGenerator(sim$cohortData,
-                                    pixelGroupMap = sim$pixelGroupMap,
-                                    vegLeadingProportion = P(sim)$vegLeadingProportion,
-                                    mixedType = P(sim)$mixedType,
-                                    sppEquiv = sim$sppEquiv,
-                                    sppEquivCol = P(sim)$sppEquivCol,
-                                    colors = sim$sppColorVect,
-                                    doAssertion = P(sim)$.unitTest)
+  vegTypeMap <- LandR::vegTypeMapGenerator(
+    sim$cohortData,
+    pixelGroupMap = sim$pixelGroupMap,
+    vegLeadingProportion = P(sim)$vegLeadingProportion,
+    mixedType = P(sim)$mixedType,
+    sppEquiv = sim$sppEquiv,
+    sppEquivCol = P(sim)$sppEquivCol,
+    colors = sim$sppColorVect,
+    doAssertion = P(sim)$.unitTest
+  )
+  ROSmap <- terra::rast(sim$pixelGroupMap) ## empty raster as template
+  ROSmap[] <- LandWebUtils::landmine_fire_ros(
+    vegTypeMap = vegTypeMap,
+    rstTimeSinceFire = sim$rstTimeSinceFire,
+    flammableMap = sim$flammableMap,
+    ROSTable = sim$ROSTable,
+    sppEquiv = sim$sppEquiv,
+    sppEquivCol = P(sim)$sppEquivCol,
+    ROSother = P(sim)$ROSother,
+    knownSpecies = mod$knownSpecies,
+    ROStype = P(sim)$ROStype
+  )
+  ROSmap <- terra::mask(ROSmap, sim$studyArea)
+  ## PERFORMANCE: for the same reason as `spreadProbThisStep` below, a raster
+  ## `spreadProbRel` is re-materialised by `spread2()` on *every* spread step.
+  ## Numeric `spreadProbRel` requires SpaDES.tools >= 2.1.2.9000 (SpaDES.tools#106).
+  ROSvals <- terra::values(ROSmap, mat = FALSE)
 
-  ROSmap <- raster(sim$pixelGroupMap)
-  ROSmap[] <- fireROS(sim, vegTypeMap = vegTypeMap)
-
-  spreadProbThisStep <- mod$spreadProb
+  ## PERFORMANCE: `spread2()` re-materialises a `SpatRaster` `spreadProb` on *every*
+  ## spread step (`as.vector(spreadProb)` in SpaDES.tools' spread2.R). Because
+  ## `landmine_burn1()` calls `spread2(iterations = 1L)` in a while loop, that is one
+  ## O(ncell) read per step -- ~36 MB per step on a 4.5 Mpix study area. Passing a
+  ## numeric vector instead is ~1.5x faster overall and bit-identical (same values, so
+  ## the same cells burn). It also makes the `[<-` NA-marking below an O(k) vector
+  ## write rather than an O(ncell) terra raster write.
+  spreadProbThisStep <- terra::values(mod$spreadProb, mat = FALSE)
 
   ## If fire sizes are in hectares, must adjust based on resolution of maps
-  ##  NOTE: round causes fires < 0.5 pixels to NOT EXIST ... i.e., 3.25 ha fires are
-  ##  "not detectable" if resolution is 6.25 ha
-  fireSizesThisPeriod <- VGAM::rtruncpareto(sum(numFiresThisPeriod), lower = 1,
-                                            upper = P(sim)$biggestPossibleFireSizeHa,
-                                            shape = sim$kBest)
+  ##  NOTE: round causes fires < 0.5 pixels to NOT EXIST ...
+  ##        e.g., 3.25 ha fires are "not detectable" if resolution is 6.25 ha
+  fireSizesThisPeriod <- VGAM::rtruncpareto(
+    n = sum(numFiresThisPeriod),
+    lower = 1,
+    upper = P(sim)$biggestPossibleFireSizeHa,
+    shape = sim$kBest
+  )
 
   ## Because annual number of fires includes fires <6.25 ha, sometimes this will round down to 0 pixels.
   ##   This calculation makes that probabilistic.
-  fireSizesInPixels <- fireSizesThisPeriod / (prod(res(sim$rstFlammable)) / 1e4)
-  ranDraws <- runif(length(fireSizesInPixels))
-  truncVals <- trunc(fireSizesInPixels)
-  decimalVals <- (unname(fireSizesInPixels - (truncVals))) > ranDraws
-
-  fireSizesInPixels <- truncVals + decimalVals
+  ## Promoted to LandWebUtils (unit-tested: the rounding preserves E[pixels], which is the
+  ## entire reason it is probabilistic, and exact pixel multiples never round up).
+  fireSizesInPixels <- LandWebUtils::landmine_sizes_to_pixels(
+    fireSizesThisPeriod,
+    pixelAreaHa = prod(res(sim$flammableMap)) / 1e4
+  )
 
   firesList <- fireSizes <- list()
   maxOrder <- 0L
   iter <- 1L
 
+  ## Fire identity, carried through every reburn round so `fireSizes` can be collapsed back to
+  ## one row per FIRE (LandWebUtils::landmine_fire_attainment()). Needed because `size` and
+  ## `maxSize` agree on every recorded row by construction -- a stalled fire is either dropped
+  ## and retried at full target, or has `maxSize` rewritten to what burned -- so a shortfall is
+  ## only visible as sum(size) per fireID against its original `targetSize`.
+  ## Issued per burn YEAR, so the identifying key downstream is (rep, year, fireID).
+  ## These three stay positionally paired with `fireSizesInPixels` through every filter below.
+  fireIDs <- seq_along(fireSizesInPixels)
+  attempts <- rep(1L, length(fireSizesInPixels))
+  targetSizes <- fireSizesInPixels
+
+  ## 2024-10: normally, non-flammable pixels are NA in ROSvals and spreadProbThisStep;
+  ##          except in 'burny' scenarios, where fires *can* spread through those pixels,
+  ##          but aren't counted towards burn stats/summaries.
+  ## PERFORMANCE: hoisted out of the reburn loop below -- `sim$flammableMap` is not
+  ## modified within this event, so this is loop-invariant. It was previously recomputed
+  ## every reburn iteration (two O(ncell) raster reads + a `which()` per round, and
+  ## burny runs average ~6 rounds/yr).
+  omitPixels <- switch(
+    P(sim)$ROStype,
+    burny = which(is.na(sim$flammableMap[]) | (sim$flammableMap[] == 0)),
+    NULL
+  )
+
+  ## PERFORMANCE: the eligible start-cell pool is loop-invariant -- the `:=` filter is
+  ## idempotent after the first pass and `thisYrStartCellsDT` is not otherwise modified --
+  ## so build it ONCE rather than re-filtering and re-`na.omit()`ing every reburn round.
+  ## Only the per-polygon resample has to be redone. On a 4.5 Mpix study area this is
+  ## ~306 ms -> ~24 ms per round, and WesternAlbertaUpland averages ~8 rounds/yr.
+  ## Verified to give the same start cells, in the same order, for the same seed: order
+  ## matters because `fireSizesInPixels` is matched positionally to `thisYrStartCells`
+  ## and `numFiresThisPeriod[.GRP]` depends on group order.
+  ## `polygonNumeric` is read from `mod$fireReturnIntervalMasked`, which is NA on zero-FRI,
+  ## non-flammable and outside-`studyArea` pixels -- so `na.omit()` alone drops every ineligible
+  ## start cell, and none of those pixels is ever an ignition location. The `> 0` filter is a
+  ## belt-and-braces guard for a raster that skipped the zero handling.
+  ##
+  ## This previously also tested `polygonNumeric %in% NA_ids`, where `NA_ids` came from
+  ## `attr(na.omit(numFiresPerYear), "na.action")` -- i.e. POSITIONS compared against FRI
+  ## VALUES. It was harmless only by accident (no study area has an FRI equal to one of those
+  ## positions). Had it ever matched, that zone would have been dropped from `startCellPool`
+  ## while remaining in `numFiresPerYear`, and the positional `.GRP` indexing below would then
+  ## have silently handed every subsequent zone another zone's fire count.
+  startCellPool <- na.omit(thisYrStartCellsDT)[polygonNumeric > 0]
+  data.table::setkeyv(startCellPool, "polygonNumeric")
+
+  ## The `numFiresThisPeriod[.GRP]` indexing below is POSITIONAL: it assumes the groups of
+  ## `startCellPool` (keyed, so ascending `polygonNumeric`) line up 1:1 and in order with
+  ## `sim$numFiresPerYear` (named by FRI, ascending from `terra::freq()`). Nothing enforces
+  ## that, and a mismatch would not error -- it would quietly simulate the wrong fire regime.
+  ## Assert it, so a future change to the masking, the FRI values, or the freq() ordering
+  ## fails loudly here instead of producing plausible-looking wrong output.
+  assertthat::assert_that(
+    identical(
+      as.character(startCellPool[, unique(polygonNumeric)]),
+      names(sim$numFiresPerYear)
+    ),
+    msg = paste(
+      "LandMine: start-cell pool zones do not match `numFiresPerYear` -- the positional",
+      "`.GRP` indexing of `numFiresThisPeriod` would assign fire counts to the wrong FRI",
+      "zones. Pool:", paste(startCellPool[, unique(polygonNumeric)], collapse = ","),
+      "| numFiresPerYear:", paste(names(sim$numFiresPerYear), collapse = ",")
+    )
+  )
+
   ## 2023-09: after maxReburns, if not reaching fire size, take the last burn,
   ## and start new fire(s) to burn the remaining area until the target is achieved.
   ## Should be OK b/c LandMine replicates FRIs (i.e., area burned each year), not number of fires
+  polysNeedMoreFires <- NULL ## set inside the loop; NULL when the loop body never reburns
   while (sum(numFiresThisPeriod) > 0 && (iter <= sum(P(sim)$maxReburns))) {
-    thisYrStartCells <- thisYrStartCellsDT[polygonNumeric %in% c(0, NA_ids), polygonNumeric := NA] %>%
-      na.omit() %>%
-      .[, SpaDES.tools:::resample(pixel, numFiresThisPeriod[.GRP]), by = polygonNumeric] %>%
-      .$V1
+    thisYrStartCells <- startCellPool[
+      , SpaDES.tools:::resample(pixel, numFiresThisPeriod[.GRP]), by = polygonNumeric
+    ]$V1
 
     firesGT0 <- fireSizesInPixels > 0L
     thisYrStartCells <- thisYrStartCells[firesGT0]
     fireSizesInPixels <- fireSizesInPixels[firesGT0]
+    fireIDs <- fireIDs[firesGT0]
+    attempts <- attempts[firesGT0]
+    targetSizes <- targetSizes[firesGT0]
 
     if (!all(is.na(thisYrStartCells)) && length(thisYrStartCells) > 0) {
       if (iter > 1 && iter <= P(sim)$maxReburns[1]) {
@@ -492,15 +639,16 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
       }
       on.exit(data.table::setDTthreads(a), add = TRUE)
 
-      fires <- landmine_burn1(
-        sim$fireReturnInterval,
+      fires <- LandWebUtils::landmine_burn1(
+        mod$fireReturnIntervalMasked,
         startCells = thisYrStartCells,
         fireSizes = fireSizesInPixels,
-        spreadProbRel = ROSmap,
+        spreadProbRel = ROSvals,
         sizeCutoffs = mod$sizeCutoffs,
         maxRetriesPerID = P(sim)$maxRetriesPerID,
         spawnNewActive = mod$spawnNewActive,
-        spreadProb = spreadProbThisStep
+        spreadProb = spreadProbThisStep,
+        omitPixels = omitPixels
       )
 
       ## occasionally, `order` col drops from fires, but it's not supposed to (SpaDES.tools#74)
@@ -515,6 +663,15 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
       }
 
       fa <- attr(fires, "spreadState")$clusterDT
+      ## `spread2()` returns clusters in its own order, so identity is JOINED on the start
+      ## cell rather than assigned by position; an unmatched cluster is an error there.
+      fa <- LandWebUtils::landmine_attach_identity(
+        fa,
+        data.table(
+          initialPixels = thisYrStartCells,
+          fireID = fireIDs, attempt = attempts, targetSize = targetSizes
+        )
+      )
       fa1 <- fa[, list(numPixelsBurned = sum(size),
                        expectedNumBurned = sum(maxSize),
                        proportionBurned = sum(size) / sum(maxSize))]
@@ -528,31 +685,49 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
 
       tooSmall <- which(fa$size != fa$maxSize)
       if (length(tooSmall)) {
-        tooSmallDT <- fa[tooSmall, c("initialPixels", "maxSize")]
+        tooSmallDT <- fa[tooSmall, c("initialPixels", "maxSize", "fireID", "attempt", "targetSize")]
+        tooSmallDT[, attempt := attempt + 1L] ## this fire is about to be tried again
         tooSmallByPoly <- thisYrStartCellsDT[tooSmallDT, on = c(pixel = "initialPixels")]
-        friByPolyDT <- data.table(polygonNumeric = sim$fireReturnIntervalsByPolygonNumeric)
 
         if (iter <= P(sim)$maxReburns[1]) {
           firesOK <- fires[!initialPixels %in% tooSmallDT$initialPixels, ]
           firesList <- append(firesList, list(firesOK))
-          fireSizes <- append(fireSizes, list(fa[!tooSmall, c("size", "maxSize")]))
+          fireSizes <- append(
+            fireSizes, list(fa[!tooSmall, c("fireID", "attempt", "targetSize", "size", "maxSize")])
+          )
           maxOrder <- max(fires$order)
 
-          polysNeedMoreFires <- tooSmallByPoly[, N := .N, by = polygonNumeric]
-          polysNeedMoreFires <- polysNeedMoreFires[friByPolyDT, on = "polygonNumeric"]
-          polysNeedMoreFires[is.na(N), N := 0]
-          set(polysNeedMoreFires, NULL, "pixel", NULL)
-
-          numFiresThisPeriod <- polysNeedMoreFires[, N[1], by = "polygonNumeric"]$V1
-          fireSizesInPixels <- na.omit(polysNeedMoreFires)$maxSize
+          ## Promoted to LandWebUtils. Phase 1: each too-small fire keeps its FULL original
+          ## target and is re-ignited from a fresh start cell.
+          reburn <- LandWebUtils::landmine_reburn_budget(
+            tooSmallByPoly, sim$fireReturnIntervalsByPolygonNumeric
+          )
+          polysNeedMoreFires <- reburn$polysNeedMoreFires
+          numFiresThisPeriod <- reburn$numFiresThisPeriod
+          fireSizesInPixels <- reburn$fireSizesInPixels
+          fireIDs <- reburn$fireIDs
+          attempts <- reburn$attempts
+          targetSizes <- reburn$targetSizes
           spreadProbThisStep[firesOK$pixels] <- NA_real_
         } else {
           firesTooSmall <- fires[initialPixels %in% tooSmallDT$initialPixels, ]
 
-          fa2 <- fa[tooSmall, c("size", "maxSize")] ## track the fires that did burn
+          fa2 <- fa[tooSmall, c("fireID", "attempt", "targetSize", "size", "maxSize")] ## what did burn
           fa3 <- copy(fa2)                          ## track what's left to burn
 
-          fa2[, maxSize := size] ## consider the area that did burn as having reached target
+          ## Consider the area that did burn as having reached target, and issue the shortfall
+          ## (`fa3`) as new fires. Deliberate: LandMine replicates FRIs (area burned per year),
+          ## not fire counts. Note what it does to the RECORD, though: no branch here ever writes
+          ## a row with `size < maxSize`. A fire that reaches target is recorded truthfully; one
+          ## that stalls is either discarded and retried at full target (the `iter <=
+          ## maxReburns[1]` branch above) or recorded with its target rewritten to match (here).
+          ## So `simSize == expSize` downstream in `burnSummaries_fireSizes.csv` is uninformative
+          ## about target attainment -- not because the equality is fabricated (most fires really
+          ## do reach target) but because a shortfall has no way to appear. The observable
+          ## signature of stalling is the fire COUNT, not the shortfall. Per-fire attainment is
+          ## recoverable from the identity columns:
+          ## `LandWebUtils::landmine_fire_attainment(fireSizes, by = c("year", "fireID"))`.
+          fa2[, maxSize := size]
 
           fa3[, maxSize2 := maxSize - size]
           fa3[, size := 0]
@@ -563,19 +738,27 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
           fireSizes <- append(fireSizes, list(fa2))
           maxOrder <- max(fires$order)
 
-          polysNeedMoreFires <- tooSmallByPoly[, N := .N, by = polygonNumeric]
-          polysNeedMoreFires <- polysNeedMoreFires[, maxSize := fa3$maxSize] ## update what's left to burn
-          polysNeedMoreFires <- polysNeedMoreFires[friByPolyDT, on = "polygonNumeric"]
-          polysNeedMoreFires[is.na(N), N := 0]
-          set(polysNeedMoreFires, NULL, "pixel", NULL)
-
-          numFiresThisPeriod <- polysNeedMoreFires[, N[1], by = "polygonNumeric"]$V1
-          fireSizesInPixels <- na.omit(polysNeedMoreFires)$maxSize
+          ## Promoted to LandWebUtils. Phase 2: NEW fires sized to the REMAINING shortfall
+          ## (`fa3$maxSize`), assigned positionally onto the too-small rows -- both descend
+          ## from the same `fa[tooSmall]` subset. The promoted function is equivalence-tested
+          ## against this exact logic over randomised multi-zone inputs.
+          reburn <- LandWebUtils::landmine_reburn_budget(
+            tooSmallByPoly, sim$fireReturnIntervalsByPolygonNumeric,
+            remainingSize = fa3$maxSize
+          )
+          polysNeedMoreFires <- reburn$polysNeedMoreFires
+          numFiresThisPeriod <- reburn$numFiresThisPeriod
+          fireSizesInPixels <- reburn$fireSizesInPixels
+          fireIDs <- reburn$fireIDs
+          attempts <- reburn$attempts
+          targetSizes <- reburn$targetSizes
           spreadProbThisStep[firesTooSmall$pixels] <- NA_real_
         }
       } else {
         firesList <- append(firesList, list(fires))
-        fireSizes <- append(fireSizes, list(fa[, c("size", "maxSize")]))
+        fireSizes <- append(
+          fireSizes, list(fa[, c("fireID", "attempt", "targetSize", "size", "maxSize")])
+        )
 
         if (length(tooSmall) == 0) {
           assertthat::assert_that(fa1$proportionBurned %==% 1)
@@ -584,7 +767,7 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
           if (any(tail(fa1$proportionBurned, 10)  < P(sim)$minPropBurn)) {
             mess <- "In 'LandMine' module 'Burn()': proportion area burned is less than 'minPropBurn'!"
             if (verbose > 0)
-              message(crayon::red(mess))
+              message(cli::col_red(mess))
             warning(mess, call. = FALSE)
           }
         }
@@ -594,37 +777,82 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
     iter <- iter + 1L
   }
 
-  fires <- rbindlist(firesList)
-  sim$fireSizes[[round(time(sim) - P(sim)$burnInitialTime + 1, 0)]] <- rbindlist(fireSizes)
-  sim$rstCurrentBurn[] <- 0L
-  sim$rstCurrentBurn[fires$pixels] <- 1L #as.numeric(factor(fires$initialPixels))
-
-  if (is.null(sim$rstCurrentBurnCumulative)) {
-    sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn # keeps 1s
-    sim$rstCurrentBurnCumulative[!is.na(sim$rstCurrentBurnCumulative[])
-                                 & sim$rstCurrentBurnCumulative[] == 0] <- 0
-  } else {
-    sim$rstCurrentBurnCumulative <- sim$rstCurrentBurn + sim$rstCurrentBurnCumulative
+  ## The loop above exits EITHER because every fire reached its target (converged) OR because
+  ## it ran out of reburn attempts. Those two are indistinguishable in the log otherwise, and
+  ## the second one means this year's area-burned target was abandoned unmet. Record WHERE:
+  ## `polygonNumeric` is the fire-return-interval zone, so this says which FRI zones the
+  ## reburn ceiling is failing to satisfy -- the thing a `maxReburns[2]` change has to fix.
+  ## One machine-parseable line per zone; only emitted when the ceiling actually binds.
+  ## The tabulation is promoted to LandWebUtils (unit-tested: zero-outstanding zones and the
+  ## NA-FRI row are excluded, and NULL/empty input gives zero rows rather than an error --
+  ## a silently wrong diagnostic would mislead the next `maxReburns` decision).
+  if (sum(numFiresThisPeriod) > 0) {
+    unmet <- LandWebUtils::landmine_reburn_ceiling(polysNeedMoreFires, year = time(sim))
+    for (i in seq_len(NROW(unmet))) {
+      message(sprintf(
+        "reburn-ceiling year=%g FRI=%g nFires=%d pixelsShort=%d",
+        unmet$year[i], unmet$FRI[i], unmet$nFires[i], unmet$pixelsShort[i]
+      ))
+    }
   }
 
-  currBurn <- raster::mask(sim$rstCurrentBurn, sim$studyAreaReporting) %>% raster::stack()
-  fris <- unique(na.omit(sim$fireReturnInterval[]))
-  npix <- vapply(fris, function(x) {
-    ids <- which(sim$fireReturnInterval[] == x)
-    unname(table(currBurn[ids])[2])
-  }, numeric(1)) %>% unname()
-  npix[is.na(npix)] <- 0 # Show that zero pixels burned in a year with no pixels burned, rather than NA
+  firesDT <- rbindlist(firesList)
+  fireSizesDT <- rbindlist(fireSizes)
 
-  burnedDF <- data.frame(time = as.numeric(times(sim)$current),
-                         nPixelsBurned = npix,
-                         haBurned = npix * prod(res(sim$rstCurrentBurn)) / 100^2, ## area in ha
-                         FRI = as.factor(fris))
+  ## TODO: how to best deal with no fires and their impacts on FRI & area burned calculations?
+  if (nrow(firesDT) == 0) {
+    message(cli::col_yellow("no fires this period!"))
+    firesDT <- data.table(
+      initialPixels = integer(0),
+      pixels = integer(0),
+      state = character(0),
+      order = integer(0)
+    )
+  }
+
+  if (nrow(fireSizesDT) == 0) {
+    fireSizesDT <- data.table(size = 0L, maxSize = 0L)
+  }
+
+  ## Keyed by YEAR, not by position. The index was `time - burnInitialTime + 1`, which
+  ## coincides with the year only when `fireTimestep` is 1: with a longer timestep the burn
+  ## years are spaced out, the intervening list slots stay NULL, and `rbindlist()` drops them
+  ## -- so the `idcol` this object's documentation tells users to read as the year would
+  ## silently be a 1..n counter instead. A named list keeps the year attached to the data.
+  sim$fireSizes[[as.character(time(sim))]] <- fireSizesDT
+
+  sim$rstCurrentBurn[] <- 0L
+  if (nrow(firesDT) > 0) {
+    sim$rstCurrentBurn[firesDT$pixels] <- 1L # as.numeric(factor(firesDT$initialPixels))
+  }
+
+  if (is.null(sim$burnMap)) {
+    sim$burnMap <- terra::deepcopy(sim$rstCurrentBurn) ## keeps 1s
+    sim$burnMap[!is.na(sim$burnMap[])
+                                 & sim$burnMap[] == 0] <- 0
+  } else {
+    sim$burnMap <- sim$rstCurrentBurn + sim$burnMap
+  }
+
+  currBurn <- terra::mask(sim$rstCurrentBurn, sim$studyAreaReporting)
+  ## NOTE: this previously counted burned pixels with `table(currBurn[ids])[2]`, which returns
+  ## NA when a zone burns COMPLETELY (only one level in the table) -- and the following
+  ## `npix[is.na(npix)] <- 0` then recorded that total burn as ZERO ha. Promoted to
+  ## LandWebUtils, where it counts with `sum(vals == 1)` and is unit-tested for the
+  ## fully-burned, partly-burned and unburned cases.
+  burnedDF <- LandWebUtils::landmine_area_burned_by_zone(
+    currentBurn = currBurn,
+    fireReturnInterval = mod$fireReturnIntervalMasked,
+    time = as.numeric(times(sim)$current),
+    pixelAreaHa = prod(res(sim$rstCurrentBurn)) / 100^2
+  )
   mod$areaBurnedOverTime <- rbind(mod$areaBurnedOverTime, burnedDF)
   mod$gg_areaBurnedOverTime <- landmine_plot_areaBurnedOverTime(mod$areaBurnedOverTime)
 
   if (time(sim) == end(sim)) {
     fgg_areaBurnedOverTime <- file.path(figurePath(sim), "LandMine_areaBurnedOverTime.png")
     ggsave(fgg_areaBurnedOverTime, mod$gg_areaBurnedOverTime)
+    sim <- registerOutputs(fgg_areaBurnedOverTime)
   }
 
   return(invisible(sim))
@@ -634,50 +862,85 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
 SummarizeFRIsingle <- function(sim) {
   studyAreaName <- P(sim)$.studyAreaName
 
-  flammableMap <- sim[["rstFlammable"]]   ## RasterLayer
-  lthfc <- sim[["fireReturnInterval"]]    ## RasterLayer
-  pixelRes <- res(sim[["rasterToMatch"]]) ## c(250, 250)
+  flammableMap <- sim[["flammableMap"]]   ## SpatRaster
+  lthfc <- sim[["fireReturnInterval"]]    ## SpatRaster
+  pixelRes <- res(sim[["rasterToMatch"]]) ## c(240, 240)
 
-  meanAnnualCumulBurnMap <- sim[["rstCurrentBurnCumulative"]] / (end(sim) - start(sim))
+  meanAnnualCumulBurnMap <- sim[["burnMap"]] / (end(sim) - start(sim))
 
   ## sanity check
-  compareRaster(flammableMap, lthfc, meanAnnualCumulBurnMap, res = TRUE, orig = TRUE)
+  compareGeom(flammableMap, lthfc, meanAnnualCumulBurnMap, res = TRUE)
 
-  nonFlammable <- which(is.na(flammableMap[]) | flammableMap[] == 0)
-  if (length(nonFlammable) > 0) {
-    flammableMap[nonFlammable] <- NA
-    lthfc[nonFlammable] <- NA
-    meanAnnualCumulBurnMap[nonFlammable] <- NA
-  }
-
-  expFRIs <- raster::getValues(lthfc) |>
-    unique() |>
-    na.omit() |>
-    sort()
-
-  simFRIs <- vapply(expFRIs, function(fri) {
-    pixIds <- which(raster::getValues(lthfc) == fri)
-    1 / (sum(meanAnnualCumulBurnMap[pixIds]) / (length(pixIds)))
-  }, numeric(1))
-
-  sim$friSummary <- data.table(
-    studyArea = studyAreaName,
-    LTHFC = expFRIs,
-    FRI = simFRIs,
-    stringsAsFactors = FALSE
+  ## Promoted to LandWebUtils: this block was duplicated VERBATIM in the single- and
+  ## multi-mode summaries, so the two could silently diverge. It is now one unit-tested
+  ## function (covering the non-flammable masking, the never-burned -> Inf case, and the
+  ## implicit contract that the NA masks of `lthfc` and the burn map agree).
+  ##
+  ## `studyArea` is what keeps unburnable pixels OUT of the denominator: `ROSmap` and
+  ## `mod$spreadProb` are both masked to it, so a pixel outside cannot be ignited or spread
+  ## into, while `sim$fireReturnInterval` is deliberately left unmasked (see Init()) and
+  ## overhangs the polygon. Without this, every such pixel inflates its zone's achieved
+  ## interval -- on WesternAlbertaUpland that was 29.4% of flammable zone pixels, and made two
+  ## zones look as though they under-burned by 3.5x and 12.2x when in fact every zone was within
+  ## 0.90-1.07 of its target. The unmasked raster is what lets `landmine_fri_metrics()` report
+  ## each zone's flammable share (`pctFlam`) and its share inside the study area
+  ## (`pctInStudyArea`), and the uncorrected `ratioUnmasked` beside `ratio`.
+  sim$friSummary <- LandWebUtils::landmine_fri_summary(
+    lthfc = lthfc,
+    flammableMap = flammableMap,
+    meanAnnualCumulBurnMap = meanAnnualCumulBurnMap,
+    studyAreaName = studyAreaName,
+    studyArea = sim$studyArea
   )
 
+  ## per-zone attainment diagnostics: a CSV a developer can diff between runs, two figures,
+  ## and a one-line verdict, so nobody has to read this log to learn a zone missed its target.
+  sim$friDiagnostics <- LandWebUtils::landmine_fri_metrics(
+    lthfc = lthfc,
+    flammableMap = flammableMap,
+    meanAnnualCumulBurnMap = meanAnnualCumulBurnMap,
+    studyAreaName = studyAreaName,
+    pixelAreaHa = prod(pixelRes) / 1e4,
+    studyArea = sim$studyArea,
+    nYears = end(sim) - start(sim)
+  )
+
+  fDiag <- file.path(outputPath(sim), "LandMine_FRI_diagnostics.csv")
+  fwrite(sim$friDiagnostics, fDiag)
+  sim <- registerOutputs(fDiag)
+
+  message(LandWebUtils::landmine_fri_verdict(sim$friDiagnostics))
+
+  if ("png" %in% P(sim)$.plots) {
+    fggFriZones <- file.path(figurePath(sim), "LandMine_FRI_zones_diagnostic.png")
+    ggsave(fggFriZones, LandWebUtils::landmine_plot_fri_zones(
+      lthfc, sim$friDiagnostics, studyAreaName
+    ), height = 7, width = 12)
+    sim <- registerOutputs(fggFriZones)
+
+    fggFriDrivers <- file.path(figurePath(sim), "LandMine_FRI_drivers.png")
+    ggsave(fggFriDrivers, LandWebUtils::landmine_plot_fri_drivers(
+      sim$friDiagnostics, studyAreaName
+    ), height = 5, width = 12)
+    sim <- registerOutputs(fggFriDrivers)
+  }
+
   f <- file.path(outputPath(sim), paste0("LandMine_FRI_summary.csv"))
-  fwrite(sim$friSummary, f) ## TODO: add this file to list of outputs
+  fwrite(sim$friSummary, f)
+  sim <- registerOutputs(f)
 
   ## LTHFC/FRI polygons
-  ggFriPolys <- landmine_plot_LTHFC(lthfc, studyAreaName)
+  ggFriPolys <- landmine_plot_LTHFC(lthfc, studyAreaName) ## rasterVis::levelplot
 
   if ("png" %in% P(sim)$.plots) {
     fggFriPolys <- file.path(figurePath(sim), "LandMine_LTHFC_map.png")
+
+    ## NOTE: this is a rasterVis::levelplot (not ggplot)
     png(fggFriPolys, height = 1000, width = 1000)
     print(ggFriPolys)
     dev.off()
+
+    sim <- registerOutputs(fggFriPolys)
   }
 
   ## expected vs simulated fire return intervals
@@ -686,12 +949,7 @@ SummarizeFRIsingle <- function(sim) {
   if ("png" %in% P(sim)$.plots) {
     fggFriExpVsSim <- file.path(figurePath(sim), "LandMine_FRI_exp_vs_sim.png")
     ggsave(fggFriExpVsSim, ggFriExpVsSim, height = 10, width = 10) ## NOTE: keep square aspect ratio
-  }
-
-  if ("screen" %in% P(sim)$.plots) {
-    mod$summaryDevice <- max(dev.list()) + 1
-    quickPlot::dev(mod$summaryDevice, width = 12)
-    gridExtra::grid.arrange(ggFriPolys, ggFriExpVsSim, nrow = 1, ncol = 2)
+    sim <- registerOutputs(fggFriExpVsSim)
   }
 
   return(invisible(sim))
@@ -706,56 +964,90 @@ SummarizeFRImulti <- function(sim) {
   pixelRes <- NULL
 
   burnMaps <- lapply(allReps, function(rep) {
+    message(paste("loading simulation data for rep", rep, "..."))
     fsim <- findSimFile(outputPath(sim), rep)
 
     tmpSim <- suppressMessages(loadSimList(fsim))
 
     if (rep == 1L) {
-      ## all reps have same flammable + LTHFC maps
-      flammableMap <<- tmpSim[["rstFlammable"]]   ## RasterLayer
-      lthfc <<- tmpSim[["fireReturnInterval"]]    ## RasterLayer
-      pixelRes <<- res(tmpSim[["rasterToMatch"]]) ## c(250, 250)
+      ## all reps have same flammable + LTHFC maps. Reps saved before LandMine 1.0.14 hold the
+      ## MASKED interval raster, so their `pctFlam` and `pctInStudyArea` read 100.
+      flammableMap <<- tmpSim[["flammableMap"]]   ## SpatRaster
+      lthfc <<- tmpSim[["fireReturnInterval"]]    ## SpatRaster
+      pixelRes <<- res(tmpSim[["rasterToMatch"]]) ## c(240, 240)
 
       ## sanity check
-      compareRaster(tmpSim[["fireReturnInterval"]],
-                    tmpSim[["rstFlammable"]],
-                    tmpSim[["rstCurrentBurnCumulative"]],
-                    res = TRUE, orig = TRUE)
+      compareGeom(tmpSim[["fireReturnInterval"]],
+                  tmpSim[["flammableMap"]],
+                  tmpSim[["burnMap"]],
+                  res = TRUE)
     }
 
     ## mean annual cumulative burn map
-    tmpSim[["rstCurrentBurnCumulative"]] / (end(tmpSim) - start(tmpSim))
-  }) |> raster::stack() |>
-    raster::calc(sum, na.rm = TRUE)
+    tmpSim[["burnMap"]] / (end(tmpSim) - start(tmpSim))
+  }) |>
+    terra::c() |>
+    terra::app(sum, na.rm = TRUE) ## TODO: confirm c() and app() replaces stack() and calc()
 
   meanAnnualCumulBurnMap <- burnMaps / length(allReps)
 
-  nonFlammable <- which(is.na(flammableMap[]) | flammableMap[] == 0)
-  if (length(nonFlammable) > 0) {
-    flammableMap[nonFlammable] <- NA
-    lthfc[nonFlammable] <- NA
-    meanAnnualCumulBurnMap[nonFlammable] <- NA
-  }
-
-  expFRIs <- raster::getValues(lthfc) |>
-    unique() |>
-    na.omit() |>
-    sort()
-
-  simFRIs <- vapply(expFRIs, function(fri) {
-    pixIds <- which(raster::getValues(lthfc) == fri)
-    1 / (sum(meanAnnualCumulBurnMap[pixIds]) / (length(pixIds)))
-  }, numeric(1))
-
-  sim$friSummary <- data.table(
-    studyArea = studyAreaName,
-    LTHFC = expFRIs,
-    FRI = simFRIs,
-    stringsAsFactors = FALSE
+  ## Promoted to LandWebUtils: this block was duplicated VERBATIM in the single- and
+  ## multi-mode summaries, so the two could silently diverge. It is now one unit-tested
+  ## function (covering the non-flammable masking, the never-burned -> Inf case, and the
+  ## implicit contract that the NA masks of `lthfc` and the burn map agree).
+  ##
+  ## `studyArea` is what keeps unburnable pixels OUT of the denominator: `ROSmap` and
+  ## `mod$spreadProb` are both masked to it, so a pixel outside cannot be ignited or spread
+  ## into, while `sim$fireReturnInterval` is deliberately left unmasked (see Init()) and
+  ## overhangs the polygon. Without this, every such pixel inflates its zone's achieved
+  ## interval -- on WesternAlbertaUpland that was 29.4% of flammable zone pixels, and made two
+  ## zones look as though they under-burned by 3.5x and 12.2x when in fact every zone was within
+  ## 0.90-1.07 of its target. The unmasked raster is what lets `landmine_fri_metrics()` report
+  ## each zone's flammable share (`pctFlam`) and its share inside the study area
+  ## (`pctInStudyArea`), and the uncorrected `ratioUnmasked` beside `ratio`.
+  sim$friSummary <- LandWebUtils::landmine_fri_summary(
+    lthfc = lthfc,
+    flammableMap = flammableMap,
+    meanAnnualCumulBurnMap = meanAnnualCumulBurnMap,
+    studyAreaName = studyAreaName,
+    studyArea = sim$studyArea
   )
 
+  ## per-zone attainment diagnostics: a CSV a developer can diff between runs, two figures,
+  ## and a one-line verdict, so nobody has to read this log to learn a zone missed its target.
+  sim$friDiagnostics <- LandWebUtils::landmine_fri_metrics(
+    lthfc = lthfc,
+    flammableMap = flammableMap,
+    meanAnnualCumulBurnMap = meanAnnualCumulBurnMap,
+    studyAreaName = studyAreaName,
+    pixelAreaHa = prod(pixelRes) / 1e4,
+    studyArea = sim$studyArea,
+    nYears = end(sim) - start(sim)
+  )
+
+  fDiag <- file.path(outputPath(sim), "LandMine_FRI_diagnostics_multi.csv")
+  fwrite(sim$friDiagnostics, fDiag)
+  sim <- registerOutputs(fDiag)
+
+  message(LandWebUtils::landmine_fri_verdict(sim$friDiagnostics))
+
+  if ("png" %in% P(sim)$.plots) {
+    fggFriZones <- file.path(figurePath(sim), "LandMine_FRI_zones_diagnostic_multi.png")
+    ggsave(fggFriZones, LandWebUtils::landmine_plot_fri_zones(
+      lthfc, sim$friDiagnostics, studyAreaName
+    ), height = 7, width = 12)
+    sim <- registerOutputs(fggFriZones)
+
+    fggFriDrivers <- file.path(figurePath(sim), "LandMine_FRI_drivers_multi.png")
+    ggsave(fggFriDrivers, LandWebUtils::landmine_plot_fri_drivers(
+      sim$friDiagnostics, studyAreaName
+    ), height = 5, width = 12)
+    sim <- registerOutputs(fggFriDrivers)
+  }
+
   f <- file.path(outputPath(sim), paste0("LandMine_FRI_summary_multi.csv"))
-  fwrite(sim$friSummary, f) ## TODO: add this file to list of outputs
+  fwrite(sim$friSummary, f)
+  sim <- registerOutputs(f)
 
   ## LTHFC/FRI polygons
   ggFriPolys <- landmine_plot_LTHFC(lthfc, studyAreaName)
@@ -765,6 +1057,7 @@ SummarizeFRImulti <- function(sim) {
     png(fggFriPolys, height = 1000, width = 1000)
     print(ggFriPolys)
     dev.off()
+    sim <- registerOutputs(fggFriPolys)
   }
 
   ## expected vs simulated fire return intervals
@@ -774,11 +1067,7 @@ SummarizeFRImulti <- function(sim) {
   if ("png" %in% P(sim)$.plots) {
     fggFriExpVsSim <- file.path(figurePath(sim), "LandMine_FRI_exp_vs_sim.png")
     ggsave(fggFriExpVsSim, ggFriExpVsSim, height = 10, width = 10) ## NOTE: keep square aspect ratio
-  }
-
-  if ("screen" %in% P(sim)$.plots) {
-    clearPlot()
-    gridExtra::grid.arrange(ggFriPolys, fggFriExpVsSim, nrow = 1, ncol = 2)
+    sim <- registerOutputs(fggFriExpVsSim)
   }
 
   return(invisible(sim))
@@ -787,15 +1076,12 @@ SummarizeFRImulti <- function(sim) {
 ## .inputObjects
 .inputObjects <- function(sim) {
   ## DEBUGGING: random seed issues
-  #fseed <- file.path(outputPath(sim), "seed.txt")
-  #writeEventInfo(sim, fseed, append = TRUE)
-  #writeRNGInfo(fseed, append = TRUE)
+  # fseed <- file.path(outputPath(sim), "seed.txt")
+  # writeEventInfo(sim, fseed, append = TRUE)
+  # writeRNGInfo(fseed, append = TRUE)
   ## END DEBUGGING
 
-  #cacheTags <- c(currentModule(sim), "function:.inputObjects")
-  dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
-  if (getOption("LandR.verbose", TRUE) > 0)
-    message(currentModule(sim), ": using dataPath '", dPath, "'.")
+  dPath <- asPath(inputPath(sim), 1)
 
   # Make random forest cover map
   mod$numDefaultPixelGroups <- 20L
@@ -803,18 +1089,17 @@ SummarizeFRImulti <- function(sim) {
   numDefaultSpeciesCodes <- 2L
 
   if (!suppliedElsewhere("studyArea", sim)) {
-    if (getOption("LandR.verbose", TRUE) > 0)
-      message("'studyArea' was not provided by user. Using a polygon in southwestern Alberta, Canada,")
+    if (getOption("LandR.verbose", TRUE) > 0) {
+      message("'studyArea' was not provided by user. Using a polygon in southwestern Alberta, Canada.")
+    }
 
     sim$studyArea <- randomStudyArea(seed = 1234, size = 1e9)
   }
 
-  if (!is(sim$studyArea, "Spatial"))
-    sim$studyArea <- as(sim$studyArea, "Spatial")
-
   if (!suppliedElsewhere("studyAreaReporting", sim)) {
-    if (getOption("LandR.verbose", TRUE) > 0)
+    if (getOption("LandR.verbose", TRUE) > 0) {
       message("'studyAreaReporting' was not provided by user. Using the same as 'studyArea'.")
+    }
     sim$studyAreaReporting <- sim$studyArea
   }
 
@@ -824,10 +1109,10 @@ SummarizeFRImulti <- function(sim) {
       sim$rasterToMatch <- fasterize::fasterize(sf::st_as_sf(sim$studyArea), sim$rasterToMatch)
     }
   }
-
-  if (!suppliedElsewhere("rstFlammable", sim)) {
-    sim$rstFlammable <- sim$rasterToMatch
-    sim$rstFlammable[] <- 1L  # 1 means flammable  ## TODO: use LandR::defineFlammable()
+  ## TODO: use LandR::defineFlammable() below
+  if (!suppliedElsewhere("flammableMap", sim)) {
+    sim$flammableMap <- sim$rasterToMatch
+    sim$flammableMap[] <- 1L  # 1 means flammable  ## TODO: use LandR::defineFlammable()
   }
 
   if (!suppliedElsewhere("fireReturnInterval", sim)) {
@@ -840,43 +1125,30 @@ SummarizeFRImulti <- function(sim) {
     sim$fireReturnInterval[] <- as.integer(as.character(vals))
   }
 
-  ## 2023-09: ensure fireReturnInterval map has non-flammable pixels removed
-  nonFlammable <- which(is.na(sim[["rstFlammable"]][]) | sim[["rstFlammable"]][] == 0)
-  if (length(nonFlammable) > 0) {
-    sim$fireReturnInterval[nonFlammable] <- NA
-  }
+  ## `fireReturnInterval` is NOT masked to flammable pixels here, supplied or default:
+  ## `LandWebUtils::landmine_ignition_budget()` masks the copy the fires use (see Init()), and
+  ## the FRI summaries need the unmasked zones to measure each zone's flammable share.
 
   if (!suppliedElsewhere(sim$ROSTable)) {
-    sim$ROSTable <- rbindlist(list(
-      list("immature_young", "decid", 6L),
-      list("mature", "decid", 9L),
-      list("immature_young", "mixed", 12L),
-      list("mature", "mixed", 17L),
-      list("immature", "pine", 14L),
-      list("mature", "pine", 21L),
-      list("young", "pine", 22L),
-      list("immature_young", "softwood", 18L),
-      list("mature", "softwood", 27L),
-      list("immature_young", "spruce", 20L),
-      list("mature", "spruce", 30L)
-    ))
-    setnames(sim$ROSTable, old = 1:3, new = c("age", "leading", "ros"))
+    ## ROS classes and values from Table 3.2 of Andison 1996
+    sim$ROSTable <- LandWebUtils::landmine_ros_table()
   }
 
-  # Upgrades to use suppliedElsewhere -- Eliot Oct 21 2018
   if (!suppliedElsewhere("pixelGroupMap", sim)) {
     sim$pixelGroupMap <- Cache(randomPolygons, sim$rasterToMatch,
                                numTypes = mod$numDefaultPixelGroups)
   }
 
   if (!suppliedElsewhere("rstTimeSinceFire", sim)) {
-    sim$rstTimeSinceFire <- raster(sim$pixelGroupMap)
+    sim$rstTimeSinceFire <- terra::rast(sim$pixelGroupMap)
     sim$rstTimeSinceFire[] <- 200L
   }
 
   if (!suppliedElsewhere("species", sim)) {
-    sim$species <- data.table(species = c("Pinu_sp", "Pice_gla"),
-                              speciesCode = 1:numDefaultSpeciesCodes)
+    sim$species <- data.table(
+      species = c("Pinu_spp", "Pice_gla"), ## LandWeb species groups; see `sppEquivCol`
+      speciesCode = 1:numDefaultSpeciesCodes
+    )
   }
 
   if (!suppliedElsewhere("cohortData", sim)) {
@@ -894,134 +1166,11 @@ SummarizeFRImulti <- function(sim) {
   }
 
   if (!suppliedElsewhere("sppEquiv", sim)) {
-    sim$sppEquiv <- LandR::sppEquivalencies_CA
-    sppNames <- LandR::equivalentName(sim$species$species, sim$sppEquiv, column = Par$sppEquivCol)
-    sim$sppEquiv <- sim$sppEquiv[get(Par$sppEquivCol) %in% sppNames]
+    sim$sppEquiv <- LandWebUtils::landweb_sppEquiv(LandR::sppEquivalencies_CA)
+    sppNames <- LandR::equivalentName(sim$species$species, sim$sppEquiv, column = P(sim)$sppEquivCol)
+    sim$sppEquiv <- sim$sppEquiv[get(P(sim)$sppEquivCol) %in% sppNames]
   }
-
 
   return(invisible(sim))
 }
 
-fireROS <- compiler::cmpfun(function(sim, vegTypeMap) {
-  ROS <- rep(NA_integer_, ncell(vegTypeMap))
-
-  vegType <- getValues(vegTypeMap)
-  vegTypes <- data.table(raster::levels(vegTypeMap)[[1]]) # 2nd column in levels
-
-  sppNames <- equivalentName(as.character(vegTypes[[2]]), sim$sppEquiv, P(sim)$sppEquivCol)
-  suppressWarnings({
-    onRaster <- rbindlist(list(
-      list("mixed", which(is.na(sppNames))),
-      list("spruce", grep(sppNames, pattern = "Pice")),
-      list("pine", grep(sppNames, pattern = "Pinu")),
-      list("decid", grep(sppNames, pattern = "Popu")),
-      list("softwood", grep(sppNames, pattern = "Pice|Pinu|Popu", invert = TRUE))
-    ))
-  })
-  # remove duplicates of softwood, which is NA
-  onRaster <- na.omit(unique(onRaster, by = "V2"))
-  setnames(onRaster, old = 1:2, new = c("leading", "pixelValue"))
-
-  sppEquiv <- sim$sppEquiv[, c("LandMine", "LandR")][, leading := mod$knownSpecies[LandR]]
-  sppEquiv <- na.omit(sppEquiv, on = "LandMine")
-  sppEquiv <- unique(sppEquiv[onRaster, on = c("LandMine" = "leading")])
-
-  sppEquivHere <- unique(na.omit(sppEquiv$LandR))
-  haveAllKnown <- sppEquivHere %in% names(mod$knownSpecies)
-  if (!all(haveAllKnown)) {
-    stop("LandMine only has rate of spread burn rates for\n",
-         paste(names(mod$knownSpecies), collapse = ", "),
-         "\nMissing rate of spread for ", paste(sppEquivHere[!haveAllKnown], collapse = ", "))
-  }
-
-  sppEquiv <- unique(sppEquiv, by = c("LandMine", "leading", "pixelValue"))
-  sppEquiv <- sppEquiv[sim$ROSTable, on = "leading", allow.cartesian = TRUE, nomatch = NULL]
-  sppEquiv <- sppEquiv[, c("leading", "age", "ros", "pixelValue")]
-  sppEquiv <- unique(sppEquiv, by = c("age", "leading", "pixelValue"))
-
-  sppEquiv[, used := "no"]
-  sppEquiv[(used == "no") & grepl("(^|_)mature", age), used := "mature"]
-  sppEquiv[(used == "no") & grepl("(^|_)immature", age), used := "immature"]
-  sppEquiv[(used == "no") & grepl("(^|_)young", age), used := "young"]
-  setkeyv(sppEquiv, "used")
-
-  # if there are no "mature_immature"
-  cuts <- list()
-  if (!any(grepl("_mature$|^mature_|_mature_", sppEquiv$age))) {
-    cuts[[1]] <- sim$rstTimeSinceFire[] > 120
-  } else {
-    cuts[[1]] <- !is.na(sim$rstTimeSinceFire[])
-  }
-
-  if (!any(grepl("_immature$|^immature_|_immature_", sppEquiv$age))) {
-    cuts[[2]] <- sim$rstTimeSinceFire[] > 40 & sim$rstTimeSinceFire[] <= 120
-  } else {
-    cuts[[2]] <- sim$rstTimeSinceFire[] <= 120
-  }
-
-  cuts[[3]] <- sim$rstTimeSinceFire[] <= 40
-
-  # Now go through from mature through immature through young
-  if (!all(sppEquiv["mature"]$pixelValue %in% vegTypes[[1]]))
-    cuts[["mature"]] <- cuts[["mature"]] & vegType %in% sppEquiv["mature"]$pixelValue
-
-  if (!all(sppEquiv["immature"]$pixelValue %in% vegTypes[[1]]))
-    cuts[[2]] <- cuts[[2]] & vegType %in% sppEquiv["immature"]$pixelValue
-
-  if (all(sppEquiv["young"]$pixelValue %in% vegTypes[[1]]))
-    cuts[[3]] <- cuts[[3]] & vegType %in% sppEquiv["young"]$pixelValue
-
-  mature <- which(cuts[[1]])
-  immature <- which(cuts[[2]])
-  young <- which(cuts[[3]])
-
-  if (length(mature))
-    ROS[mature] <- sppEquiv["mature"]$ros[match(vegType[mature], sppEquiv["mature"]$pixelValue)]
-  if (length(immature))
-    ROS[immature] <- sppEquiv["immature"]$ros[match(vegType[immature], sppEquiv["immature"]$pixelValue)]
-  if (length(young))
-    ROS[young] <- sppEquiv["young"]$ros[match(vegType[young], sppEquiv["young"]$pixelValue)]
-
-  if (getOption("LandR.assertions", TRUE)) {
-    names(cuts) <- c("mature", "immature", "young")
-    dt <- data.table(
-      ROS = ROS,
-      pixelValue = vegType,
-      age = cut(sim$rstTimeSinceFire[], breaks = c(0, 40, 120, 999),
-                labels = c("young", "immature", "mature")),
-      as.data.table(cuts)
-    )
-    dt <- na.omit(dt, cols = c("ROS", "age"))
-    dtSumm <- dt[, list(derivedROS = unique(ROS)), by = c("pixelValue", "age")]
-    dtSumm <- dtSumm[sppEquiv, on = c("pixelValue", "age" = "used"), nomatch = NULL]
-    if (!(identical(dtSumm$derivedROS, dtSumm$ros))) {
-      stop("fireROS failed its test")
-    }
-  }
-
-  ## Other vegetation that can burn -- e.g., grasslands, lichen, shrub
-  ## The original default value is the same as that of mature spruce stands (30L)
-  ## 2023-02: discontinuous fuels (e.g., shield) requires increasing spread --
-  ##          use same value as young deciduous (6L), per Dave's text messages
-  ROSother <- switch(P(sim)$ROStype,
-                     burny = sim$ROSTable[leading == "decid" & age == "immature_young", ros],
-                     sim$ROSTable[leading == "spruce" & age == "mature", ros])
-
-  assertthat::assert_that(
-    isTRUE(inRange(P(sim)$ROSother, min(sim$ROSTable$ros), max(sim$ROSTable$ros))),
-    isTRUE(inRange(P(sim)$ROSother, 0.95*ROSother, 1.05*ROSother)) ## TODO: tweak this to allow greater range
-  )
-  ROS[sim$rstFlammable[] == 1L & is.na(ROS)] <- as.integer(P(sim)$ROSother)
-  ROS[sim$rstFlammable[] == 0L | is.na(sim$rstFlammable[])] <- NA ## non-flammable pixels
-
-  return(ROS)
-})
-
-## older version of SpaDES.core used here doesn't have this function
-if (packageVersion("SpaDES.core") < "2.0.2.9001") {
-  figurePath <- function(sim) {
-    file.path(outputPath(sim), "figures", current(sim)[["moduleName"]]) |>
-      checkPath(create = TRUE)
-  }
-}
