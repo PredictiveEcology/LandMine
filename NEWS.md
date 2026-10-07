@@ -4,6 +4,7 @@ Known issues: <https://github.com/PredictiveEcology/LandMine/issues>
 
 Unreleased changes on the `development` branch since the 1.0.1 release:
 
+* New parameter `sppEquivColFuel` (1.0.15): with species simulated separately, LandMine can type fuel from the leading group of a `sppEquiv` column (LandWeb's reporting groups), summing biomass within a group before the leading type is decided, as when the group was one simulated species. Fuel types come from `LandWebUtils::landmine_fuel_types()`, so larch, a spruce fuel with black spruce, no longer falls through to the mature-spruce rate at every age. Without it, the species-name fuel typing stops at the first fire on codes such as `Pinu_con`. `NA`, the default, keeps today's typing.
 * Standardized fire object names to the scfm/fireSense convention: `rstFlammable` renamed to `flammableMap`, and `rstCurrentBurnCumulative` renamed to `burnMap`.
 * Re-enabled the `registerOutputs()` calls (previously disabled pending a fix).
 * Fixed a `terra::values()` argument typo ("wat" to "mat").
