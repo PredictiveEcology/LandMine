@@ -2972,7 +2972,7 @@ border-radius: 0px;
 
 
 <h1 class="title toc-ignore">LandMine Manual</h1>
-<h3 class="subtitle">v.1.0.14</h3>
+<h3 class="subtitle">v.1.0.15</h3>
 <h4 class="date">18 May 2018; updated 29 Oct 2025</h4>
 
 </div>
@@ -3559,6 +3559,26 @@ The column in <code>sim$sppEquiv</code> data.table to use as a naming convention
 </tr>
 <tr>
 <td style="text-align:left;">
+sppEquivColFuel
+</td>
+<td style="text-align:left;">
+character
+</td>
+<td style="text-align:left;">
+NA
+</td>
+<td style="text-align:left;">
+NA
+</td>
+<td style="text-align:left;">
+NA
+</td>
+<td style="text-align:left;">
+Column of <code>sim$sppEquiv</code> that groups the simulated species (<code>sppEquivCol</code>) for fuel typing. When set, cohorts are recoded to these groups before the leading vegetation type is decided, so biomass is summed within a group, and each group’s fuel type is looked up in <code>LandWebUtils::landmine_fuel_types()</code>, whose names the groups must use (LandWeb’s reporting groups). For species simulated separately: the leading type of a stand of jack pine 35%, lodgepole pine 25% and black spruce 40% is then pine, as when the pines were one simulated group. <code>NA</code> (the default) types fuel from the simulated species’ names (<code>LandWebUtils::landmine_known_species()</code>).
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
 useSeed
 </td>
 <td style="text-align:left;">
@@ -4006,7 +4026,7 @@ fire is retried at full target — so <code>attempts</code> counts rounds, not b
 ##  [5] &quot;fpCompare&quot;                                                 
 ##  [6] &quot;ggplot2&quot;                                                   
 ##  [7] &quot;PredictiveEcology/LandR@development (&gt;= 1.1.0.9003)&quot;       
-##  [8] &quot;PredictiveEcology/LandWebUtils@development (&gt;= 1.0.3.9038)&quot;
+##  [8] &quot;PredictiveEcology/LandWebUtils@development (&gt;= 1.0.3.9045)&quot;
 ##  [9] &quot;PredictiveEcology/pemisc@development&quot;                      
 ## [10] &quot;PredictiveEcology/SpaDES.tools@development (&gt;= 2.1.2.9000)&quot;
 ## [11] &quot;RColorBrewer&quot;                                              

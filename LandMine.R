@@ -7,7 +7,7 @@ defineModule(sim, list(
     person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb", "cre"))
   ),
   childModules = character(0),
-  version = list(LandMine = numeric_version("1.0.14")),
+  version = list(LandMine = numeric_version("1.0.15")),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
@@ -16,7 +16,7 @@ defineModule(sim, list(
     "assertthat", "cli", "data.table", "fpCompare", "ggplot2",
     "RColorBrewer", "stats", "terra", "tidyterra", "VGAM",
     "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
-    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9038)",
+    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9045)", ## sppEquiv_groups(), landmine_fuel_types()
     "PredictiveEcology/pemisc@development",
     "PredictiveEcology/SpaDES.tools@development (>= 2.1.2.9000)"
   ),
@@ -79,6 +79,15 @@ defineModule(sim, list(
                           "LandMine's fuel types are keyed on the LandWeb species groups: Init() and",
                           "`LandWebUtils::landmine_fire_ros()` read the `LandWeb` column directly,",
                           "so species must be named by that column.")),
+    defineParameter("sppEquivColFuel", "character", NA_character_, NA, NA,
+                    paste("Column of `sim$sppEquiv` that groups the simulated species (`sppEquivCol`) for",
+                          "fuel typing. When set, cohorts are recoded to these groups before the leading",
+                          "vegetation type is decided, so biomass is summed within a group, and each group's",
+                          "fuel type is looked up in `LandWebUtils::landmine_fuel_types()`, whose names the",
+                          "groups must use (LandWeb's reporting groups). For species simulated separately:",
+                          "the leading type of a stand of jack pine 35%, lodgepole pine 25% and black spruce",
+                          "40% is then pine, as when the pines were one simulated group. `NA` (the default)",
+                          "types fuel from the simulated species' names (`LandWebUtils::landmine_known_species()`).")),
     defineParameter("useSeed", "integer", NULL, NA, NA,
                     paste("Only used for creating a starting `cohortData` dataset.",
                           "If `NULL`, then it will be randomly generated;",
@@ -390,7 +399,20 @@ Init <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
 
   ## knownSpecies needs to use 'LandWeb' column, not 'LandR'!
   mod$knownSpecies <- LandWebUtils::landmine_known_species()
-  sim$sppEquiv[, LandMine := mod$knownSpecies[LandWeb]]
+  if (is.na(P(sim)$sppEquivColFuel)) {
+    sim$sppEquiv[, LandMine := mod$knownSpecies[LandWeb]]
+  } else {
+    ## fuel groups (see Burn()): every group needs a fuel type
+    mod$fuelGroups <- LandWebUtils::sppEquiv_groups(sim$sppEquiv, P(sim)$sppEquivCol, P(sim)$sppEquivColFuel)
+    groups <- mod$fuelGroups$groups[[mod$fuelGroups$col]]
+    noFuel <- setdiff(groups, names(LandWebUtils::landmine_fuel_types()))
+    if (length(noFuel)) {
+      stop("LandMine: no fuel type in LandWebUtils::landmine_fuel_types() for `",
+           P(sim)$sppEquivColFuel, "` group(s): ", paste(noFuel, collapse = ", "), ".", call. = FALSE)
+    }
+    mod$fuelColors <- LandR::sppColors(mod$fuelGroups$groups, mod$fuelGroups$col,
+                                       newVals = "Mixed", palette = "Accent")
+  }
 
   return(invisible(sim))
 }
@@ -482,16 +504,32 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   ## August 2022: reburn fires that did not meet their target size
 
   ## Rate of Spread
-  vegTypeMap <- LandR::vegTypeMapGenerator(
-    sim$cohortData,
-    pixelGroupMap = sim$pixelGroupMap,
-    vegLeadingProportion = P(sim)$vegLeadingProportion,
-    mixedType = P(sim)$mixedType,
-    sppEquiv = sim$sppEquiv,
-    sppEquivCol = P(sim)$sppEquivCol,
-    colors = sim$sppColorVect,
-    doAssertion = P(sim)$.unitTest
-  )
+  byGroup <- !is.na(P(sim)$sppEquivColFuel)
+  vegTypeMap <- if (byGroup) {
+    ## leading FUEL GROUP: cohorts recoded to their groups first, so that vegTypeMapGenerator(),
+    ## which sums B within a code, sums it within a group
+    LandR::vegTypeMapGenerator(
+      LandWebUtils::recode_cohorts(sim$cohortData, mod$fuelGroups$map),
+      pixelGroupMap = sim$pixelGroupMap,
+      vegLeadingProportion = P(sim)$vegLeadingProportion,
+      mixedType = P(sim)$mixedType,
+      sppEquiv = mod$fuelGroups$groups,
+      sppEquivCol = mod$fuelGroups$col,
+      colors = mod$fuelColors,
+      doAssertion = P(sim)$.unitTest
+    )
+  } else {
+    LandR::vegTypeMapGenerator(
+      sim$cohortData,
+      pixelGroupMap = sim$pixelGroupMap,
+      vegLeadingProportion = P(sim)$vegLeadingProportion,
+      mixedType = P(sim)$mixedType,
+      sppEquiv = sim$sppEquiv,
+      sppEquivCol = P(sim)$sppEquivCol,
+      colors = sim$sppColorVect,
+      doAssertion = P(sim)$.unitTest
+    )
+  }
   ROSmap <- terra::rast(sim$pixelGroupMap) ## empty raster as template
   ROSmap[] <- LandWebUtils::landmine_fire_ros(
     vegTypeMap = vegTypeMap,
@@ -502,6 +540,7 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
     sppEquivCol = P(sim)$sppEquivCol,
     ROSother = P(sim)$ROSother,
     knownSpecies = mod$knownSpecies,
+    fuelTypes = if (byGroup) LandWebUtils::landmine_fuel_types() else NULL,
     ROStype = P(sim)$ROStype
   )
   ROSmap <- terra::mask(ROSmap, sim$studyArea)

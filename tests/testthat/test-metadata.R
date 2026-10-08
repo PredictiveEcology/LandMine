@@ -60,7 +60,7 @@ test_that("parameters are the expected names", {
            ".saveInterval", ".studyAreaName", ".unitTest", ".useCache", ".useParallel",
            "biggestPossibleFireSizeHa", "burnInitialTime", "fireTimestep", "maxReburns",
            "maxRetriesPerID", "minPropBurn", "mixedType", "mode", "optimParsRowID",
-           "reps", "ROSother", "ROStype", "sppEquivCol", "useSeed",
+           "reps", "ROSother", "ROStype", "sppEquivCol", "sppEquivColFuel", "useSeed",
            "vegLeadingProportion"))
   )
 })
