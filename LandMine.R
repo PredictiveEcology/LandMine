@@ -7,7 +7,7 @@ defineModule(sim, list(
     person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb", "cre"))
   ),
   childModules = character(0),
-  version = list(LandMine = numeric_version("1.0.15")),
+  version = list(LandMine = numeric_version("1.1.0")),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),

@@ -1,8 +1,12 @@
 Known issues: <https://github.com/PredictiveEcology/LandMine/issues>
 
-# LandMine (development version)
+# LandMine 1.1.0
 
-Unreleased changes on the `development` branch since the 1.0.1 release:
+LandMine now spreads fire 11 to 13 times faster with the same fires burning, and it writes a per-zone report and maps showing whether each fire-return-interval zone reaches its target. Each recorded fire now carries an identity and its target size, so shortfalls can be measured. Fire-spread parameters were recalibrated, and the 120 m fit is now the default at every resolution. The module also runs on its own default species, and fuel can be typed from groups of simulated species.
+
+Several fixes change simulated fire regimes, so results from earlier versions are not comparable. Mixedwood stands now get their own spread rates, and fires are no longer budgeted or ignited in parts of a zone that lie outside the study area. The fire-return-interval summary no longer counts those outside pixels, which had made some zones look badly under-burned. Two fire objects were renamed to match scfm and fireSense: `rstFlammable` is now `flammableMap`, and `rstCurrentBurnCumulative` is now `burnMap`.
+
+Details of the changes since the 1.0.1 release:
 
 * New parameter `sppEquivColFuel` (1.0.15): with species simulated separately, LandMine can type fuel from the leading group of a `sppEquiv` column (LandWeb's reporting groups), summing biomass within a group before the leading type is decided, as when the group was one simulated species. Fuel types come from `LandWebUtils::landmine_fuel_types()`, so larch, a spruce fuel with black spruce, no longer falls through to the mature-spruce rate at every age. Without it, the species-name fuel typing stops at the first fire on codes such as `Pinu_con`. `NA`, the default, keeps today's typing.
 * Standardized fire object names to the scfm/fireSense convention: `rstFlammable` renamed to `flammableMap`, and `rstCurrentBurnCumulative` renamed to `burnMap`.
