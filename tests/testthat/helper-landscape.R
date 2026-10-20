@@ -65,24 +65,46 @@ landmineTestLandscape <- function(res = 250, nrow = 40L, ncol = 80L, speciesInpu
   )
 }
 
+## LandMine parameters for a test run: the test defaults, then the landscape's own, then `params`.
+## Plots are off.
+landmineTestParams <- function(landscape, params = list()) {
+  utils::modifyList(utils::modifyList(list(
+    .plots = NA_character_,
+    .useCache = FALSE,
+    .useParallel = 1,
+    biggestPossibleFireSizeHa = 1e4,
+    maxReburns = c(1L, 2L),
+    mode = "single"
+  ), landscape$params), params)
+}
+
 ## Run LandMine in "single" mode on `landscape` from `start` to `end` with a fixed seed.
-## `params` overrides or adds LandMine parameters, after the landscape's own. Plots are off.
+## `params` overrides or adds LandMine parameters, after the landscape's own.
 runLandMineTest <- function(landscape, paths, start = 0, end = 5, seed = 20260928L,
                             params = list()) {
   withr::local_seed(seed)
   withr::local_options(LandR.verbose = 0)
   SpaDES.core::simInitAndSpades(
     times = list(start = start, end = end),
-    params = list(LandMine = utils::modifyList(utils::modifyList(list(
-      .plots = NA_character_,
-      .useCache = FALSE,
-      .useParallel = 1,
-      biggestPossibleFireSizeHa = 1e4,
-      maxReburns = c(1L, 2L),
-      mode = "single"
-    ), landscape$params), params)),
+    params = list(LandMine = landmineTestParams(landscape, params)),
     modules = "LandMine",
     objects = landscape$objects,
     paths = paths
   )
+}
+
+## Run only the init events, with a fixed seed. Returns the simList and `rng`, the session's
+## `.Random.seed` right after init, so a test can tell whether init drew from that stream.
+initLandMineTest <- function(landscape, paths, seed = 20260928L, params = list()) {
+  withr::local_seed(seed)
+  withr::local_options(LandR.verbose = 0)
+  sim <- SpaDES.core::simInit(
+    times = list(start = 0, end = 5),
+    params = list(LandMine = landmineTestParams(landscape, params)),
+    modules = "LandMine",
+    objects = landscape$objects,
+    paths = paths
+  )
+  sim <- SpaDES.core::spades(sim, events = "init")
+  list(sim = sim, rng = get(".Random.seed", envir = globalenv()))
 }

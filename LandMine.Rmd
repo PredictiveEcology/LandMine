@@ -167,6 +167,13 @@ knitr::kable(df_outputs, caption = "List of (ref:LandMine) outputs and their des
   kableExtra::kable_styling(latex_options = "scale_down", full_width = FALSE)
 ```
 
+### Fire-size distribution: `kBest`
+
+Fire sizes are drawn from a truncated Pareto distribution between 1 ha and `biggestPossibleFireSizeHa`, with shape `kBest`.
+By default `kBest` is fitted at init to Dave Andison's rule of thumb that 95% of the area burned is in the largest 5% of fires (`LandWebUtils::landmine_estimate_kBest()`).
+The fit draws random fire sizes, so it differs between replicates: over 100 seeds at `biggestPossibleFireSizeHa = 3e5`, `kBest` ran 0.628--0.683, a mean fire size of 115--183 ha.
+For replicates that share one distribution, supply `kBest`, which skips the fit, or set `useSeed`, which fits on a separate random stream and leaves the simulation's stream as it was.
+
 ### Reported fire sizes: what `maxSize` does and does not mean
 
 `fireSizes` carries `size` and `maxSize` per fire, which `burnSummaries` writes out as `simSize`

@@ -58,7 +58,7 @@ test_that("parameters are the expected names", {
     sort(md$parameters$paramName),
     sort(c(".plotInitialTime", ".plotInterval", ".plots", ".saveInitialTime",
            ".saveInterval", ".studyAreaName", ".unitTest", ".useCache", ".useParallel",
-           "biggestPossibleFireSizeHa", "burnInitialTime", "fireTimestep", "maxReburns",
+           "biggestPossibleFireSizeHa", "burnInitialTime", "fireTimestep", "kBest", "maxReburns",
            "maxRetriesPerID", "minPropBurn", "mixedType", "mode", "optimParsRowID",
            "reps", "ROSother", "ROStype", "sppEquivCol", "sppEquivColFuel", "useSeed",
            "vegLeadingProportion"))

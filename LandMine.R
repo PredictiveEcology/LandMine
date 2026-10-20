@@ -7,14 +7,14 @@ defineModule(sim, list(
     person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb", "cre"))
   ),
   childModules = character(0),
-  version = list(LandMine = numeric_version("1.1.0")),
+  version = list(LandMine = numeric_version("1.1.0.9000")),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = list("README.md", "LandMine.Rmd"),
   reqdPkgs = list(
     "assertthat", "cli", "data.table", "fpCompare", "ggplot2",
-    "RColorBrewer", "stats", "terra", "tidyterra", "VGAM",
+    "RColorBrewer", "stats", "terra", "tidyterra", "VGAM", "withr (>= 2.5.0)",
     "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
     "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9045)", ## sppEquiv_groups(), landmine_fuel_types()
     "PredictiveEcology/pemisc@development",
@@ -27,6 +27,12 @@ defineModule(sim, list(
                     "This describes the simulation time at which the first burn event should occur"),
     defineParameter("fireTimestep", "integer", 1L, NA, NA,
                     "This describes the simulation time interval between burn events"),
+    defineParameter("kBest", "numeric", NULL, NA, NA,
+                    paste("Shape of the truncated Pareto distribution fire sizes are drawn from",
+                          "(`VGAM::rtruncpareto()`). `NULL` (the default) fits it at init with",
+                          "`LandWebUtils::landmine_estimate_kBest()`; see `useSeed`.",
+                          "A single positive number is used as given, and the fit is skipped.",
+                          "The fitted value depends on `biggestPossibleFireSizeHa`: refit it when that changes.")),
     defineParameter("maxReburns", "integer", c(1L, 20L), 1L, 500L,
                     paste("Number of attempts to burn fires that don't reach their target fire size.",
                           "Reburning occurs in two phases, hence accepting a parameter value of length 2.",
@@ -89,10 +95,13 @@ defineModule(sim, list(
                           "40% is then pine, as when the pines were one simulated group. `NA` (the default)",
                           "types fuel from the simulated species' names (`LandWebUtils::landmine_known_species()`).")),
     defineParameter("useSeed", "integer", NULL, NA, NA,
-                    paste("Only used for creating a starting `cohortData` dataset.",
-                          "If `NULL`, then it will be randomly generated;",
-                          "If non-`NULL`, will pass this value to `set.seed()` and be deterministic and identical each time.",
-                          "WARNING: setting the seed to a specific value will cause all simulations to be identical!")),
+                    paste("Seed for the `kBest` fit only. The fit's objective draws random fire sizes,",
+                          "so unseeded fits differ between replicates.",
+                          "`NULL` (the default) fits from the simulation's random stream.",
+                          "An integer fits on its own stream, from `set.seed(useSeed)` with R's default",
+                          "generator, then restores the simulation's stream: the same seed gives the same",
+                          "`kBest` in any session, and fires still vary between replicates.",
+                          "Ignored when `kBest` is supplied.")),
     defineParameter("vegLeadingProportion", "numeric", 0.8, 0, 1,
                     "a number that define whether a species is leading for a given pixel"),
     defineParameter(".plotInitialTime", "numeric", start(sim, "year") + 1, NA, NA,
@@ -213,8 +222,8 @@ defineModule(sim, list(
       "modes apart (flammable fraction, patch structure, cohort coverage)."
     )),
     createsOutput("kBest", "numeric", paste(
-      "A numeric scalar that is the optimal value of `K` in the",
-      "Truncated Pareto distribution (`rtruncpareto`)")
+      "Shape of the truncated Pareto distribution fire sizes are drawn from (`rtruncpareto`):",
+      "the `kBest` parameter when supplied, otherwise fitted at init (see `useSeed`).")
     ),
     createsOutput("numFiresPerYear", "numeric", paste(
       "The average number of fires per year, by fire return interval level on `rstCurrentBurn`.")
@@ -267,6 +276,19 @@ doEvent.LandMine <- function(sim, eventTime, eventType, debug = FALSE) {
 
 ### initialization
 EstimateTruncPareto <- function(sim, verbose = getOption("LandR.verbose", TRUE)) {
+  ## A supplied shape is used as given: no fit, so init draws no random numbers.
+  kBest <- P(sim)$kBest
+  if (!is.null(kBest) && !isTRUE(is.na(kBest))) {
+    if (!is.numeric(kBest) || length(kBest) != 1L || !is.finite(kBest) || kBest <= 0) {
+      stop("LandMine: `kBest` must be a single positive number, or NULL to fit it.", call. = FALSE)
+    }
+    sim$kBest <- kBest
+    if (verbose > 0) {
+      message("Truncated Pareto shape: kBest = ", format(kBest, digits = 6), " (supplied, not fitted)")
+    }
+    return(invisible(sim))
+  }
+
   if (verbose > 0) {
     message("Estimate Truncated Pareto parameters")
   }
@@ -275,12 +297,28 @@ EstimateTruncPareto <- function(sim, verbose = getOption("LandR.verbose", TRUE))
   ## area is in 5% of the fires" rule of thumb -- deliberately a rule of thumb, not a fit to
   ## NBAC/NFDB. The module previously carried the two superseded versions of that rule as
   ## commented-out code; they are recorded in the function's documentation instead.
-  sim$kBest <- Cache(
-    LandWebUtils::landmine_estimate_kBest,
-    biggestPossibleFireSizeHa = P(sim)$biggestPossibleFireSizeHa,
-    cachePath = cachePath(sim),
-    useCache = FALSE
-  )
+  ## The objective draws 1e6 fire sizes per evaluation, so the fit is noisy: over 100 seeds at
+  ## `biggestPossibleFireSizeHa = 3e5`, kBest ran 0.628-0.683, a mean fire size of 115-183 ha.
+  upper <- P(sim)$biggestPossibleFireSizeHa
+  seed <- P(sim)$useSeed
+  seeded <- !is.null(seed) && !isTRUE(is.na(seed))
+  sim$kBest <- if (seeded) {
+    ## On its own stream, put back as it was afterwards, so the draws that follow are the ones
+    ## they would have been without a fit. R's default generator, not the session's (parallel
+    ## workers may run L'Ecuyer-CMRG), so a seed gives the same kBest in any session.
+    withr::with_seed(
+      seed,
+      LandWebUtils::landmine_estimate_kBest(biggestPossibleFireSizeHa = upper),
+      .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion", .rng_sample_kind = "Rejection"
+    )
+  } else {
+    ## from the simulation's random stream, as before `useSeed` was read
+    LandWebUtils::landmine_estimate_kBest(biggestPossibleFireSizeHa = upper)
+  }
+  if (verbose > 0) {
+    message("Truncated Pareto shape: kBest = ", format(sim$kBest, digits = 6),
+            if (seeded) paste0(" (fitted, useSeed = ", seed, ")") else " (fitted)")
+  }
 
   return(invisible(sim))
 }

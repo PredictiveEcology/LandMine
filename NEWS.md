@@ -1,5 +1,10 @@
 Known issues: <https://github.com/PredictiveEcology/LandMine/issues>
 
+# LandMine (development version)
+
+* New parameter `kBest` (1.1.0.9000), the shape of the truncated Pareto distribution fire sizes are drawn from. A positive number is used as given and the fit at init is skipped; `NULL`, the default, fits it as before. The fit's objective draws 1e6 random fire sizes per evaluation, so each unseeded replicate got its own fire-size distribution: over 100 seeds at `biggestPossibleFireSizeHa = 3e5`, `kBest` ran 0.628-0.683, mean fire sizes of 115-183 ha, and expected fires per year 0.81-1.29 times those at the mean `kBest`. A fit takes about 1.6 s.
+* `useSeed`, declared but never read, now seeds the `kBest` fit (1.1.0.9000). The fit runs on its own stream, from `set.seed(useSeed)` with R's default generator, and the simulation's stream is then put back, so the same seed gives the same `kBest` in any session while fires still vary between replicates. With `NULL`, the default, the fit draws from the simulation's stream as before: for a given seed, results are identical to 1.1.0. Adds `withr (>= 2.5.0)` to `reqdPkgs`.
+
 # LandMine 1.1.0
 
 LandMine now spreads fire 11 to 13 times faster with the same fires burning, and it writes a per-zone report and maps showing whether each fire-return-interval zone reaches its target. Each recorded fire now carries an identity and its target size, so shortfalls can be measured. Fire-spread parameters were recalibrated, and the 120 m fit is now the default at every resolution. The module also runs on its own default species, and fuel can be typed from groups of simulated species.
