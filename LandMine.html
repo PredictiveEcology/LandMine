@@ -2972,7 +2972,7 @@ border-radius: 0px;
 
 
 <h1 class="title toc-ignore">LandMine Manual</h1>
-<h3 class="subtitle">v.1.1.0.9000</h3>
+<h3 class="subtitle">v.1.1.0.9001</h3>
 <h4 class="date">18 May 2018; updated 29 Oct 2025</h4>
 
 </div>
@@ -3939,7 +3939,7 @@ fireSizes
 list
 </td>
 <td style="text-align:left;">
-A list of data.tables, one per burn event, with <code>size</code>, <code>maxSize</code> and the fire-identity columns <code>fireID</code>, <code>attempt</code> and <code>targetSize</code>. <code>size</code> and <code>maxSize</code> are the actual and expected sizes burned. <code>fireID</code> is issued per burn YEAR, so (rep, year, fireID) identifies one fire; rows sharing it are the pieces that fire was burned in, and are NOT necessarily contiguous. <code>attempt</code> is the reburn round that produced the row, and <code>targetSize</code> the ORIGINAL target, constant across a fire’s rows. NOTE: <code>maxSize</code> is NOT an independent record of the target. When a fire stalls, the retry loop rewrites its <code>maxSize</code> to the area that did burn and issues the shortfall as new fires, so <code>size == maxSize</code> by construction and cannot be used as evidence that fires reach their targets; stalling shows up in the fire COUNT instead. Named by simulation year, so <code>rbindlist(sim$fireSizes, idcol = &#39;year&#39;)</code> gives a <code>year</code> column carrying the actual year (as character) rather than a 1..n counter.
+A list of data.tables, one per burn event, with <code>size</code>, <code>maxSize</code> and the fire-identity columns <code>fireID</code>, <code>attempt</code> and <code>targetSize</code>. <code>size</code> and <code>maxSize</code> are the actual and expected sizes burned. <code>fireID</code> is issued per burn YEAR, so (rep, year, fireID) identifies one fire; rows sharing it are the pieces that fire was burned in, and are NOT necessarily contiguous. <code>attempt</code> is the reburn round that produced the row, and <code>targetSize</code> the ORIGINAL target, constant across a fire’s rows. NOTE: <code>maxSize</code> is NOT an independent record of the target. When a fire stalls, the retry loop rewrites its <code>maxSize</code> to the area that did burn and issues the shortfall as new fires, so <code>size == maxSize</code> by construction and cannot be used as evidence that fires reach their targets; stalling shows up in the fire COUNT instead. Named by simulation year, so <code>rbindlist(sim$fireSizes, idcol = &#39;year&#39;)</code> gives a <code>year</code> column carrying the actual year (as character) rather than a 1..n counter. A burn year with no fires has a zero-row table with the same columns, so it adds no rows.
 </td>
 </tr>
 <tr>
