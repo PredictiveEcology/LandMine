@@ -8,11 +8,18 @@
 ## A year is fire-free when nothing burned in it, which holds for the old placeholder too, so the
 ## schema checks below run under either. The run must contain both kinds of year, so the test
 ## cannot pass on a run without one.
+##
+## Some of those years have no ignitions at all. Through 1.1.0.9001 they drew fire sizes anyway,
+## and `VGAM::rtruncpareto(n = 0)` warned "no non-missing arguments to max". This seed gives such
+## years, so the warning check below fails on 1.1.0.9001.
 
 test_that("a fire-free year has the columns of a fire year and adds no rows", {
   landscape <- landmineTestLandscape()
   landscape$objects$fireReturnInterval <- landscape$objects$fireReturnInterval * 5L
-  sim <- runLandMineTest(landscape, paths = testPaths, end = 10)
+  expect_no_warning(
+    sim <- runLandMineTest(landscape, paths = testPaths, end = 10),
+    message = "no non-missing arguments to max"
+  )
 
   burned <- vapply(sim$fireSizes, function(x) sum(x$size), numeric(1))
   expect_true(any(burned == 0))

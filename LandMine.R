@@ -7,7 +7,7 @@ defineModule(sim, list(
     person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb", "cre"))
   ),
   childModules = character(0),
-  version = list(LandMine = numeric_version("1.1.0.9001")),
+  version = list(LandMine = numeric_version("1.1.0.9002")),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
@@ -597,24 +597,31 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   ## write rather than an O(ncell) terra raster write.
   spreadProbThisStep <- terra::values(mod$spreadProb, mat = FALSE)
 
-  ## If fire sizes are in hectares, must adjust based on resolution of maps
-  ##  NOTE: round causes fires < 0.5 pixels to NOT EXIST ...
-  ##        e.g., 3.25 ha fires are "not detectable" if resolution is 6.25 ha
-  fireSizesThisPeriod <- VGAM::rtruncpareto(
-    n = sum(numFiresThisPeriod),
-    lower = 1,
-    upper = P(sim)$biggestPossibleFireSizeHa,
-    shape = sim$kBest
-  )
+  ## A year with no ignitions draws no fire sizes, so it reaches the no-fires path below with
+  ## empty vectors. `VGAM::rtruncpareto(n = 0)` warned "no non-missing arguments to max" (from
+  ## `max(p)` in `qtruncpareto()`) and returned one `NA`, not an empty vector; rounding that
+  ## `NA` to pixels then drew one `runif()`, so skipping both changes later draws for a seed.
+  fireSizesInPixels <- numeric(0)
+  if (sum(numFiresThisPeriod) > 0) {
+    ## If fire sizes are in hectares, must adjust based on resolution of maps
+    ##  NOTE: round causes fires < 0.5 pixels to NOT EXIST ...
+    ##        e.g., 3.25 ha fires are "not detectable" if resolution is 6.25 ha
+    fireSizesThisPeriod <- VGAM::rtruncpareto(
+      n = sum(numFiresThisPeriod),
+      lower = 1,
+      upper = P(sim)$biggestPossibleFireSizeHa,
+      shape = sim$kBest
+    )
 
-  ## Because annual number of fires includes fires <6.25 ha, sometimes this will round down to 0 pixels.
-  ##   This calculation makes that probabilistic.
-  ## Promoted to LandWebUtils (unit-tested: the rounding preserves E[pixels], which is the
-  ## entire reason it is probabilistic, and exact pixel multiples never round up).
-  fireSizesInPixels <- LandWebUtils::landmine_sizes_to_pixels(
-    fireSizesThisPeriod,
-    pixelAreaHa = prod(res(sim$flammableMap)) / 1e4
-  )
+    ## Because annual number of fires includes fires <6.25 ha, sometimes this will round down to 0 pixels.
+    ##   This calculation makes that probabilistic.
+    ## Promoted to LandWebUtils (unit-tested: the rounding preserves E[pixels], which is the
+    ## entire reason it is probabilistic, and exact pixel multiples never round up).
+    fireSizesInPixels <- LandWebUtils::landmine_sizes_to_pixels(
+      fireSizesThisPeriod,
+      pixelAreaHa = prod(res(sim$flammableMap)) / 1e4
+    )
+  }
 
   firesList <- fireSizes <- list()
   maxOrder <- 0L
