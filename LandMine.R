@@ -7,7 +7,7 @@ defineModule(sim, list(
     person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb", "cre"))
   ),
   childModules = character(0),
-  version = list(LandMine = numeric_version("1.1.0.9000")),
+  version = list(LandMine = numeric_version("1.1.0.9001")),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
@@ -200,7 +200,8 @@ defineModule(sim, list(
       "as new fires, so `size == maxSize` by construction and cannot be used as evidence",
       "that fires reach their targets; stalling shows up in the fire COUNT instead.",
       "Named by simulation year, so `rbindlist(sim$fireSizes, idcol = 'year')` gives a",
-      "`year` column carrying the actual year (as character) rather than a 1..n counter.")
+      "`year` column carrying the actual year (as character) rather than a 1..n counter.",
+      "A burn year with no fires has a zero-row table with the same columns, so it adds no rows.")
     ),
     createsOutput("fireReturnInterval", "SpatRaster", paste(
       "The input `fireReturnInterval`, coerced to integer and with zero-valued pixels set to `NA`.",
@@ -887,8 +888,18 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
     )
   }
 
+  ## A fire-free year records NO rows, with the columns and types of a year with fires. The
+  ## placeholder was one zero-size fire with only `size` and `maxSize`: it predated the identity
+  ## columns, so `rbindlist(sim$fireSizes, idcol = "year")` in burnSummaries stopped on the
+  ## column-count mismatch. Before those columns it bound, but added a fire that never burned.
   if (nrow(fireSizesDT) == 0) {
-    fireSizesDT <- data.table(size = 0L, maxSize = 0L)
+    fireSizesDT <- data.table(
+      fireID = integer(0),
+      attempt = integer(0),
+      targetSize = numeric(0),
+      size = integer(0),
+      maxSize = integer(0)
+    )
   }
 
   ## Keyed by YEAR, not by position. The index was `time - burnInitialTime + 1`, which
