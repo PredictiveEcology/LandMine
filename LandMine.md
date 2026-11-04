@@ -1,6 +1,6 @@
 ---
 title: "LandMine Manual"
-subtitle: "v.1.0.0"
+subtitle: "v.1.1.0.9003"
 date: "18 May 2018; updated 29 Oct 2025"
 output:
   bookdown::html_document2:
@@ -77,7 +77,7 @@ Table: (\#tab:species-table)LandMine species codes.
 
 Table \@ref(tab:moduleInputs-LandMine) shows the full list of module inputs.
 
-<table class="table" style="color: black; width: auto !important; margin-left: auto; margin-right: auto;">
+<table class="table" style="width: auto !important; margin-left: auto; margin-right: auto;">
 <caption>(\#tab:moduleInputs-LandMine)(\#tab:moduleInputs-LandMine)List of (ref:LandMine) input objects and their description.</caption>
  <thead>
   <tr>
@@ -119,7 +119,7 @@ Table \@ref(tab:moduleInputs-LandMine) shows the full list of module inputs.
    <td style="text-align:left;"> NA </td>
   </tr>
   <tr>
-   <td style="text-align:left;"> rstFlammable </td>
+   <td style="text-align:left;"> flammableMap </td>
    <td style="text-align:left;"> SpatRaster </td>
    <td style="text-align:left;"> A raster layer, with 0, 1 and NA, where 1 indicates areas that are flammable, 0 not flammable (e.g., lakes) and NA not applicable (e.g., masked) </td>
    <td style="text-align:left;"> NA </td>
@@ -145,7 +145,7 @@ Table \@ref(tab:moduleInputs-LandMine) shows the full list of module inputs.
   <tr>
    <td style="text-align:left;"> sppEquiv </td>
    <td style="text-align:left;"> data.table </td>
-   <td style="text-align:left;"> Multi-columned data.table indicating species name equivalencies. Default taken from `LandR::sppEquivalencies_CA` which has names for species of trees in Canada </td>
+   <td style="text-align:left;"> Multi-columned data.table indicating species name equivalencies. Must have a `LandWeb` column. Default is `LandR::sppEquivalencies_CA` with the LandWeb species groups added by `LandWebUtils::landweb_sppEquiv()`. </td>
    <td style="text-align:left;"> NA </td>
   </tr>
   <tr>
@@ -165,7 +165,7 @@ Table \@ref(tab:moduleInputs-LandMine) shows the full list of module inputs.
 
 Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
 
-<table class="table" style="color: black; width: auto !important; margin-left: auto; margin-right: auto;">
+<table class="table" style="width: auto !important; margin-left: auto; margin-right: auto;">
 <caption>(\#tab:moduleParams-LandMine)(\#tab:moduleParams-LandMine)List of (ref:LandMine) parameters and their description.</caption>
  <thead>
   <tr>
@@ -175,6 +175,7 @@ Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
    <th style="text-align:left;"> min </th>
    <th style="text-align:left;"> max </th>
    <th style="text-align:left;"> paramDesc </th>
+   <th style="text-align:left;"> cacheKey </th>
   </tr>
  </thead>
 <tbody>
@@ -185,6 +186,7 @@ Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
    <td style="text-align:left;"> 10000 </td>
    <td style="text-align:left;"> 2e+06 </td>
    <td style="text-align:left;"> An upper limit, in hectares, of the truncated Pareto distribution of fire sizes </td>
+   <td style="text-align:left;"> TRUE </td>
   </tr>
   <tr>
    <td style="text-align:left;"> burnInitialTime </td>
@@ -193,6 +195,7 @@ Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> This describes the simulation time at which the first burn event should occur </td>
+   <td style="text-align:left;"> TRUE </td>
   </tr>
   <tr>
    <td style="text-align:left;"> fireTimestep </td>
@@ -201,14 +204,25 @@ Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> This describes the simulation time interval between burn events </td>
+   <td style="text-align:left;"> TRUE </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> kBest </td>
+   <td style="text-align:left;"> numeric </td>
+   <td style="text-align:left;">  </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> Shape of the truncated Pareto distribution fire sizes are drawn from (`VGAM::rtruncpareto()`). `NULL` (the default) fits it at init with `LandWebUtils::landmine_estimate_kBest()`; see `useSeed`. A single positive number is used as given, and the fit is skipped. The fitted value depends on `biggestPossibleFireSizeHa`: refit it when that changes. </td>
+   <td style="text-align:left;"> TRUE </td>
   </tr>
   <tr>
    <td style="text-align:left;"> maxReburns </td>
    <td style="text-align:left;"> integer </td>
    <td style="text-align:left;"> 1, 20 </td>
    <td style="text-align:left;"> 1 </td>
-   <td style="text-align:left;"> 20 </td>
+   <td style="text-align:left;"> 500 </td>
    <td style="text-align:left;"> Number of attempts to burn fires that don't reach their target fire size. Reburning occurs in two phases, hence accepting a parameter value of length 2. In the first phase, fires that did not reach their target size are reignited from new pixels within the FRI zone, so they are less likely to continue being stuck in a region with sinuous fires or discontinuous fuels. If, after `maxReburns[1]` attempts, there are still fires that haven't reached their target size, the second reburn phase is attempted. After recording the the pixels that did burn in phase one, new fires are ignited, whose target sizes are set equal the difference between the previous target and the previously burned area. Repeats up to `maxReburns[2]` times. This results in additional (smaller) fires, but since the purpose of LandMine is to replicate area burned per year to achieve LTHFC, this is an acceptable compromise. </td>
+   <td style="text-align:left;"> TRUE </td>
   </tr>
   <tr>
    <td style="text-align:left;"> maxRetriesPerID </td>
@@ -217,6 +231,7 @@ Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
    <td style="text-align:left;"> 0 </td>
    <td style="text-align:left;"> 299 </td>
    <td style="text-align:left;"> Number of additional attempts ('jumps') that will be made per firelet ID, before abandoning. See `?SpaDES.tools::spread2`. NOTE: increasing this value results in longer simulation times when firelets get 'stuck', but higher values are needed to achive larger fire sizes with discontinuous fuels. </td>
+   <td style="text-align:left;"> TRUE </td>
   </tr>
   <tr>
    <td style="text-align:left;"> minPropBurn </td>
@@ -225,6 +240,7 @@ Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
    <td style="text-align:left;"> 0 </td>
    <td style="text-align:left;"> 1 </td>
    <td style="text-align:left;"> Minimum proportion burned pixels to use when triggering warnings about simulated fires. </td>
+   <td style="text-align:left;"> TRUE </td>
   </tr>
   <tr>
    <td style="text-align:left;"> mixedType </td>
@@ -233,6 +249,7 @@ Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
    <td style="text-align:left;"> 1 </td>
    <td style="text-align:left;"> 2 </td>
    <td style="text-align:left;"> How to define mixed stands: 1 for any species admixture; 2 for deciduous &gt; conifer. See ?vegTypeMapGenerator. </td>
+   <td style="text-align:left;"> TRUE </td>
   </tr>
   <tr>
    <td style="text-align:left;"> mode </td>
@@ -241,6 +258,7 @@ Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> use 'single' to run part of a landscape simulation; use 'multi' to run as part of postprocessing multiple simulation runs. </td>
+   <td style="text-align:left;"> TRUE </td>
   </tr>
   <tr>
    <td style="text-align:left;"> optimParsRowID </td>
@@ -248,7 +266,8 @@ Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
    <td style="text-align:left;"> 1 </td>
    <td style="text-align:left;"> 1 </td>
    <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> which set of optimization parameter values to use for simulating fire spread, specified by row number of the `LandMine_DEoptim_params.csv` file. `1L` specifies the original 2018 values at 100m pixels; all other rows were calculated using 250m pixels. </td>
+   <td style="text-align:left;"> which set of optimization parameter values to use for simulating fire spread, specified by row number of the `LandMine_DEoptim_params.csv` file. Row 1 is the 120 m fit, and is the default at EVERY resolution: it scores as well as the 240 m fit on the 240 m landscape (0.70 vs 0.81, 0.33 pooled sd) with a fifth of the variance, while the 240 m fit is much worse at 120 m (1.78 vs 0.61, 4.91 sd). The 120 m fit is also far better determined: repeat runs land within 4.6% of the search interval, against 24.8% at 240 m. `2L` is the 240 m fit, retained for reference. Rows fitted before 2026-08 were removed: they used a different objective (a size penalty that never fired, a constant perimeter:area target, and fire sizes in pixels rather than hectares) and are not comparable. They remain in git history. </td>
+   <td style="text-align:left;"> TRUE </td>
   </tr>
   <tr>
    <td style="text-align:left;"> reps </td>
@@ -257,6 +276,7 @@ Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
    <td style="text-align:left;"> 1 </td>
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> number of replicates/runs per study area when running in 'multi' mode. </td>
+   <td style="text-align:left;"> TRUE </td>
   </tr>
   <tr>
    <td style="text-align:left;"> ROSother </td>
@@ -265,6 +285,7 @@ Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> default ROS value for non-forest vegetation classes.this is needed when passing a modified `ROSTable`, e.g. using log-transformed values. </td>
+   <td style="text-align:left;"> TRUE </td>
   </tr>
   <tr>
    <td style="text-align:left;"> ROStype </td>
@@ -272,15 +293,26 @@ Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
    <td style="text-align:left;"> default </td>
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> One of 'burny', 'equal', 'log', or 'default'. </td>
+   <td style="text-align:left;"> One of 'default' or 'burny'. </td>
+   <td style="text-align:left;"> TRUE </td>
   </tr>
   <tr>
    <td style="text-align:left;"> sppEquivCol </td>
    <td style="text-align:left;"> character </td>
-   <td style="text-align:left;"> LandR </td>
+   <td style="text-align:left;"> LandWeb </td>
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> The column in `sim$specieEquivalency` data.table to use as a naming convention. </td>
+   <td style="text-align:left;"> The column in `sim$sppEquiv` data.table to use as a naming convention. LandMine's fuel types are keyed on the LandWeb species groups: Init() and `LandWebUtils::landmine_fire_ros()` read the `LandWeb` column directly, so species must be named by that column. </td>
+   <td style="text-align:left;"> TRUE </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> sppEquivColFuel </td>
+   <td style="text-align:left;"> character </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> Column of `sim$sppEquiv` that groups the simulated species (`sppEquivCol`) for fuel typing. When set, cohorts are recoded to these groups before the leading vegetation type is decided, so biomass is summed within a group, and each group's fuel type is looked up in `LandWebUtils::landmine_fuel_types()`, whose names the groups must use (LandWeb's reporting groups). For species simulated separately: the leading type of a stand of jack pine 35%, lodgepole pine 25% and black spruce 40% is then pine, as when the pines were one simulated group. `NA` (the default) types fuel from the simulated species' names (`LandWebUtils::landmine_known_species()`). </td>
+   <td style="text-align:left;"> TRUE </td>
   </tr>
   <tr>
    <td style="text-align:left;"> useSeed </td>
@@ -288,7 +320,8 @@ Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
    <td style="text-align:left;">  </td>
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> Only used for creating a starting `cohortData` dataset. If `NULL`, then it will be randomly generated; If non-`NULL`, will pass this value to `set.seed()` and be deterministic and identical each time. WARNING: setting the seed to a specific value will cause all simulations to be identical! </td>
+   <td style="text-align:left;"> Seed for the `kBest` fit only. The fit's objective draws random fire sizes, so unseeded fits differ between replicates. `NULL` (the default) fits from the simulation's random stream. An integer fits on its own stream, from `set.seed(useSeed)` with R's default generator, then restores the simulation's stream: the same seed gives the same `kBest` in any session, and fires still vary between replicates. Ignored when `kBest` is supplied. </td>
+   <td style="text-align:left;"> TRUE </td>
   </tr>
   <tr>
    <td style="text-align:left;"> vegLeadingProportion </td>
@@ -297,6 +330,7 @@ Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
    <td style="text-align:left;"> 0 </td>
    <td style="text-align:left;"> 1 </td>
    <td style="text-align:left;"> a number that define whether a species is leading for a given pixel </td>
+   <td style="text-align:left;"> TRUE </td>
   </tr>
   <tr>
    <td style="text-align:left;"> .plotInitialTime </td>
@@ -305,6 +339,7 @@ Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> This describes the simulation time at which the first plot event should occur </td>
+   <td style="text-align:left;"> TRUE </td>
   </tr>
   <tr>
    <td style="text-align:left;"> .plotInterval </td>
@@ -313,6 +348,7 @@ Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> This describes the simulation time interval between plot events </td>
+   <td style="text-align:left;"> TRUE </td>
   </tr>
   <tr>
    <td style="text-align:left;"> .plots </td>
@@ -321,6 +357,7 @@ Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> Passed to `types` in `Plots` (see `?Plots`). There are a few plots that are made within this module, if set. Note that plots (or their data) saving will ONLY occur at `end(sim)`. If `NA`, plotting is turned off completely (this includes plot saving). </td>
+   <td style="text-align:left;"> TRUE </td>
   </tr>
   <tr>
    <td style="text-align:left;"> .saveInitialTime </td>
@@ -329,6 +366,7 @@ Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> This describes the simulation time at which the first save event should occur </td>
+   <td style="text-align:left;"> TRUE </td>
   </tr>
   <tr>
    <td style="text-align:left;"> .saveInterval </td>
@@ -337,6 +375,7 @@ Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> This describes the simulation time interval between save events </td>
+   <td style="text-align:left;"> TRUE </td>
   </tr>
   <tr>
    <td style="text-align:left;"> .studyAreaName </td>
@@ -345,6 +384,7 @@ Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> Human-readable name for the study area used - e.g., a hash of the studyarea obtained using `reproducible::studyAreaName()` </td>
+   <td style="text-align:left;"> TRUE </td>
   </tr>
   <tr>
    <td style="text-align:left;"> .useCache </td>
@@ -353,6 +393,7 @@ Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> Should this entire module be run with caching activated? This is generally intended for data-type modules, where stochasticity and time are not relevant </td>
+   <td style="text-align:left;"> TRUE </td>
   </tr>
   <tr>
    <td style="text-align:left;"> .unitTest </td>
@@ -361,6 +402,7 @@ Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> Some functions can have internal testing. This will turn those on or off, if any exist. </td>
+   <td style="text-align:left;"> TRUE </td>
   </tr>
   <tr>
    <td style="text-align:left;"> .useParallel </td>
@@ -369,6 +411,7 @@ Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> NA </td>
    <td style="text-align:left;"> Used in burning. Will be passed to `data.table::setDTthreads()`. NOTE: use `.useParallel &lt;= 2` as the additonal RAM overhead too high given marginal speedup. </td>
+   <td style="text-align:left;"> TRUE </td>
   </tr>
 </tbody>
 </table>
@@ -377,7 +420,7 @@ Summary of user-visible parameters (Table \@ref(tab:moduleParams-LandMine)).
 
 Description of the module outputs (Table \@ref(tab:moduleOutputs-LandMine)).
 
-<table class="table" style="color: black; width: auto !important; margin-left: auto; margin-right: auto;">
+<table class="table" style="width: auto !important; margin-left: auto; margin-right: auto;">
 <caption>(\#tab:moduleOutputs-LandMine)(\#tab:moduleOutputs-LandMine)List of (ref:LandMine) outputs and their description.</caption>
  <thead>
   <tr>
@@ -395,12 +438,12 @@ Description of the module outputs (Table \@ref(tab:moduleOutputs-LandMine)).
   <tr>
    <td style="text-align:left;"> fireSizes </td>
    <td style="text-align:left;"> list </td>
-   <td style="text-align:left;"> A list of data.tables, one per burn event, each with two columns, `size` and `maxSize`. These indicate the actual sizes and expected sizes burned, respectively. These can be put into a single data.table with `rbindlist(sim$fireSizes, idcol = 'year')` </td>
+   <td style="text-align:left;"> A list of data.tables, one per burn event, with `size`, `maxSize` and the fire-identity columns `fireID`, `attempt` and `targetSize`. `size` and `maxSize` are the actual and expected sizes burned. `fireID` is issued per burn YEAR, so (rep, year, fireID) identifies one fire; rows sharing it are the pieces that fire was burned in, and are NOT necessarily contiguous. `attempt` is the reburn round that produced the row, and `targetSize` the ORIGINAL target, constant across a fire's rows. NOTE: `maxSize` is NOT an independent record of the target. When a fire stalls, the retry loop rewrites its `maxSize` to the area that did burn and issues the shortfall as new fires, so `size == maxSize` by construction and cannot be used as evidence that fires reach their targets; stalling shows up in the fire COUNT instead. Named by simulation year, so `rbindlist(sim$fireSizes, idcol = 'year')` gives a `year` column carrying the actual year (as character) rather than a 1..n counter. A burn year with no fires has a zero-row table with the same columns, so it adds no rows. </td>
   </tr>
   <tr>
    <td style="text-align:left;"> fireReturnInterval </td>
    <td style="text-align:left;"> SpatRaster </td>
-   <td style="text-align:left;"> A `Raster` map showing the fire return interval. This is created from the `rstCurrentBurn`. </td>
+   <td style="text-align:left;"> The input `fireReturnInterval`, coerced to integer and with zero-valued pixels set to `NA`. It is NOT masked to flammable pixels or to `studyArea`, so the FRI summaries can report how much of each zone is flammable and inside the study area. Fires are ignited and counted on an internal copy masked to both. </td>
   </tr>
   <tr>
    <td style="text-align:left;"> fireReturnIntervalsByPolygonNumeric </td>
@@ -418,9 +461,14 @@ Description of the module outputs (Table \@ref(tab:moduleOutputs-LandMine)).
    <td style="text-align:left;"> summary fire return interval table </td>
   </tr>
   <tr>
+   <td style="text-align:left;"> friDiagnostics </td>
+   <td style="text-align:left;"> data.table </td>
+   <td style="text-align:left;"> per-FRI-zone attainment diagnostics: achieved/target ratio over the BURNABLE area, the same ratio computed the way `friSummary` does it, the share of each zone that lies inside the study area, and the structural measurements that tell the failure modes apart (flammable fraction, patch structure, cohort coverage). </td>
+  </tr>
+  <tr>
    <td style="text-align:left;"> kBest </td>
    <td style="text-align:left;"> numeric </td>
-   <td style="text-align:left;"> A numeric scalar that is the optimal value of `K` in the Truncated Pareto distribution (`rtruncpareto`) </td>
+   <td style="text-align:left;"> Shape of the truncated Pareto distribution fire sizes are drawn from (`rtruncpareto`): the `kBest` parameter when supplied, otherwise fitted at init (see `useSeed`). </td>
   </tr>
   <tr>
    <td style="text-align:left;"> numFiresPerYear </td>
@@ -433,7 +481,7 @@ Description of the module outputs (Table \@ref(tab:moduleOutputs-LandMine)).
    <td style="text-align:left;"> A raster layer, produced at each timestep, where each pixel is either 1 or 0 indicating burned or not burned. </td>
   </tr>
   <tr>
-   <td style="text-align:left;"> rstCurrentBurnCumulative </td>
+   <td style="text-align:left;"> burnMap </td>
    <td style="text-align:left;"> SpatRaster </td>
    <td style="text-align:left;"> Cumulative number of times a pixel has burned </td>
   </tr>
@@ -444,6 +492,75 @@ Description of the module outputs (Table \@ref(tab:moduleOutputs-LandMine)).
   </tr>
 </tbody>
 </table>
+
+### Fire-size distribution: `kBest`
+
+Fire sizes are drawn from a truncated Pareto distribution between 1 ha and `biggestPossibleFireSizeHa`, with shape `kBest`.
+By default `kBest` is fitted at init to Dave Andison's rule of thumb that 95% of the area burned is in the largest 5% of fires (`LandWebUtils::landmine_estimate_kBest()`).
+The fit draws random fire sizes, so it differs between replicates: over 100 seeds at `biggestPossibleFireSizeHa = 3e5`, `kBest` ran 0.628--0.683, a mean fire size of 115--183 ha.
+For replicates that share one distribution, supply `kBest`, which skips the fit, or set `useSeed`, which fits on a separate random stream and leaves the simulation's stream as it was.
+
+### Reported fire sizes: what `maxSize` does and does not mean
+
+`fireSizes` carries `size` and `maxSize` per fire, which `burnSummaries` writes out as `simSize`
+and `expSize`. They agree for essentially every fire --- 100 % of 1,081,686 in the v3 Western
+Alberta Upland run --- and it is tempting to read that as evidence fires reach their targets.
+**It is not evidence either way**, and the reason is worth stating precisely, because the naive
+version of this warning is wrong.
+
+Most fires genuinely do reach their target, and those are recorded truthfully. The problem is that
+**no branch of the burn loop ever records a fire that fell short.** There are three ways a fire's
+row reaches `fireSizes`, and none of them can carry `size < maxSize`:
+
+1. **Everything reached target this iteration** --- all rows recorded as-is, with a
+   `proportionBurned == 1` assertion. The equality is real.
+2. **A fire stalled, within the first `maxReburns[1]` attempts** --- that fire is *dropped* from
+   the record entirely and re-ignited from a fresh start cell keeping its **full original target**.
+   Only the fires that did reach target are recorded for that iteration. The stalled attempt leaves
+   no row behind.
+3. **A fire stalled, past `maxReburns[1]`** --- its `maxSize` is rewritten to the area that did
+   burn, and the shortfall is re-issued as new fires. The equality here is bookkeeping. Fires that
+   reached target in the same iteration are recorded as-is, as in (2). Through v1.1.0.9002 they
+   were dropped instead: they burned, but were left out of `fireSizes` and the burn map.
+
+So a shortfall is either discarded and retried (2) or laundered into equality plus extra fires (3).
+The statistic is not "always fabricated" --- it is *incapable of expressing the failure mode*, which
+is why it reads as a perfect score.
+
+This is a deliberate design trade-off rather than a defect, and follows from what the model is
+actually calibrated to: LandMine replicates fire *return intervals* --- area burned per year --- not
+the number of fires. Annual area burned is therefore preserved, while the realized size
+distribution is pushed away from the calibrated heavy tail.
+
+The practical consequences:
+
+- **Never cite `simSize`/`expSize` agreement** in a report or diagnostic as evidence of target
+  attainment. The record cannot show disagreement, so the agreement carries no information.
+- **Stalling shows up in the fire count instead.** One stalled large fire is recorded as several
+  smaller fires that each "reached target", so an inflated fire count at a small mean size is the
+  observable signature. The same v3 WAU run recorded 1,082 fires/yr (min 258, max 3,271) at a mean
+  of 33.8 pixels.
+- **Judge the size distribution directly**, against the calibrated truncated Pareto or against
+  NBAC/NFDB, rather than against `expSize`.
+
+### Measuring attainment properly
+
+Since v1.0.13 the rows carry `fireID`, `attempt` and `targetSize`, which make the questions above
+answerable. `fireID` is issued per burn **year**, so `(rep, year, fireID)` identifies one fire, and
+the rows sharing it are the pieces that fire was burned in --- not necessarily contiguous ones.
+
+```r
+att <- LandWebUtils::landmine_fire_attainment(
+  data.table::rbindlist(sim$fireSizes, idcol = "year"),
+  by = c("year", "fireID")
+)
+att[reached == FALSE]        ## fires that exhausted maxReburns[2] and fell short
+att[, .N, by = attempts]     ## reached on the 1st attempt, the 2nd, the 3rd...
+```
+
+`reached == FALSE` is the shortfall that no `size`-versus-`maxSize` comparison can show. Note that
+attempts abandoned within the first `maxReburns[1]` rounds still leave no row of their own --- the
+fire is retried at full target --- so `attempts` counts rounds, not burned-then-discarded area.
 
 \newpage
 
@@ -469,16 +586,16 @@ SpaDES.core::packages(modules = "LandMine", paths = "..")[[1]]
 ##  [4] "data.table"                                                
 ##  [5] "fpCompare"                                                 
 ##  [6] "ggplot2"                                                   
-##  [7] "magrittr"                                                  
-##  [8] "PredictiveEcology/LandR@development (>= 1.1.0.9003)"       
-##  [9] "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9002)"
-## [10] "PredictiveEcology/pemisc@development"                      
-## [11] "PredictiveEcology/SpaDES.tools@development"                
-## [12] "RColorBrewer"                                              
-## [13] "stats"                                                     
-## [14] "terra"                                                     
-## [15] "tidyterra"                                                 
-## [16] "VGAM"
+##  [7] "PredictiveEcology/LandR@development (>= 1.1.0.9003)"       
+##  [8] "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9045)"
+##  [9] "PredictiveEcology/pemisc@development"                      
+## [10] "PredictiveEcology/SpaDES.tools@development (>= 2.1.2.9000)"
+## [11] "RColorBrewer"                                              
+## [12] "stats"                                                     
+## [13] "terra"                                                     
+## [14] "tidyterra"                                                 
+## [15] "VGAM"                                                      
+## [16] "withr (>= 2.5.0)"
 ```
 
 ### Module usage
@@ -552,42 +669,41 @@ The following code chunk tries to find values of `spawnNewActive` that creates "
 
 ``` r
 pixelSize <- 240
+DEoptim_file <- file.path(moduleDir, "LandMine", "data", "LandMine_DEoptim_params.csv")
 
-## terra objects can't be serialized, as-is, so use file as intermediary
-ros_file <- tempfile(fileext = ".tif")
-ros_rast <- terra::rast(
-  terra::ext(0, pixelSize * 1e3, 0, pixelSize * 1e3),
-  resolution = pixelSize,
-  vals = 0
-) 
-ros_rast <- ros_rast == 0
-ros_rast <- terra::writeRaster(ros_rast, ros_file)
-ros <- ros_file ## this will be passed to objective function
+## The calibration landscape is deliberately uniform and fully flammable, so the fitted
+## shape statistics aren't confounded by any one study area's fuel pattern. The helper
+## also returns the ignition cell and a file path -- the objective takes the landscape as
+## a path because `SpatRaster`s can't be serialized to cluster workers.
+lscape <- LandWebUtils::landmine_optim_landscape(pixelSize = pixelSize)
+ros <- lscape$file
+centreCell <- lscape$centreCell
 
+## Fire sizes are specified in HECTARES, because that is how the calibration targets are
+## defined (Andison fitted the shape relationship over 10-3,000 ha), and converted to pixels
+## for the resolution being calibrated. Specifying pixel counts directly means a different
+## physical fire at every resolution -- `c(10, ..., 1e5)` pixels is 10-100,000 ha at 100 m but
+## 57.6-576,000 ha at 240 m -- which put most of the v3 calibration outside the fitted range,
+## and defeats the point of calibrating at several pixel sizes.
+fireSizesHa <- c(50, 200, 600, 1500, 3000)
+fireSizes <- LandWebUtils::landmine_optim_fireSizes(pixelSize, fireSizesHa)
+
+## Current best-fit parameters, used by the visual-inspection runs further below.
+## Read via `landmine_optim_params_read()`/`landmine_optim_unpack()` so the CSV schema and
+## the `10^` convention have a single definition, shared with `LandMine.R`.
+nRuns <- nrow(LandWebUtils::landmine_optim_params_read(DEoptim_file))
+pars <- LandWebUtils::landmine_optim_unpack(
+  LandWebUtils::landmine_optim_params_read(DEoptim_file, rowID = nRuns)
+)
+spawnNewActive <- pars$spawnNewActive
+sizeCutoffs <- pars$sizeCutoffs
+spreadProb <- pars$spreadProb
 fireSize <- 1e5
-maxRetriesPerID <- 4 ## 4 retries (5 attempts total)
-spreadProb <- 0.9
-spawnNewActive <- c(0.46, 0.2, 0.26, 0.11)
-sizeCutoffs <- c(8e3, 2e4)
 
-NineCorners <- terra::cellFromRowCol(
-  ros_rast,
-  row = terra::nrow(ros_rast) / 4 * rep(1:3, 3),
-  col = terra::ncol(ros_rast) / 4 * rep(1:3, each = 3)
-)
-
-centreCell <- terra::cellFromRowCol(
-  ros_rast,
-  row = terra::nrow(ros_rast) / 2,
-  col = terra::ncol(ros_rast) / 2
-)
-
-## Set variables
+## Set variables to be exported to the cluster workers
 objs <- c("centreCell", "fireSize", "ros", "spawnNewActive", "sizeCutoffs", "spreadProb")
 pkgs <- c("data.table", "LandWebUtils", "terra", "SpaDES.tools")
 ```
-
-Setup a cluster for parallel computation:
 
 
 ``` r
@@ -614,41 +730,65 @@ if (!is.null(cl)) {
 }
 ```
 
-### Visual examination
+### What the objective fits
+
+The spread parameters are fitted against the landscape statistics @Andison:1996 reported, on a
+uniform, fully-flammable synthetic landscape so the fit is not conditioned on any one study
+area's fuel pattern. Three components, per fire size:
+
+- **shape** --- the simulated shape index against `SHAPE = 1.770 + 0.041 log10(AREA)^4`
+  (thesis §3.3.1). Note this is the coefficient fitted to his *empirical* data; the thesis also
+  reports 1.881 for his own model's output, and targeting that would be circular.
+- **size** --- a continuous shortfall against the target fire size.
+- **islands** --- percent of fire area in remnant islands against Table 3.5 (empirical column:
+  4.0 / 6.0 / 9.0 % by size class).
+
+Four properties of this fit are worth stating plainly, because each was wrong or absent before
+2026-08 and each changes how the results should be read.
+
+**Fire sizes are specified in hectares, not pixels.** Andison rasterized at 50 m
+(quarter-hectare) pixels and fitted the shape relationship over 10--3,000 ha. A fixed
+pixel-count vector means a different physical fire at every resolution --- `c(10, ..., 1e5)`
+pixels is 10--100,000 ha at 100 m but 57.6--576,000 ha at 240 m --- which had put nearly the
+whole 240 m calibration outside the fitted range, and made calibrating at several pixel sizes
+uninterpretable, since the runs were fitting different physical fires.
+
+**The remnant-island term is down-weighted with coarsening resolution.** Table 3.6 puts 65 % of
+island area in the 2--5 ha class for fires under 1,000 ha; at 240 m a single pixel is already
+5.76 ha, so that class cannot exist and the target is unreachable however the parameters are
+set. The weight is `min(1, 50 / pixelSize)`: 1.0 at 50 m, 0.42 at 120 m, 0.21 at 240 m.
+
+**The objective is stochastic, so it must be replicated.** Common random numbers make parameter
+vectors comparable but let the optimizer exploit the particular realization it was given. At
+`replicates = 2` the fits over-fitted their realization by 12.9x (240 m) and 9.3x (120 m) when
+re-scored at independent seeds; at `replicates = 10` that fell to 3.4x and 1.9x. Always re-score
+a fit at independent seeds before adopting it --- `landmine_optim_calibrate()` reports this.
+
+**Iteration count is not the binding constraint.** Improvement stopped at iteration 149 and 128
+of 200 in the first runs, with no gain across the final 50. Noise is the constraint; replication
+addresses it, more generations do not.
+
+### Running the fit
 
 
 ``` r
-library(DEoptim)
-
-opt_sn <- DEoptim(
-  fn = LandWebUtils::landmine_optim_fitSN,
-  lower = c(-2, -3, -3, -3, 1, 3.5, 0.75), 
-  upper = c(-0.1, -0.5, -0.5, -1, 3.5, 5, 1),
-  control = DEoptim.control(
-    VTR = 0.001,
-    NP = as.integer(length(clNames)),
-    itermax = 200,
-    cluster = cl,
-    strategy = 6
-  ),
-  ros = ros,
-  centreCell = centreCell,
-  fireSizes = c(10, 100, 1000, 10000, 100000),
-  desiredPerimeterArea = 0.003
+## `landmine_optim_calibrate()` wraps the DEoptim fit; its defaults reproduce the fit that
+## was previously written out inline here (same bounds, VTR, itermax, strategy, objective).
+## `objective = "andison"` (the default) fits the shape-vs-area relationship and the remnant
+## island fractions from Andison (1996), rather than a single constant perimeter:area target.
+## `crnSeed` applies common random numbers, so parameter vectors are compared against the same
+## random draws; `replicates` averages over draws, which the island statistic needs.
+opt_sn <- LandWebUtils::landmine_optim_calibrate(
+  pixelSize = pixelSize,
+  fireSizesHa = fireSizesHa,
+  itermax = 200,
+  cl = cl,
+  seed = 1234L,   ## with a fixed NP, this makes the per-worker RNG streams reproducible
+  crnSeed = 1L,
+  paramsFile = DEoptim_file ## appends the best parameters as a new dated row
 )
 
 opt_sn$optim$bestmem ## best param values
-
-## add dated row to facilitate multiple DEoptim runs
-optimParams <- data.frame(
-  date = format(Sys.time(), "%Y-%m-%d"),
-  pixelSize = pixelSize
-) |>
-  cbind(rbind(opt_sn$optim$bestmem))
-
-DEoptim_file <- file.path(moduleDir, "LandMine", "data", "LandMine_DEoptim_params.csv")
-prevVals <- read.csv(DEoptim_file)
-write.csv(rbind(prevVals, optimParams), DEoptim_file, row.names = FALSE)
 
 parallel::stopCluster(cl)
 cl <- NULL
@@ -657,34 +797,81 @@ gc()
 
 
 ``` r
-fs_sn <- c(10, 100, 1000, 10000, 100000)
-fit_sn <- LandWebUtils::landmine_optim_fitSN(
-  sna = c(-1, -1, -1, -2, 2, 4, 0.9),
-  ros = ros,
-  centreCell = centreCell,
-  fireSizes = fs_sn,
-  desiredPerimeterArea = 0.003
+## Diagnostics at the fitted solution, using the same functions the project reports use.
+## `components` carries the per-fire-size observed-vs-expected values behind each figure.
+best <- opt_sn$optim$bestmem
+lscape <- LandWebUtils::landmine_optim_landscape(pixelSize = pixelSize)
+comp <- attr(
+  LandWebUtils::landmine_optim_fitAndison(
+    par = as.numeric(best), ros = lscape$file, centreCell = lscape$centreCell,
+    fireSizes = as.integer(fireSizes), replicates = 5L, crnSeed = 99L
+  ),
+  "components"
 )
-bfs1_sn <- purrr::transpose(attr(fit_sn, "bfs1"))
-LM_sn <- do.call(rbind, bfs1_sn$LM)
 
-## NOTE: visual inspection - not too round; not too sinuous
-plot(log10(fs_sn), LM_sn[, "perim.area.ratio"])
+## simulated shape against Andison's fitted relationship
+LandWebUtils::landmine_plot_calibShape(comp)
+
+## simulated remnant islands against Andison Table 3.5
+LandWebUtils::landmine_plot_calibIslands(comp)
+
+## did the run converge, or did it hit itermax while still improving?
+LandWebUtils::landmine_plot_calibConvergence(opt_sn)
 ```
+
+### Results (2026-08)
+
+Calibrated at both 120 m and 240 m with `replicates = 10`, holding everything else identical so
+the two are comparable.
+
+The **120 m fit is well determined**: repeat runs land within 4.6 % of the search interval, and
+its shape fit is close to exact at the large end (7.80 against a target of 7.76 at 3,000 ha).
+
+The **240 m optimum is a broad plateau, not a point**: two 240 m fits differing by 24.8 % of the
+search interval score identically (0.16 pooled sd). That is expected at that grain --- a 50 ha
+fire is 9 pixels, so the shape statistic is quantization-limited, and the island term carries a
+weight of only 0.21.
+
+The parameters **transfer asymmetrically**. The 120 m fit scores as well as the 240 m fit on the
+240 m landscape (0.70 vs 0.81, 0.33 pooled sd) with a fifth of the variance, while the 240 m fit
+is much worse at 120 m (1.78 vs 0.61, 4.91 sd). The 120 m fit is therefore adopted at **every**
+resolution (`optimParsRowID = 1L`); the 240 m fit is retained as row 2 for reference but should
+not be quoted as a determined value.
+
+**The objective identifies some parameters and not others, and any single fit is one draw from a
+broad optimum.** Fitted against the *previous* objective, 43 repeat runs of the same configuration
+scattered four of the seven parameters across more than 90 % of their search interval, and repeat
+solutions proved statistically indistinguishable from one another --- and from some randomly drawn
+parameter vectors. That objective was effectively fitting seven parameters to one statistic,
+because its size penalty was dead code: `landmine_optim_burnFun()` filled every burned cell with
+the *ignition cell index* rather than 1, so summing the burned map summed pixel IDs instead of
+counting cells. That defect is fixed (the count is now `nBurned`), and the current objective adds
+constraints and does separate fitted from random parameters --- but it still cannot rank
+near-equivalent solutions. Report fitted parameters as a region, not a point estimate, and re-score
+any candidate fit at independent seeds before adopting it.
 
 ## Alternate optimization
 
 A second (alternative) version tries the optimization using fewer parameters, to test whether a simpler version gets better/different results.
 Although this version was not used for the final module, we preserve it here for posterity.
 
+Both `landmine_optim_fitSN()` and `landmine_optim_fitSN2()` are the **legacy** objective: a single
+constant perimeter-to-area target at every fire size. That target works against Andison's central
+result --- that shape complexity *increases* with fire area --- and its size penalty never fired
+(it summed pixel IDs rather than counting cells, from 2018 until 2026-08). They are retained so
+historical fits can be reproduced, not for new calibration.
+
 
 ``` r
+## NOTE: needs a live cluster; re-create it (the `optimization` chunk stops its own).
+cl <- LandWebUtils::landmine_optim_clusterSetup(nodes = clNames)
+
 fs_optim2 <- c(0.2, 1:8) * 10000
-opt_sn2 <- DEoptim(
-  landmine_optim_fitSN2,
+opt_sn2 <- DEoptim::DEoptim(
+  fn = LandWebUtils::landmine_optim_fitSN2,
   lower = c(1, -1, 1, 3, 4),
   upper = c(3, -0.3, 3, 4, 5), 
-  control = DEoptim.control(
+  control = DEoptim::DEoptim.control(
     VTR = 0.001, 
     itermax = 40, 
     cluster = cl,
@@ -721,208 +908,30 @@ plot(log10(fs_sn2), LM_sn2[, "perim.area.ratio"])
 
 ## Manual inspection of optimization results
 
-### Original (2018) version
-
-The original version was run using 100m pixels, despite the simulations being run using 250m pixels.
-This was corrected and rerun below.
-
-
-``` r
-## 10,000 hectares burns gave this
-spawnNewActive[2:3] <- c(0.0235999945606232, 0.0263073265505955)
-
-#100,000 hectare burns gave this
-#spawnNewActive <- 10^c(-1.264780,   -1.970946,   -1.288213,   -2.202580)
-spawnNewActive <- 10^c(-0.586503645288758, -1.08108837273903,
-                       -2.14391896536108, -1.00221184641123)
-sizeCutoffs <- 10^c(3.37711253212765, 4.52040993282571)
-
-sns <- c(-1.733262, -0.933318, -2.562183, -2.493687, 3.064458, 4.812305)
-spawnNewActive <- 10^sns[1:4]
-sizeCutoffs <- 10^sns[5:6]
-#spawnNewActive <- 10^c(-1.646419, -1.815395, -2.809013, -2.613337)
-#sizeCutoffs <- 10^c(3.888317,    4.641961)
-
-## 100,000 pixel fires -- the next worked, but I think we can get better
-# sns <- structure(
-#   c(-1.652459,-0.962121,-0.964879,-2.304902, 3.522345, 4.173242),
-#   .Names = c("par1", 
-sns <- structure(
-  c(-1.641197,-1.152821,-0.697335,-1.751917, 3.720378, 4.034059),
-  .Names = c("par1", "par2", "par3", "par4", "par5", "par6")
-)
-spawnNewActive <- 10^sns[1:4]
-sizeCutoffs <- 10^(sns[5:6])
-fireSize <- 30000
-
-## 100
-sns <- c(-0.77716149196811, -0.769325340166688, -1.2772046867758,
-         -1.99332102853805, 3.14260408212431, 4.46155184064992) 
-
-## 1000
-sns <- c(-0.775107,-1.031760,-0.599669,-1.958105, 3.048958, 4.275831)
-
-## seemed good for 100,000, pretty good for 1e3
-sns <- c(-1.54885, -0.97052, -1.38305, -1.93759, 3.20379, 4.13237)
-
-## good for 100 000, 10 000 ha -- too sinuous for 1000 and 100 ha
-sns <- c(-1.537203,-1.462981,-0.524957,-1.002567, 3.642046, 4.501754)
-
-## good for 100 000, 10 000 ha (except some fires @ 1e5 don't make it to full size)
-## -- too sinuous for smaller
-sns <- c(-1.484338,-1.220440,-2.948275,-2.155940, 3.945281, 4.904893)
-
-sns <- c(-1.495247,-0.800494,-1.582350,-2.270646, 3.530671, 4.663245)
-
-## final optimization after 75 iterations, Good: 1e5, 1e4
-sns <- c(-1.47809, -0.86224, -1.34532, -1.93568, 3.27149, 4.20741)
-
-## based on equal weights 10^(1:5)
-sns <- c(-0.923528, -1.804549, -1.760455, -1.793594,  1.683355,  4.466668)
-
-## With spreadProb = 0.9 # Pretty GOOD!
-sns <- c(-0.731520, -0.501823, -0.605968, -1.809726,  2.202732,  4.696060, 0.9) ## used in module
-optimParams <- data.frame(
-  date = "2018-05-18",
-  pixelSize = 100
-) |>
-  cbind(rbind(sns))
-write.csv(optimParams, DEoptim_file, row.names = FALSE)
-
-## With spreadProb = 0.9 # Optimal
-sns <- c(-0.978947, -0.540946, -0.790736, -1.583039,  2.532013,  4.267547,  0.946730)
-
-spawnNewActive <- 10^sns[1:4]
-sizeCutoffs <- 10^(sns[5:6])
-if (length(sns) == 7) spreadProb <- sns[7]
-
-## from linear model version
-par <- c(1.548899,-0.396904, 2.191424, 3.903082, 4.854002)
-sizeCutoffs <- 10^c(par[4], par[5])
-sna <- min(-0.15, par[1] + par[2]*log10(fireSize))
-sna <- 10^c(sna*par[3], sna*2*par[3], sna*3*par[3], sna*4*par[3])
-spawnNewActive <- sna
-
-###########################
-dev.new()
-
-for (i in 1:5) {
-  fireSize <- 10^i
-  dim <- round(sqrt(fireSize)*5 * 250)
-  ros <- raster(extent(0, dim,0,dim), res = 250, vals = 1)
-  centreCell <- cellFromRowCol(ros,
-                               rownr = nrow(ros) / 2,
-                               colnr = ncol(ros) / 2)
-  reps <- paste0("rep", 1:4 + (log10(fireSize) - 1)*4)
-  burnedMapList <- landmine_optim_clusterWrap(cl = cl, nodes = clNames, reps = reps, objs = objs, pkgs = pkgs)
-  names(burnedMapList$out) <- reps
-  burnedMapList <- purrr::transpose(burnedMapList$out)
-  cl <- burnedMapList$cl
-  do.call(rbind, burnedMapList$LM)
-  
-  terra::plot(
-    burnedMapList$burnedMap,
-    col = "red",
-    colNA = "white",
-    legend = FALSE,
-    main = paste0("Fire size: ", fireSize)
-  )
-}
-```
-
-
-``` r
-reps <- paste0("rep", 1:1)
-perims <- list()
-perm <- list()
-mod <- list()
-
-dev.new()
-
-fireSizes <-  10^(4)
-
-for (fs in fireSizes) {
-  for (i in 1:1) {
-    ros <- terra::rast(terra::ext(0, 2e5, 0, 2e5), resolution = 100, vals = 1)
-    NineCorners <- terra::cellFromRowCol(
-      ros,
-      rownr = terra::nrow(ros) / 4 * rep(1:3, 3),
-      colnr = terra::ncol(ros) / 4 * rep(1:3, each = 3)
-    )
-    centreCell <- NineCorners
-    ran <- runif(4, -3, -1)
-    spawnNewActive <- 10^ran
-    # spawnNewActive <- 10^c(-0.1, -0.75, -1.2, ran*2.5)
-    fireSize = rep(fs, length(centreCell))
-    sizeCutoffs <- 10^c(1,3)
-    burnedMapList <- LandWebUtils::landmine_optim_clusterWrap(cl = cl, nodes = clNames, reps = reps, objs = objs, pkgs = pkgs)
-    names(burnedMapList$out) <- reps
-    burnedMapList <- purrr::transpose(burnedMapList$out)
-    cl <- burnedMapList$cl
-    do.call(rbind, burnedMapList$LM)
-    terra::plot(burnedMapList$burnedMap)
-    perims[[i]] <- data.frame(
-      perim = burnedMapList$LM$rep1$perim.area.ratio,
-      spawnNewActive = mean(spawnNewActive),
-      others = t(spawnNewActive)
-    )
-  }
-  fsChar <- as.character(fs)
-  perm[[fsChar]] <- rbindlist(perims)
-  perm[[fsChar]]$perim <- log10(perm[[fsChar]]$perim)
-  perm[[fsChar]]$spawnNewActive <- perm[[fsChar]]$spawnNewActive
-  plot(perm[[fsChar]]$perim, perm[[fsChar]]$spawnNewActive, add = TRUE)
-  mod[[fsChar]] <- lm(spawnNewActive ~ perim, data = perm[[fsChar]])
-}
-
-(predict(mod[["10"]], data.frame(perim = log10(0.003))))
-(predict(mod[["100"]], data.frame(perim = log10(0.003))))
-log10(predict(mod[["1000"]], data.frame(perim = log10(0.003))))
-```
-
-### Current (2025) version
-
-The original version was run using 100m pixels, despite the simulations being run using 250m pixels.
-
-This version uses 240m pixels to work with LandWeb v3.
+Fires are simulated at a range of sizes and replicated, then plotted for visual
+inspection: the shapes should be neither too round nor too sinuous. This uses 240 m pixels,
+matching LandWeb v3. (Earlier 100 m and 250 m explorations are in the git history.)
 
 
 ``` r
 library(ggplot2)
 library(tidyterra)
 
-pixelSize <- 240
-
-## final optimization after 200 iterations (landmine_optim_fitSN)
-optimParams <- read.csv(DEoptim_file, row.names = FALSE)
-sns <- optimParams[, grepl("^par", colnames(optimParams))] |> tail(1) ## take last row
-
-spawnNewActive <- 10^sns[1:4] |> as.numeric()
-sizeCutoffs <- 10^(sns[5:6]) |> as.numeric()
-spreadProb <- sns[7] |> as.numeric()
-
-## from linear model version
-# par <- c(1.548899,-0.396904, 2.191424, 3.903082, 4.854002)
-# sizeCutoffs <- 10^c(par[4], par[5])
-# sna <- min(-0.15, par[1] + par[2]*log10(fireSize))
-# sna <- 10^c(sna*par[3], sna*2*par[3], sna*3*par[3], sna*4*par[3])
-# spawnNewActive <- sna
+## `spawnNewActive`, `sizeCutoffs` and `spreadProb` are set in the `fit-values` chunk
+## above, from the most recent row of the calibration CSV.
 
 cl <- NULL ## new cluster created below; will be reused for each fireSize
 n <- 3^2 ## number of reps per fireSize (square numbers best for plotting)
 
 for (i in 1:5) {
   fireSize <- 10^i
-  dim <- round(sqrt(fireSize) * 5 * pixelSize)
-  ros <- tempfile(fileext = ".tif")
-  ros_rast <- terra::rast(terra::ext(0, dim, 0, dim), resolution = pixelSize, vals = 1) |>
-    terra::writeRaster(ros)
-  
-  centreCell <- terra::cellFromRowCol(
-    ros_rast,
-    row = terra::nrow(ros_rast) / 2,
-    col = terra::ncol(ros_rast) / 2
+  ## landscape sized to the fire (5x the fire's linear extent), via the shared helper
+  lscape_i <- LandWebUtils::landmine_optim_landscape(
+    pixelSize = pixelSize,
+    n = round(sqrt(fireSize) * 5)
   )
+  ros <- lscape_i$file
+  centreCell <- lscape_i$centreCell
   reps <- sprintf("rep%02d", 1:n + (i - 1)*n)
   burnedMapList <- LandWebUtils::landmine_optim_clusterWrap(
     cl = cl,
@@ -947,9 +956,7 @@ for (i in 1:5) {
     theme_void() +
     theme(legend.position = "none")
     
-  f_gg <- file.path(moduleDir, "LandMine", "figures") |>
-    fs::dir_create() |>
-    file.path(sprintf("%s_fireSize_1e%d.png", format(Sys.Date(), "%Y-%m-%d"), i))
+  f_gg <- file.path(figDir, sprintf("%s_fireSize_1e%d.png", format(Sys.Date(), "%Y-%m-%d"), i))
   ggsave(f_gg, gg)
   
   print(gg)
