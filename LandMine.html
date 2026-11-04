@@ -2972,7 +2972,7 @@ border-radius: 0px;
 
 
 <h1 class="title toc-ignore">LandMine Manual</h1>
-<h3 class="subtitle">v.1.1.0.9002</h3>
+<h3 class="subtitle">v.1.1.0.9003</h3>
 <h4 class="date">18 May 2018; updated 29 Oct 2025</h4>
 
 </div>
@@ -4080,7 +4080,9 @@ the record entirely and re-ignited from a fresh start cell keeping its <strong>f
 Only the fires that did reach target are recorded for that iteration. The stalled attempt leaves
 no row behind.</li>
 <li><strong>A fire stalled, past <code>maxReburns[1]</code></strong> — its <code>maxSize</code> is rewritten to the area that did
-burn, and the shortfall is re-issued as new fires. The equality here is bookkeeping.</li>
+burn, and the shortfall is re-issued as new fires. The equality here is bookkeeping. Fires that
+reached target in the same iteration are recorded as-is, as in (2). Through v1.1.0.9002 they
+were dropped instead: they burned, but were left out of <code>fireSizes</code> and the burn map.</li>
 </ol>
 <p>So a shortfall is either discarded and retried (2) or laundered into equality plus extra fires (3).
 The statistic is not “always fabricated” — it is <em>incapable of expressing the failure mode</em>, which
