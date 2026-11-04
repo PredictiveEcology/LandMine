@@ -193,7 +193,9 @@ row reaches `fireSizes`, and none of them can carry `size < maxSize`:
    Only the fires that did reach target are recorded for that iteration. The stalled attempt leaves
    no row behind.
 3. **A fire stalled, past `maxReburns[1]`** --- its `maxSize` is rewritten to the area that did
-   burn, and the shortfall is re-issued as new fires. The equality here is bookkeeping.
+   burn, and the shortfall is re-issued as new fires. The equality here is bookkeeping. Fires that
+   reached target in the same iteration are recorded as-is, as in (2). Through v1.1.0.9002 they
+   were dropped instead: they burned, but were left out of `fireSizes` and the burn map.
 
 So a shortfall is either discarded and retried (2) or laundered into equality plus extra fires (3).
 The statistic is not "always fabricated" --- it is *incapable of expressing the failure mode*, which

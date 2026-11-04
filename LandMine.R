@@ -7,7 +7,7 @@ defineModule(sim, list(
     person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb", "cre"))
   ),
   childModules = character(0),
-  version = list(LandMine = numeric_version("1.1.0.9002")),
+  version = list(LandMine = numeric_version("1.1.0.9003")),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
@@ -774,14 +774,19 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
         tooSmallDT[, attempt := attempt + 1L] ## this fire is about to be tried again
         tooSmallByPoly <- thisYrStartCellsDT[tooSmallDT, on = c(pixel = "initialPixels")]
 
-        if (iter <= P(sim)$maxReburns[1]) {
-          firesOK <- fires[!initialPixels %in% tooSmallDT$initialPixels, ]
-          firesList <- append(firesList, list(firesOK))
-          fireSizes <- append(
-            fireSizes, list(fa[!tooSmall, c("fireID", "attempt", "targetSize", "size", "maxSize")])
-          )
-          maxOrder <- max(fires$order)
+        ## In both phases, the fires that reached target are recorded and their pixels masked in
+        ## `spreadProbThisStep`. Through 1.1.0.9002 only phase 1 did this: a phase-2 round
+        ## recorded only its stalled fires, so the fires that reached target in it were burned
+        ## but never recorded, mapped or masked.
+        firesOK <- fires[!initialPixels %in% tooSmallDT$initialPixels, ]
+        firesList <- append(firesList, list(firesOK))
+        fireSizes <- append(
+          fireSizes, list(fa[!tooSmall, c("fireID", "attempt", "targetSize", "size", "maxSize")])
+        )
+        maxOrder <- max(fires$order)
+        spreadProbThisStep[firesOK$pixels] <- NA_real_
 
+        if (iter <= P(sim)$maxReburns[1]) {
           ## Promoted to LandWebUtils. Phase 1: each too-small fire keeps its FULL original
           ## target and is re-ignited from a fresh start cell.
           reburn <- LandWebUtils::landmine_reburn_budget(
@@ -793,7 +798,6 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
           fireIDs <- reburn$fireIDs
           attempts <- reburn$attempts
           targetSizes <- reburn$targetSizes
-          spreadProbThisStep[firesOK$pixels] <- NA_real_
         } else {
           firesTooSmall <- fires[initialPixels %in% tooSmallDT$initialPixels, ]
 
@@ -821,7 +825,6 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
 
           firesList <- append(firesList, list(firesTooSmall))
           fireSizes <- append(fireSizes, list(fa2))
-          maxOrder <- max(fires$order)
 
           ## Promoted to LandWebUtils. Phase 2: NEW fires sized to the REMAINING shortfall
           ## (`fa3$maxSize`), assigned positionally onto the too-small rows -- both descend
