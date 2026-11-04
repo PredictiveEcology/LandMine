@@ -1,6 +1,6 @@
 ---
 title: "LandMine Manual"
-subtitle: "v.1.1.0.9003"
+subtitle: "v.1.1.0.9004"
 date: "18 May 2018; updated 29 Oct 2025"
 output:
   bookdown::html_document2:
@@ -587,7 +587,7 @@ SpaDES.core::packages(modules = "LandMine", paths = "..")[[1]]
 ##  [5] "fpCompare"                                                 
 ##  [6] "ggplot2"                                                   
 ##  [7] "PredictiveEcology/LandR@development (>= 1.1.0.9003)"       
-##  [8] "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9045)"
+##  [8] "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9052)"
 ##  [9] "PredictiveEcology/pemisc@development"                      
 ## [10] "PredictiveEcology/SpaDES.tools@development (>= 2.1.2.9000)"
 ## [11] "RColorBrewer"                                              
