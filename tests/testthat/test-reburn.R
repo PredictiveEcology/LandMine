@@ -19,17 +19,7 @@
 ## bookkeeping it checks.
 
 test_that("fires that reach target in an extra reburn round are recorded and burned", {
-  landscape <- landmineTestLandscape()
-  rtm <- landscape$objects$rasterToMatch
-  cells <- seq_len(terra::ncell(rtm))
-  cols <- terra::colFromCell(rtm, cells)
-  rows <- terra::rowFromCell(rtm, cells)
-  flam <- terra::rast(rtm)
-  terra::values(flam) <- as.integer(cols <= 25L | (cols > 26L & cols %% 2L == 1L & rows %% 2L == 1L))
-  fri <- terra::rast(rtm)
-  terra::values(fri) <- 2L
-  landscape$objects$flammableMap <- flam
-  landscape$objects$fireReturnInterval <- fri
+  landscape <- landmineIslandLandscape()
 
   rounds <- list()
   burn1 <- LandWebUtils::landmine_burn1
@@ -72,4 +62,62 @@ test_that("fires that reach target in an extra reburn round are recorded and bur
     expect_gt(length(px), 0)
     expect_true(all(burned[px] == 1L), info = paste("round", r))
   }
+})
+
+## Regression test: a later burn round of a year could burn a pixel an earlier round had burned and
+## recorded, so the year recorded that pixel twice. Burn() masks those pixels by setting their
+## `spreadProb` to NA, but the start cells of re-issued fires were drawn from the whole zone, and
+## `landmine_burn1()` spread its first step with probability 1, ignoring the mask. With this seed
+## the year recorded 867 pixels for 847 burned (this file run on its own; the draws depend on what
+## ran before in the session).
+test_that("a pixel burned in one round of a year is not burned again in a later round", {
+  rounds <- list()
+  burn1 <- LandWebUtils::landmine_burn1
+  local_mocked_bindings(
+    landmine_burn1 = function(...) {
+      args <- list(...)
+      fires <- burn1(...)
+      rounds[[length(rounds) + 1L]] <<- list(
+        startCells = args$startCells,
+        pixels = fires$pixels,
+        ## what earlier rounds burned: flammable pixels the module masked out of `spreadProb`
+        masked = which(is.na(args$spreadProb) & !is.na(args$spreadProbRel))
+      )
+      fires
+    },
+    .package = "LandWebUtils"
+  )
+
+  sim <- runLandMineTest(landmineIslandLandscape(), paths = testPaths, end = 1, seed = 2L,
+                         params = list(maxReburns = c(1L, 5L)))
+  fs <- sim$fireSizes[["1"]]
+  burned <- terra::values(sim$rstCurrentBurn, mat = FALSE)
+
+  expect_gt(length(rounds), 2L) ## without later rounds, the checks below test nothing
+  expect_gt(length(rounds[[length(rounds)]]$masked), 0L)
+  for (r in seq_along(rounds)[-1L]) {
+    expect_false(any(rounds[[r]]$startCells %in% rounds[[r]]$masked), info = paste("round", r))
+    expect_false(any(rounds[[r]]$pixels %in% rounds[[r]]$masked), info = paste("round", r))
+  }
+  ## the area the year recorded is the area it burned
+  expect_identical(as.integer(sum(fs$size)), sum(burned == 1L, na.rm = TRUE))
+})
+
+## A zone burned completely within a year can take no more fires: with this seed the lake island
+## burns out and still needs a fire. Its start cell was drawn on a burned pixel, re-burning it each
+## round to the reburn ceiling: 19 pixels recorded for 9 burned (this file run on its own).
+test_that("a zone with no unburned pixel left gets no more fires that year, and says so", {
+  landscape <- landmineLakeIslandLandscape()
+  ## 2 years, though only year 1 is checked: with one year and several zones, the module's
+  ## area-burned plot (`geom_area()`) warns
+  expect_message(
+    sim <- runLandMineTest(landscape, paths = testPaths, end = 2, seed = 4L,
+                           params = list(maxReburns = c(1L, 5L))),
+    "reburn-no-start-cell year=1 FRI=1 nFires=1"
+  )
+  fs <- sim$fireSizes[["1"]]
+  ## year 1's burn: the cumulative burn map less year 2's
+  burned <- terra::values(sim$burnMap, mat = FALSE) - terra::values(sim$rstCurrentBurn, mat = FALSE)
+  expect_true(all(burned[landscape$island] == 1L))
+  expect_identical(as.integer(sum(fs$size)), sum(burned == 1L, na.rm = TRUE))
 })

@@ -7,7 +7,7 @@ defineModule(sim, list(
     person(c("Alex", "M."), "Chubaty", email = "achubaty@for-cast.ca", role = c("ctb", "cre"))
   ),
   childModules = character(0),
-  version = list(LandMine = numeric_version("1.1.0.9003")),
+  version = list(LandMine = numeric_version("1.1.0.9004")),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
@@ -16,7 +16,7 @@ defineModule(sim, list(
     "assertthat", "cli", "data.table", "fpCompare", "ggplot2",
     "RColorBrewer", "stats", "terra", "tidyterra", "VGAM", "withr (>= 2.5.0)",
     "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
-    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9045)", ## sppEquiv_groups(), landmine_fuel_types()
+    "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9052)", ## landmine_start_cells(), masked first step
     "PredictiveEcology/pemisc@development",
     "PredictiveEcology/SpaDES.tools@development (>= 2.1.2.9000)"
   ),
@@ -697,11 +697,37 @@ Burn <- compiler::cmpfun(function(sim, verbose = getOption("LandR.verbose", TRUE
   ## Should be OK b/c LandMine replicates FRIs (i.e., area burned each year), not number of fires
   polysNeedMoreFires <- NULL ## set inside the loop; NULL when the loop body never reburns
   while (sum(numFiresThisPeriod) > 0 && (iter <= sum(P(sim)$maxReburns))) {
-    thisYrStartCells <- startCellPool[
-      , SpaDES.tools:::resample(pixel, numFiresThisPeriod[.GRP]), by = polygonNumeric
-    ]$V1
+    ## No fire starts on a pixel `spreadProbThisStep` marks `NA`: the pool is flammable study
+    ## area, so those are the pixels earlier rounds of this year burned (masked below). Starting
+    ## on one burned it a second time and recorded it twice. A zone with fewer unburned pixels
+    ## than fires gives the rest no start cell (`NA`); they are dropped and logged below.
+    startCellsDT <- startCellPool[
+      , list(cell = LandWebUtils::landmine_start_cells(
+        pixel, numFiresThisPeriod[.GRP], available = !is.na(spreadProbThisStep[pixel])
+      )),
+      by = polygonNumeric
+    ]
+    thisYrStartCells <- startCellsDT$cell
 
     firesGT0 <- fireSizesInPixels > 0L
+    noStartCell <- firesGT0 & is.na(thisYrStartCells)
+    if (any(noStartCell)) {
+      ## fewer unburned pixels left in the zone than fires: one machine-parseable line per zone,
+      ## as for the reburn ceiling below
+      unplaced <- data.table(FRI = startCellsDT$polygonNumeric[noStartCell],
+                             size = fireSizesInPixels[noStartCell])[
+        , list(nFires = .N, pixelsShort = sum(size)), by = "FRI"]
+      for (i in seq_len(NROW(unplaced))) {
+        message(sprintf(
+          "reburn-no-start-cell year=%g FRI=%g nFires=%d pixelsShort=%d",
+          time(sim), unplaced$FRI[i], unplaced$nFires[i], as.integer(unplaced$pixelsShort[i])
+        ))
+      }
+      firesGT0 <- firesGT0 & !noStartCell
+      if (!any(firesGT0)) {
+        numFiresThisPeriod[] <- 0L ## nothing left that can burn; logged above, not as a ceiling
+      }
+    }
     thisYrStartCells <- thisYrStartCells[firesGT0]
     fireSizesInPixels <- fireSizesInPixels[firesGT0]
     fireIDs <- fireIDs[firesGT0]

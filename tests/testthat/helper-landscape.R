@@ -108,3 +108,36 @@ initLandMineTest <- function(landscape, paths, seed = 20260928L, params = list()
   sim <- SpaDES.core::spades(sim, events = "init")
   list(sim = sim, rng = get(".Random.seed", envir = globalenv()))
 }
+
+## One fire-return-interval zone (FRI 2) in two parts: a solid block of flammable pixels (columns
+## 1-25), and to its right single flammable pixels ("islands") at odd rows and columns, each ringed
+## by non-flammable pixels. A fire ignited on an island with a target above one pixel stalls, so a
+## year has several burn rounds. See test-reburn.R.
+landmineIslandLandscape <- function() {
+  landscape <- landmineTestLandscape()
+  rtm <- landscape$objects$rasterToMatch
+  cells <- seq_len(terra::ncell(rtm))
+  cols <- terra::colFromCell(rtm, cells)
+  rows <- terra::rowFromCell(rtm, cells)
+  flam <- terra::rast(rtm)
+  terra::values(flam) <- as.integer(cols <= 25L | (cols > 26L & cols %% 2L == 1L & rows %% 2L == 1L))
+  fri <- terra::rast(rtm)
+  terra::values(fri) <- 2L
+  landscape$objects$flammableMap <- flam
+  landscape$objects$fireReturnInterval <- fri
+  landscape
+}
+
+## The default landscape with a 3 x 3 block of flammable pixels inside the lake (columns 30-32,
+## rows 20-22), in a zone of its own with FRI 1. Its fires are often bigger than the zone, so it
+## can burn completely within a year while it still needs fires. `island` is its pixels.
+landmineLakeIslandLandscape <- function() {
+  landscape <- landmineTestLandscape()
+  rtm <- landscape$objects$rasterToMatch
+  cells <- seq_len(terra::ncell(rtm))
+  island <- which(terra::colFromCell(rtm, cells) %in% 30:32 & terra::rowFromCell(rtm, cells) %in% 20:22)
+  landscape$objects$flammableMap[island] <- 1L
+  landscape$objects$fireReturnInterval[island] <- 1L
+  landscape$island <- island
+  landscape
+}
