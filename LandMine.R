@@ -13,8 +13,9 @@ defineModule(sim, list(
   citation = list("citation.bib"),
   documentation = list("README.md", "LandMine.Rmd"),
   reqdPkgs = list(
-    "assertthat", "cli", "data.table", "fpCompare", "ggplot2",
-    "RColorBrewer", "stats", "terra", "tidyterra", "VGAM", "withr (>= 2.5.0)",
+    "assertthat", "cli", "cowplot", "data.table", "fasterize", "fpCompare", "ggplot2",
+    "RColorBrewer", "sf", "stats", "terra", "tidyterra", "VGAM", "withr (>= 2.5.0)",
+    "DEoptim", "dplyr", "fs", "igraph", "purrr", ## LandMine.Rmd
     "PredictiveEcology/LandR@development (>= 1.1.0.9003)",
     "PredictiveEcology/LandWebUtils@development (>= 1.0.3.9045)", ## sppEquiv_groups(), landmine_fuel_types()
     "PredictiveEcology/pemisc@development",
