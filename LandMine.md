@@ -50,26 +50,30 @@ The current version has not yet been fully tested and compared with the original
 1. Fire sizes are taken from a Truncated Pareto distribution, resulting in numerous very small fires, and few large fires;
 2. Parameters have been fitted to the landscapes that are under study in the LandWeb project.
 
-### Known Species
+### Species and fuel types
 
-Landmine requires the following codes as inputs (the genus and species codes below), which converts and groups species as follows.
-Each of the species groups has its own Rate of Spread (ROS) for fire spreading:
+Fire spreads at a rate (ROS) set by each pixel's fuel type and stand age class (`ROSTable`, from Table 3.2 of @Andison:1996).
+A pixel's fuel type comes from its leading vegetation type, and the parameter `sppEquivColFuel` decides what that vegetation type is.
+
+With `sppEquivColFuel` set to a column of `sim$sppEquiv` that groups the simulated species, each cohort is recoded to its group before the leading type is decided, so biomass is summed within a group.
+LandWeb sets it to `"LandWebReport"`, its reporting groups, so that a stand of 35% jack pine, 25% lodgepole pine and 40% black spruce, with the species simulated separately, is led by pine, as when the pines were one simulated group.
+The groups must be named as in `LandWebUtils::landmine_fuel_types()`, which gives each its fuel type (Table \@ref(tab:species-table)).
+
+With `sppEquivColFuel = NA` (the default), fuel types come from the simulated species' own names, through `LandWebUtils::landmine_known_species()`, which is keyed on the merged-group codes of the `LandWeb` column (e.g., `Pinu_spp`, `Popu_spp`).
+A species code it does not list, such as `Pinu_con`, stops the run at the first fire.
 
 
-Table: (\#tab:species-table)LandMine species codes.
+Table: (\#tab:species-table)LandMine fuel type of each LandWeb reporting group, used when `sppEquivColFuel` is set.
 
-|Species                  |Code     |Group                   |
-|:------------------------|:--------|:-----------------------|
-|Jack pine                |Pinu_ban |Pine (PINU)             |
-|Lodgepole pine           |Pinu_con |Pine (PINU)             |
-|Unspecified pine species |Pinu_spp |Pine (PINU)             |
-|Paper birch              |Betu_pap |Deciduous (DECI)        |
-|Balsam poplar            |Popu_bal |Deciduous (DECI)        |
-|Trembling aspen          |Popu_tre |Deciduous (DECI)        |
-|Larch/Tamarack           |Lari_lar |Deciduous (DECI)        |
-|Black spruce             |Pice_mar |Black spruce (PICE_MAR) |
-|White spruce             |Pice_gla |White spruce (PICE_GLA) |
-|Fir and other softwoods  |Abie_spp |Fir (ABIE)              |
+|Group     |Fuel type |LandWeb species codes                            |
+|:---------|:---------|:------------------------------------------------|
+|Wh_Spruce |spruce    |Pice_eng, Pice_eng_gla, Pice_gla                 |
+|Bl_Spruce |spruce    |Lari_lar, Lari_occ, Lari_spp, Pice_mar           |
+|Pine      |pine      |Pinu_ban, Pinu_con, Pinu_spp                     |
+|Fir       |softwood  |Abie_bal, Abie_las, Abie_spp, Thuj_pli, Tsug_het |
+|Doug_fir  |softwood  |Pseu_men                                         |
+|Decid     |decid     |Betu_pap, Popu_bal, Popu_spp, Popu_tre           |
+|Mixed     |mixed     |(stands no group leads)                          |
 
 \newpage
 
@@ -857,6 +861,31 @@ counting cells. That defect is fixed (the count is now `nBurned`), and the curre
 constraints and does separate fitted from random parameters --- but it still cannot rank
 near-equivalent solutions. Report fitted parameters as a region, not a point estimate, and re-score
 any candidate fit at independent seeds before adopting it.
+
+**The adopted fit holds on a real landscape.** On 2026-09-01, after the fixes to the ignition
+budget and the mixedwood rates of spread, the adopted parameters were scored at 240 m on the
+uniform calibration landscape and on the real Western Alberta Upland landscape, 5 fire sizes by 12
+replicates each. The shape component was 0.0736 on the uniform landscape and 0.0782 on the real
+one, the size penalty was 0 on both, and fires reached 99.8--103.7 % of their target size, so those
+fixes did not call for a re-calibration.
+
+**Large fires are less convoluted than Andison's relationship at 240 m.** There the simulated shape
+index falls short of the target by 4 % at 50 ha and by 38--40 % at 3,000 ha, on the uniform
+calibration landscape as well as on the real one, so the landscape is not the cause. At 120 m the
+same fit is within 0.5 % of the target at 3,000 ha (above). Two causes are possible and neither has
+been tested: the fit was made at 120 m and is used at 240 m, and a perimeter traced along coarser
+pixel edges may measure shape differently. Look at this before the next calibration.
+
+**One region of the spawn rules has no rule of its own.** `LandWebUtils::landmine_burn1()` picks
+the probability that an active firelet spreads to two neighbours instead of one from the four
+values of `spawnNewActive`, by the number of active firelets (NF, against
+`nActiveCells1 = c(10, 36)`) and the fire's size so far (FS, against `sizeCutoffs`, about 2,226
+and 5,559 ha in the adopted fit); see `?LandWebUtils::landmine_burn1`. When
+`NF >= nActiveCells1[2]` and `FS >= sizeCutoffs[1]`, none of its three rules applies and
+`spawnNewActive[1]` is used: 0.49 in the adopted fit, the highest of the four, and the value meant
+for a fire with few active firelets. The deprecated `landmine_burn()` set this region to 0, noting
+that it is "undescribed in Andison" and that fires "look too circular" without it. Choosing a value
+there changes fire behaviour and needs a re-fit, so the gap is documented rather than patched.
 
 ## Alternate optimization
 
