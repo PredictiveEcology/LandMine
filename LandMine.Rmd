@@ -165,6 +165,27 @@ knitr::kable(df_outputs, caption = "List of (ref:LandMine) outputs and their des
   kableExtra::kable_styling(latex_options = "scale_down", full_width = FALSE)
 ```
 
+### Events
+
+```{r eventFlowCheck-LandMine, include = FALSE, eval = TRUE, cache = FALSE}
+## the generated figures need SpaDES.core 3.2.1.9068 or later; older versions skip them
+.efOK <- utils::packageVersion("SpaDES.core") >= "3.2.1.9068"
+```
+
+```{r eventFlow-LandMine, echo = FALSE, eval = .efOK, cache = FALSE, out.width = "100%", fig.pos = "H", fig.cap = "(ref:LandMine) events, as read from the module code with its default parameters."}
+ef <- tryCatch(SpaDES.core::moduleEventFlow("LandMine", path = ".."), error = function(e) e)
+SpaDES.core::includeModuleEventFlow(ef, "figures/LandMine_eventFlow.png")
+```
+
+```{r eventObjects-LandMine, echo = FALSE, eval = .efOK, cache = FALSE}
+SpaDES.core::kableModuleObjects(ef, caption = "Where each object of (ref:LandMine) is written and read, in run order.",
+                                lead = "Table \\@ref(tab:eventObjects-LandMine) lists, for each object, the code that writes it and the code that only reads it.")
+```
+
+```{r eventFigures-LandMine, echo = FALSE, eval = .efOK, cache = FALSE, results = "asis"}
+SpaDES.core::moduleEventFigures(ef, figDir = "figures", level = 4)
+```
+
 ### Fire-size distribution: `kBest`
 
 Fire sizes are drawn from a truncated Pareto distribution between 1 ha and `biggestPossibleFireSizeHa`, with shape `kBest`.
