@@ -497,6 +497,198 @@ Description of the module outputs (Table \@ref(tab:moduleOutputs-LandMine)).
 </tbody>
 </table>
 
+### Events
+
+
+
+<div class="figure">
+<img src="figures/LandMine_eventFlow.png" alt="(ref:LandMine) events, as read from the module code with its default parameters." width="100%" />
+<p class="caption">(\#fig:eventFlow-LandMine)(ref:LandMine) events, as read from the module code with its default parameters.</p>
+</div>
+
+Table \@ref(tab:eventObjects-LandMine) lists, for each object, the code that writes it and the code that only reads it.
+
+<table class="table" style="width: auto !important; ">
+<caption>(\#tab:eventObjects-LandMine)Where each object of (ref:LandMine) is written and read, in run order.</caption>
+ <thead>
+  <tr>
+   <th style="text-align:left;"> Object </th>
+   <th style="text-align:left;"> Written by </th>
+   <th style="text-align:left;"> Read by </th>
+  </tr>
+ </thead>
+<tbody>
+  <tr grouplength="10"><td colspan="3" style="border-bottom: 1px solid;"><strong>Inputs</strong></td></tr>
+<tr>
+   <td style="text-align:left;padding-left: 2em;" indentlevel="1"> species </td>
+   <td style="text-align:left;"> .inputObjects (default) </td>
+   <td style="text-align:left;">  </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;padding-left: 2em;" indentlevel="1"> flammableMap </td>
+   <td style="text-align:left;"> .inputObjects (default) </td>
+   <td style="text-align:left;"> init: Init(), Burn (single), plot (single), summarySingle (single) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;padding-left: 2em;" indentlevel="1"> rasterToMatch </td>
+   <td style="text-align:left;"> .inputObjects (default) </td>
+   <td style="text-align:left;"> init: Init(), summarySingle (single) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;padding-left: 2em;" indentlevel="1"> rstTimeSinceFire </td>
+   <td style="text-align:left;"> .inputObjects (default) </td>
+   <td style="text-align:left;"> init: Init(), Burn (single) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;padding-left: 2em;" indentlevel="1"> studyArea </td>
+   <td style="text-align:left;"> .inputObjects (default) </td>
+   <td style="text-align:left;"> init: Init(), Burn (single), summarySingle (single), summaryMulti (multi) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;padding-left: 2em;" indentlevel="1"> cohortData </td>
+   <td style="text-align:left;"> .inputObjects (default) </td>
+   <td style="text-align:left;"> Burn (single) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;padding-left: 2em;" indentlevel="1"> pixelGroupMap </td>
+   <td style="text-align:left;"> .inputObjects (default) </td>
+   <td style="text-align:left;"> Burn (single) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;padding-left: 2em;" indentlevel="1"> ROSTable </td>
+   <td style="text-align:left;"> .inputObjects (default) </td>
+   <td style="text-align:left;"> Burn (single) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;padding-left: 2em;" indentlevel="1"> sppColorVect </td>
+   <td style="text-align:left;"> .inputObjects (default) </td>
+   <td style="text-align:left;"> Burn (single) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;padding-left: 2em;" indentlevel="1"> studyAreaReporting </td>
+   <td style="text-align:left;"> .inputObjects (default) </td>
+   <td style="text-align:left;"> Burn (single), plot (single) </td>
+  </tr>
+  <tr grouplength="2"><td colspan="3" style="border-bottom: 1px solid;"><strong>Inputs the module also updates</strong></td></tr>
+<tr>
+   <td style="text-align:left;padding-left: 2em;" indentlevel="1"> fireReturnInterval </td>
+   <td style="text-align:left;"> .inputObjects (default), init: Init() </td>
+   <td style="text-align:left;"> plot (single), summarySingle (single) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;padding-left: 2em;" indentlevel="1"> sppEquiv </td>
+   <td style="text-align:left;"> .inputObjects (default), init: Init() </td>
+   <td style="text-align:left;"> Burn (single) </td>
+  </tr>
+  <tr grouplength="10"><td colspan="3" style="border-bottom: 1px solid;"><strong>Outputs</strong></td></tr>
+<tr>
+   <td style="text-align:left;padding-left: 2em;" indentlevel="1"> kBest </td>
+   <td style="text-align:left;"> init: EstimateTruncPareto() </td>
+   <td style="text-align:left;"> init: Init(), Burn (single) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;padding-left: 2em;" indentlevel="1"> fireInitialTime </td>
+   <td style="text-align:left;"> init: Init() </td>
+   <td style="text-align:left;">  </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;padding-left: 2em;" indentlevel="1"> fireReturnIntervalsByPolygonNumeric </td>
+   <td style="text-align:left;"> init: Init() </td>
+   <td style="text-align:left;"> Burn (single) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;padding-left: 2em;" indentlevel="1"> fireSizes </td>
+   <td style="text-align:left;"> init: Init(), Burn (single) </td>
+   <td style="text-align:left;">  </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;padding-left: 2em;" indentlevel="1"> fireTimestep </td>
+   <td style="text-align:left;"> init: Init() </td>
+   <td style="text-align:left;">  </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;padding-left: 2em;" indentlevel="1"> numFiresPerYear </td>
+   <td style="text-align:left;"> init: Init(), Burn (single) </td>
+   <td style="text-align:left;">  </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;padding-left: 2em;" indentlevel="1"> rstCurrentBurn </td>
+   <td style="text-align:left;"> init: Init(), Burn (single) </td>
+   <td style="text-align:left;"> plot (single) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;padding-left: 2em;" indentlevel="1"> burnMap </td>
+   <td style="text-align:left;"> Burn (single) </td>
+   <td style="text-align:left;"> plot (single), summarySingle (single) </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;padding-left: 2em;" indentlevel="1"> friDiagnostics </td>
+   <td style="text-align:left;"> summarySingle (single), summaryMulti (multi) </td>
+   <td style="text-align:left;">  </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;padding-left: 2em;" indentlevel="1"> friSummary </td>
+   <td style="text-align:left;"> summarySingle (single), summaryMulti (multi) </td>
+   <td style="text-align:left;">  </td>
+  </tr>
+</tbody>
+</table>
+
+
+#### .inputObjects {-}
+
+during simInit: defaults for inputs not supplied
+
+![](figures/LandMine_io_.inputObjects.png){width=100%}
+
+
+
+#### EstimateTruncPareto() {-}
+
+init event, step 1 of 2
+
+![](figures/LandMine_io_init_EstimateTruncPareto.png){width=100%}
+
+
+
+#### Init() {-}
+
+init event, step 2 of 2
+
+![](figures/LandMine_io_init_Init.png){width=100%}
+
+
+
+#### Burn {-}
+
+mode = "single": every year (fireTimestep); first at start + 1 year (burnInitialTime)
+
+![](figures/LandMine_io_Burn.png){width=100%}
+
+
+
+#### plot {-}
+
+mode = "single": every year (.plotInterval); first at start + 1 year (.plotInitialTime); and at end
+
+![](figures/LandMine_io_plot.png){width=100%}
+
+
+
+#### summarySingle {-}
+
+mode = "single": once, at end
+
+![](figures/LandMine_io_summarySingle.png){width=100%}
+
+
+
+#### summaryMulti {-}
+
+mode = "multi": once, at start
+
+![](figures/LandMine_io_summaryMulti.png){width=100%}
+
 ### Fire-size distribution: `kBest`
 
 Fire sizes are drawn from a truncated Pareto distribution between 1 ha and `biggestPossibleFireSizeHa`, with shape `kBest`.
